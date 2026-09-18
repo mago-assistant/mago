@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager;
 use Magento\UrlRewrite\Model\ResourceModel\UrlRewrite as UrlRewriteResource;
 use Magento\UrlRewrite\Model\UrlRewriteFactory;
 use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class DeleteAction implements IrreversibleActionInterface
 {
@@ -46,6 +47,14 @@ class DeleteAction implements IrreversibleActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'success' => [PiiClass::PUBLIC],
+            'message' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

@@ -13,6 +13,7 @@ use Magento\CatalogRule\Model\RuleFactory;
 use Magento\Customer\Model\ResourceModel\Group\CollectionFactory as CustomerGroupCollectionFactory;
 use Magento\Store\Model\StoreManagerInterface;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class CreateRuleAction implements ActionInterface
@@ -90,6 +91,16 @@ class CreateRuleAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'message' => [PiiClass::PUBLIC],
+            'success' => [PiiClass::PUBLIC],
+            'rule_id' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

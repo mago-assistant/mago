@@ -17,6 +17,7 @@ use MagoAssistant\Mago\Logger\ErrorLogger;
 use Magento\Framework\AuthorizationInterface;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
+use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Service\Usage\UsageLogger;
 
@@ -46,7 +47,8 @@ class ChatService implements ChatServiceInterface
         private readonly AuthorizationInterface $authorization,
         private readonly StoreScopeContext $storeScopeContext,
         private readonly AnswerWidgets $answerWidgets,
-        private readonly PageContextHolder $pageContextHolder
+        private readonly PageContextHolder $pageContextHolder,
+        private readonly PrivacyService $privacyService
     ) {
     }
 
@@ -72,7 +74,10 @@ class ChatService implements ChatServiceInterface
         $tools = $this->toolRegistry->getToolDefinitions($adminUserId);
         $maxIterations = $this->configRepository->getMaxToolIterations();
 
-        $messages = $this->prependSystemMessage($messages);
+        if ($conversationId !== null) {
+            $this->privacyService->beginConversation($conversationId);
+        }
+        $messages = $this->privacyService->scrubMessages($this->prependSystemMessage($messages));
         $instructedTools = [];
         $nudged = false;
 
@@ -136,14 +141,41 @@ class ChatService implements ChatServiceInterface
         $tools = $this->toolRegistry->getToolDefinitions($adminUserId);
         $maxIterations = $this->configRepository->getMaxToolIterations();
 
-        $messages = $this->prependSystemMessage($messages);
+        if ($conversationId !== null) {
+            $this->privacyService->beginConversation($conversationId);
+        }
+        $messages = $this->privacyService->scrubMessages($this->prependSystemMessage($messages));
         $instructedTools = [];
         $nudged = false;
         $allToolCalls = [];
 
+        // Rehydrate the text the admin sees, holding a token that splits across chunks. Everything
+        // stored and replayed to the provider stays tokenised; only this display copy is rehydrated.
+        /** @var string $carry */
+        $carry = '';
+        $flushCarry = function () use ($onChunk, &$carry): void {
+            if ($carry !== '') {
+                $onChunk('text', ['text' => $this->privacyService->displayText($carry)]);
+                $carry = '';
+            }
+        };
+        $streamOut = function (string $event, array $data) use ($onChunk, &$carry, $flushCarry): void {
+            if ($event !== 'text') {
+                $flushCarry();
+                $onChunk($event, $data);
+
+                return;
+            }
+            [$emit, $carry] = $this->privacyService->rehydrateStreamDelta($carry, (string)($data['text'] ?? ''));
+            if ($emit !== '') {
+                $onChunk('text', ['text' => $emit]);
+            }
+        };
+
         for ($i = 0; $i < $maxIterations; $i++) {
             try {
-                $response = $this->client->stream($client, $messages, $tools, $onChunk);
+                $response = $this->client->stream($client, $messages, $tools, $streamOut);
+                $flushCarry();
             } catch (\Throwable $e) {
                 $this->errorLogger->addLog('ChatService Stream', $e->getMessage());
                 throw $e;
@@ -193,7 +225,10 @@ class ChatService implements ChatServiceInterface
                             'id' => (string)($tc['id'] ?? ''),
                             'name' => $tc['name'],
                             'description' => $t->getDescription(),
-                            'input' => $tc['input'] ?? [],
+                            // Display copy only (#97 decision 5): the admin must see the real values
+                            // they are approving, not opaque tokens; the persisted tool_calls stay
+                            // tokenised and are re-checked on the confirm round-trip.
+                            'input' => $this->privacyService->rehydrateArguments($tc['input'] ?? []),
                         ] + $this->describeRisk($t, $tc['input'] ?? [], $adminUserId);
                         $confirmTools[] = $details;
                         $describedCalls[] = $tc + $details;
@@ -297,8 +332,15 @@ class ChatService implements ChatServiceInterface
         array $toolCalls,
         ?int $adminUserId = null,
         ?callable $onChunk = null,
-        ?array $selectedIds = null
+        ?array $selectedIds = null,
+        ?int $conversationId = null
     ): array {
+        // The confirm round-trip is a fresh request: without binding the vault here the persisted
+        // tokenised arguments cannot rehydrate (every confirmed write would be refused) and tokens
+        // minted while filtering the results would collide with earlier turns' persisted ones.
+        if ($conversationId !== null) {
+            $this->privacyService->beginConversation($conversationId);
+        }
         $results = [];
         foreach ($toolCalls as $toolCall) {
             if ($selectedIds !== null && !in_array((string)($toolCall['id'] ?? ''), $selectedIds, true)) {
@@ -492,6 +534,9 @@ class ChatService implements ChatServiceInterface
             return ['error' => $denial];
         }
 
+        // The tool's own declaration of how the invoked action's output crosses to the LLM (#97).
+        $classes = $tool->getFieldClassification((string)($toolCall['input']['action'] ?? ''));
+
         try {
             if ($this->configRepository->isDebugEnabled()) {
                 $this->debugLogger->addLog('Tool Execute', [
@@ -500,10 +545,29 @@ class ChatService implements ChatServiceInterface
                 ]);
             }
             $input = $toolCall['input'] ?? [];
+            // A sensitive-class token (masked personal value, admin URL) never rehydrates into a
+            // write, resolvable or not: prompt injection could otherwise steer it into stored data
+            // an attacker can read back (the rehydration-oracle chain). Checked BEFORE rehydration.
+            if (!$tool->isReadOnlyAction($input) && $this->privacyService->containsSensitiveToken($input)) {
+                return ['error' => 'This action would write a masked personal value into data. Ask the '
+                    . 'administrator to enter it directly on the form or in the request.'];
+            }
+            // The model only ever saw tokens for scrubbed values, so swap them back to real values on
+            // every execution path (read, stream, confirm); the persistent vault resolves tokens from
+            // earlier turns and across the confirm round-trip. A token the vault cannot resolve
+            // (forged, or minted in another conversation) must never reach a write: it would persist
+            // "[order_1]" verbatim into real data. Refuse instead.
+            $input = $this->privacyService->rehydrateArguments($input);
+            if (!$tool->isReadOnlyAction($input) && $this->privacyService->containsToken($input)) {
+                return ['error' => 'This action refers to a value that is masked for privacy. Ask the '
+                    . 'administrator to enter it directly on the form or in the request.'];
+            }
             if ($adminUserId !== null) {
                 $input['_admin_user_id'] = $adminUserId;
             }
             $result = $tool->execute($input);
+            // Privacy filter runs here, before the result is capped and sent to the LLM.
+            $result = $this->privacyService->filterToolResult($classes, $result);
             if ($this->configRepository->isDebugEnabled()) {
                 $this->debugLogger->addLog('Tool Result', ['tool' => $toolCall['name'], 'result' => $result]);
             }
@@ -513,7 +577,9 @@ class ChatService implements ChatServiceInterface
                 'tool' => $toolCall['name'],
                 'error' => $e->getMessage(),
             ]);
-            return ['error' => $e->getMessage()];
+            // The exception message can embed a rehydrated argument, so it goes through the filter
+            // (its "error" envelope is re-scrubbed) rather than straight to the LLM.
+            return $this->privacyService->filterToolResult($classes, ['error' => $e->getMessage()]);
         }
     }
 

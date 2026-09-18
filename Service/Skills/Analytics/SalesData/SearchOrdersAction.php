@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
@@ -57,6 +58,26 @@ class SearchOrdersAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // The customer name is a direct identifier and never sent; the order ids are tokenised.
+        return [
+            'query' => [PiiClass::PUBLIC],
+            'period' => [PiiClass::PUBLIC],
+            'results_count' => [PiiClass::PUBLIC],
+            'entity_id' => [PiiClass::TOKENISE, 'order'],
+            'order_number' => [PiiClass::TOKENISE, 'order'],
+            'order_total' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'customer' => [PiiClass::STRIP],
+            'date' => [PiiClass::PUBLIC],
+            'product_sku' => [PiiClass::PUBLIC],
+            'product_name' => [PiiClass::PUBLIC],
+            'qty' => [PiiClass::PUBLIC],
+            'line_total' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

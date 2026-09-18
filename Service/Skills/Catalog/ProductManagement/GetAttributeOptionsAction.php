@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class GetAttributeOptionsAction implements ActionInterface
 {
@@ -44,6 +45,15 @@ class GetAttributeOptionsAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'attribute_code' => [PiiClass::PUBLIC],
+            'id' => [PiiClass::PUBLIC],
+            'label' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\ProductData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class GetBySkuAction implements ActionInterface
 {
@@ -44,6 +45,23 @@ class GetBySkuAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'sku' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'price' => [PiiClass::PUBLIC],
+            'special_price' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'type' => [PiiClass::PUBLIC],
+            'description' => [PiiClass::PUBLIC],
+            'short_description' => [PiiClass::PUBLIC],
+            'meta_title' => [PiiClass::PUBLIC],
+            'meta_description' => [PiiClass::PUBLIC],
+            'url_key' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Content\CmsData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class ListPagesAction implements ActionInterface
 {
@@ -39,6 +40,17 @@ class ListPagesAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'total' => [PiiClass::PUBLIC],
+            'id' => [PiiClass::PUBLIC],
+            'identifier' => [PiiClass::PUBLIC],
+            'title' => [PiiClass::PUBLIC],
+            'is_active' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

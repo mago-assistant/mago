@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class RecentOrdersAction implements ActionInterface
@@ -46,6 +47,20 @@ class RecentOrdersAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // The order ids are tokenised so follow-up actions can still target the order.
+        return [
+            'entity_id' => [PiiClass::TOKENISE, 'order'],
+            'order_number' => [PiiClass::TOKENISE, 'order'],
+            'total' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'items' => [PiiClass::PUBLIC],
+            'store_id' => [PiiClass::PUBLIC],
+            'date' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

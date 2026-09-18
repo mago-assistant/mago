@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\CustomerData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class LookupCustomerAction implements ActionInterface
@@ -50,6 +51,25 @@ class LookupCustomerAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // Direct identifiers are never sent; the bare id is tokenised so the assistant can still
+        // refer to the row; city/country stay public so "which customers are in X" keeps working
+        // (#97: the identifiers beside them are stripped, so they are not linkable).
+        return [
+            'entity_id' => [PiiClass::TOKENISE, 'customer'],
+            'name' => [PiiClass::STRIP],
+            'email' => [PiiClass::STRIP],
+            'telephone' => [PiiClass::STRIP],
+            'country' => [PiiClass::PUBLIC],
+            'city' => [PiiClass::PUBLIC],
+            'registered' => [PiiClass::PUBLIC],
+            // The miss message quotes what the admin searched for, which is a name or an address.
+            // An empty results list already says "nothing found".
+            'message' => [PiiClass::STRIP],
+        ];
     }
 
     public function getInstructions(): string

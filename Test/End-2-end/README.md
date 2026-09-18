@@ -21,6 +21,7 @@ Everything is read from environment variables, no config file to edit:
 | `ADMIN_PATH` | `admin` | `backend/frontName` from `app/etc/env.php` |
 | `ADMIN_USERNAME` | `exampleuser` | Admin username |
 | `ADMIN_PASSWORD` | `examplepassword123` | Admin password |
+| `WIREMOCK_ADMIN_URL` | `http://localhost:8080` | WireMock admin API, for request-journal assertions |
 | `MAGO_DEBUG_LOG` | `/var/www/html/var/log/mago-debug.log` | Path of the Mago debug log as seen from the test runner |
 
 ```bash

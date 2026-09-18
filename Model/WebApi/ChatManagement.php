@@ -14,6 +14,7 @@ use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
 use MagoAssistant\Mago\Api\WebApi\ChatManagementInterface;
 use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Service\Ai\ChatService;
+use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 
 class ChatManagement implements ChatManagementInterface
 {
@@ -22,7 +23,8 @@ class ChatManagement implements ChatManagementInterface
         private readonly ConversationRepositoryInterface $conversationRepository,
         private readonly UserContextInterface $userContext,
         private readonly Json $json,
-        private readonly ErrorLogger $errorLogger
+        private readonly ErrorLogger $errorLogger,
+        private readonly PrivacyService $privacyService
     ) {
     }
 
@@ -31,14 +33,24 @@ class ChatManagement implements ChatManagementInterface
         try {
             $adminUserId = $this->requireAdminUserId();
 
+            $isNewConversation = !$conversationId;
             if (!$conversationId) {
-                $title = mb_substr($message, 0, 50);
-                $conversationId = $this->conversationRepository->create($adminUserId, $title);
+                $conversationId = $this->conversationRepository->create($adminUserId);
             } else {
                 // Reject posting into another admin's conversation
                 $this->conversationRepository->getByIdForUser($conversationId, $adminUserId);
             }
 
+            // Same treatment as the Stream controller (#97 decision 1): the stored copy is
+            // tokenised, the title derives from the scrubbed text.
+            $this->privacyService->beginConversation($conversationId);
+            $message = $this->privacyService->scrubText($message);
+            if ($isNewConversation) {
+                $this->conversationRepository->updateTitle(
+                    $conversationId,
+                    $this->privacyService->safeTitle($message)
+                );
+            }
             $this->conversationRepository->addMessage($conversationId, 'user', $message);
 
             $messages = $this->conversationRepository->getMessages($conversationId);
@@ -55,11 +67,20 @@ class ChatManagement implements ChatManagementInterface
                 $pendingConfirmation
             );
 
+            // Display copies for the caller (#97 decision 5); stored copies stay tokenised, and the
+            // canonical tool_calls stay tokenised too so a confirm re-reads them from the store.
+            $toolCallsDisplay = [];
+            foreach (($response['tool_calls'] ?? []) as $tc) {
+                $tc['input'] = $this->privacyService->rehydrateArguments($tc['input'] ?? []);
+                $toolCallsDisplay[] = $tc;
+            }
+
             return $this->toJson([
                 'conversation_id' => $conversationId,
                 'message_id' => $messageId,
-                'content' => $response['content'] ?? '',
+                'content' => $this->privacyService->displayText((string)($response['content'] ?? '')),
                 'tool_calls' => $response['tool_calls'] ?? [],
+                'tool_calls_display' => $toolCallsDisplay,
                 'pending_confirmation' => $pendingConfirmation,
             ]);
         } catch (\Throwable $e) {
@@ -84,7 +105,20 @@ class ChatManagement implements ChatManagementInterface
         try {
             $adminUserId = $this->requireAdminUserId();
             $conversation = $this->conversationRepository->getByIdForUser($conversationId, $adminUserId);
-            $conversation['messages'] = $this->conversationRepository->getMessages($conversationId);
+            $messages = $this->conversationRepository->getMessages($conversationId);
+
+            // Stored copies are tokenised; rehydrate for the caller like the panel's Load does
+            // (#97 decision 5). The list endpoint keeps tokenised titles: rehydrating would need a
+            // vault bind per row, and a token in a list title is privacy-safe.
+            $this->privacyService->beginConversation($conversationId);
+            $conversation['title'] = $this->privacyService->displayText((string)($conversation['title'] ?? ''));
+            foreach ($messages as $index => $message) {
+                if (isset($message['content']) && is_string($message['content'])) {
+                    $messages[$index]['content'] = $this->privacyService->displayText($message['content']);
+                }
+            }
+            $conversation['messages'] = $messages;
+
             return $this->toJson($conversation);
         } catch (\Throwable $e) {
             return $this->toJson(['error' => $e->getMessage()]);
@@ -118,12 +152,10 @@ class ChatManagement implements ChatManagementInterface
 
             /** @var ChatService $chatService */
             $chatService = $this->chatService;
-            $results = $chatService->executeConfirmedTools($toolCalls, $adminUserId);
+            $conversationId = (int)$message['conversation_id'];
+            $results = $chatService->executeConfirmedTools($toolCalls, $adminUserId, null, null, $conversationId);
 
             $this->conversationRepository->resolveConfirmation($messageId, true, $adminUserId);
-
-            // Add tool results as messages and continue conversation
-            $conversationId = (int)$message['conversation_id'];
             foreach ($results as $toolCallId => $result) {
                 $this->conversationRepository->addMessage(
                     $conversationId,
@@ -146,7 +178,7 @@ class ChatManagement implements ChatManagementInterface
             return $this->toJson([
                 'success' => true,
                 'message_id' => $responseMessageId,
-                'content' => $response['content'] ?? '',
+                'content' => $this->privacyService->displayText((string)($response['content'] ?? '')),
                 'tool_results' => $results,
             ]);
         } catch (\Throwable $e) {

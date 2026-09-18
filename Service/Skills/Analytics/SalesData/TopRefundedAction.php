@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 
 class TopRefundedAction implements ActionInterface
@@ -51,6 +52,18 @@ class TopRefundedAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'period' => [PiiClass::PUBLIC],
+            'sku' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'qty_refunded' => [PiiClass::PUBLIC],
+            'refund_total' => [PiiClass::PUBLIC],
+            'creditmemo_count' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

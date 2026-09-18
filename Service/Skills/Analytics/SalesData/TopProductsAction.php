@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 
 class TopProductsAction implements ActionInterface
@@ -51,6 +52,17 @@ class TopProductsAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'period' => [PiiClass::PUBLIC],
+            'sku' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'qty_ordered' => [PiiClass::PUBLIC],
+            'revenue' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

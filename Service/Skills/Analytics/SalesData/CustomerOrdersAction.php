@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
@@ -56,6 +57,22 @@ class CustomerOrdersAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // The bare customer and order ids are tokenised so the assistant can still refer to them.
+        return [
+            'customer_id' => [PiiClass::TOKENISE, 'customer'],
+            'period' => [PiiClass::PUBLIC],
+            'total_orders' => [PiiClass::PUBLIC],
+            'entity_id' => [PiiClass::TOKENISE, 'order'],
+            'order_number' => [PiiClass::TOKENISE, 'order'],
+            'total' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'items' => [PiiClass::PUBLIC],
+            'date' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

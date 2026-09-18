@@ -480,6 +480,7 @@ declare(strict_types=1);
 namespace Vendor\HostingIntegration\Service\Tool;
 
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class ServerStatus implements ToolInterface
 {
@@ -540,6 +541,19 @@ class ServerStatus implements ToolInterface
         return ''; // Return e.g. 'Magento_Backend::cache' for native ACL checks;
                    // mixed tools can switch on $input['action'] per invocation
     }
+
+    public function getFieldClassification(string $action = ''): array
+    {
+        // Required since 2.0.0: how each output field crosses to the LLM. Undeclared
+        // is never public (stripped). See docs/privacy-mode/README.md for the cookbook.
+        return [
+            'cpu_usage' => [PiiClass::PUBLIC],
+            'memory_usage' => [PiiClass::PUBLIC],
+            'disk_usage' => [PiiClass::PUBLIC],
+            'php_workers_active' => [PiiClass::PUBLIC],
+            'php_workers_total' => [PiiClass::PUBLIC],
+        ];
+    }
 }
 ```
 
@@ -596,6 +610,7 @@ Add a `system.xml` field under the Admin Assistant tools section so store admins
 - **Keep responses under 4,000 tokens** — output beyond the limit is truncated. If your tool can return large datasets, support pagination or filtering via parameters.
 - **Include `_links` for navigable records** — if your tool returns orders, products, or other admin-viewable entities, add a `_links` array so the admin can click through to the relevant page.
 - **Set `isReadOnly()` correctly** — if your tool has any side effects (writes, API calls that change state), return `false`. This triggers the user confirmation flow.
+- **Classify every output field** (`getFieldClassification()`, required since 2.0.0) — the privacy filter strips any field you do not declare, so an incomplete map silently empties your tool's output. Fields that can carry personal data are `PiiClass::STRIP` (or `TOKENISE` for bare linkable ids); see `docs/privacy-mode/README.md` for the four canonical shapes.
 - **Never return secrets** — API keys, passwords, tokens should never appear in tool output. They would be sent to the LLM.
 - **Handle errors gracefully** — throw exceptions with clear messages. The ChatService catches them and reports to the user.
 
@@ -785,7 +800,7 @@ The existing `ToolInterface` methods map 1:1 to MCP tool definitions, making thi
 | API keys, secrets, passwords, tokens | Blocked path patterns in `ConfigReader` and `ConfigWriter` |
 | Payment configuration (`payment/*`) | Hardcoded path block in config tools |
 | Encrypted config values | Blocked by sensitive path detection |
-| Customer PII (names, emails, addresses) | `CustomerData` only returns aggregates and IDs |
+| Customer PII (names, emails, addresses) | Privacy mode (see `privacy-mode/README.md`): every tool classifies its output fields; direct identifiers are stripped, bare linkable ids are tokenised, undeclared fields never pass |
 | Admin passwords | Never exposed via any tool |
 | Database credentials | Blocked by sensitive path detection |
 

@@ -21,6 +21,13 @@ interface ConversationRepositoryInterface
 
     /**
      * @param int $conversationId
+     * @param string $title
+     * @return void
+     */
+    public function updateTitle(int $conversationId, string $title): void;
+
+    /**
+     * @param int $conversationId
      * @return array
      * @deprecated Not ownership-scoped; use getByIdForUser() to avoid cross-user conversation IDOR.
      * @see self::getByIdForUser()

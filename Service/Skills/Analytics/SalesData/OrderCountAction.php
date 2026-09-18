@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 
 class OrderCountAction implements ActionInterface
@@ -47,6 +48,13 @@ class OrderCountAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // by_status keys the counts by order status code, including custom ones, so the keys cannot
+        // be enumerated; the whole result is count aggregates.
+        return [PiiClass::ANY => [PiiClass::PUBLIC]];
     }
 
     public function getInstructions(): string

@@ -32,6 +32,14 @@ class Repository implements ConversationRepositoryInterface
         return (int)$connection->lastInsertId($table);
     }
 
+    public function updateTitle(int $conversationId, string $title): void
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $table = $this->resourceConnection->getTableName('mago_conversation');
+
+        $connection->update($table, ['title' => $title], ['entity_id = ?' => $conversationId]);
+    }
+
     public function getById(int $conversationId): array
     {
         $connection = $this->resourceConnection->getConnection();

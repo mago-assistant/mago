@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Navigation;
 
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\EntityRouteMap;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
@@ -146,6 +147,21 @@ class AdminNavigator implements ToolInterface
     public function getInstructions(): string
     {
         return '';
+    }
+
+    public function getFieldClassification(string $action = ''): array
+    {
+        // url embeds the admin secret key (/key/<hash>/), so it is tokenised (#107): the provider
+        // only ever sees [url_N] while display rehydration hands the admin the real clickable link.
+        // entity_id can be a bare customer or order id, so it is tokenised too.
+        return [
+            'label' => [PiiClass::PUBLIC],
+            'category' => [PiiClass::PUBLIC],
+            'url' => [PiiClass::TOKENISE, 'url'],
+            'entity_type' => [PiiClass::PUBLIC],
+            'entity_id' => [PiiClass::TOKENISE, 'entity'],
+            'message' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getMagentoAcl(array $input = []): string

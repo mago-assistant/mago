@@ -17,6 +17,37 @@
     <preference for="MagoAssistant\Mago\Api\ModuleInfo\RepositoryInterface" type="MagoAssistant\Mago\Model\ModuleInfo\Repository"/>
     <preference for="MagoAssistant\Mago\Api\ModuleInfo\InstalledPackagesInterface" type="MagoAssistant\Mago\Model\ModuleInfo\ComposerInstalledPackages"/>
 
+    <preference for="MagoAssistant\Mago\Api\Privacy\VaultStorageInterface" type="MagoAssistant\Mago\Model\Privacy\DbVaultStorage"/>
+
+    <!--
+        Privacy mode (#97): every tool declares how its output fields cross to the LLM via
+        getFieldClassification() on the @api tool/action interfaces. Undeclared is never public: a
+        field a tool does not classify is stripped, so a tool that declares nothing leaks nothing.
+        See docs/privacy-mode/README.md for the classification cookbook.
+    -->
+    <!--
+        Egress tripwire (#97 decision 6): developer mode logs a hit, production skips the scan.
+        A test environment flips throwOnHit via a di override so a filter regression fails the run.
+        The Client argument must be wired explicitly: Magento DI does not autowire an optional
+        constructor parameter, it would silently stay null.
+    -->
+    <type name="MagoAssistant\Mago\Service\Privacy\EgressTripwire">
+        <arguments>
+            <argument name="throwOnHit" xsi:type="boolean">false</argument>
+        </arguments>
+    </type>
+    <type name="MagoAssistant\Mago\Service\Ai\Client">
+        <arguments>
+            <argument name="tripwire" xsi:type="object">MagoAssistant\Mago\Service\Privacy\EgressTripwire</argument>
+        </arguments>
+    </type>
+
+    <type name="MagoAssistant\Mago\Service\Privacy\ConversationVault">
+        <arguments>
+            <argument name="storage" xsi:type="object">MagoAssistant\Mago\Api\Privacy\VaultStorageInterface</argument>
+        </arguments>
+    </type>
+
     <!-- Tool Registry: inject all tools -->
     <type name="MagoAssistant\Mago\Service\Tool\ToolRegistry">
         <arguments>

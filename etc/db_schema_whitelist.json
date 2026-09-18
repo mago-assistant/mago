@@ -66,7 +66,8 @@
             "created_at": true
         },
         "constraint": {
-            "PRIMARY": true
+            "PRIMARY": true,
+            "MAGO_USAGE_LOG_CONV_ID": true
         },
         "index": {
             "MAGO_USAGE_LOG_ADMIN_USER_ID": true,
@@ -93,6 +94,23 @@
         },
         "index": {
             "MAGO_DOC_FULLTEXT": true
+        }
+    },
+    "mago_pii_token": {
+        "column": {
+            "entity_id": true,
+            "conversation_id": true,
+            "token": true,
+            "value": true,
+            "token_type": true,
+            "created_at": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "MAGO_PII_TOKEN_CONV_ID": true
+        },
+        "index": {
+            "MAGO_PII_TOKEN_CONVERSATION_ID": true
         }
     }
 }

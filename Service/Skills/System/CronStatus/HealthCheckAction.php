@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\System\CronStatus;
 use Magento\Cron\Model\ResourceModel\Schedule\CollectionFactory;
 use Magento\Cron\Model\Schedule;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class HealthCheckAction implements ActionInterface
 {
@@ -40,6 +41,25 @@ class HealthCheckAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // The last_24h error count is not declared: "error" is a reserved envelope key the
+        // filter always lets through, so the count crosses anyway.
+        return [
+            'cron_active' => [PiiClass::PUBLIC],
+            'last_success' => [PiiClass::PUBLIC],
+            'success' => [PiiClass::PUBLIC],
+            'pending' => [PiiClass::PUBLIC],
+            'running' => [PiiClass::PUBLIC],
+            'missed' => [PiiClass::PUBLIC],
+            'schedule_id' => [PiiClass::PUBLIC],
+            'job_code' => [PiiClass::PUBLIC],
+            'executed_at' => [PiiClass::PUBLIC],
+            'oldest_pending' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

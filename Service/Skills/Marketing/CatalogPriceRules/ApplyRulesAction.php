@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
 use Magento\CatalogRule\Model\Rule\Job;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class ApplyRulesAction implements ActionInterface
 {
@@ -39,6 +40,14 @@ class ApplyRulesAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'message' => [PiiClass::PUBLIC],
+            'success' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

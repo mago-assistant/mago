@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\ProductData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class CountAction implements ActionInterface
 {
@@ -39,6 +40,15 @@ class CountAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'total_products' => [PiiClass::PUBLIC],
+            'enabled_products' => [PiiClass::PUBLIC],
+            'disabled_products' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

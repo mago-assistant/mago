@@ -13,6 +13,7 @@ use Magento\Framework\DB\Adapter\AdapterInterface;
 use Magento\Framework\DB\Sql\Expression;
 use Magento\Sales\Model\Order;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 
 class RevenueAction implements ActionInterface
@@ -55,6 +56,19 @@ class RevenueAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'period' => [PiiClass::PUBLIC],
+            'from' => [PiiClass::PUBLIC],
+            'to' => [PiiClass::PUBLIC],
+            'total_revenue' => [PiiClass::PUBLIC],
+            'order_count' => [PiiClass::PUBLIC],
+            'average_order_value' => [PiiClass::PUBLIC],
+            'total_items_sold' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

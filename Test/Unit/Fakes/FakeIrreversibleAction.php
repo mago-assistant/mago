@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Fakes;
 
 use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 /**
  * A write action that cannot be undone, with a fixed impact list
@@ -56,6 +57,11 @@ final class FakeIrreversibleAction implements IrreversibleActionInterface
     public function getInstructions(): string
     {
         return '';
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [PiiClass::ANY => [PiiClass::PUBLIC]];
     }
 
     public function getImpacts(array $params, int $adminUserId): array

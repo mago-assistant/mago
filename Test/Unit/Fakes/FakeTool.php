@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Fakes;
 
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 /**
  * Hand-written mixed tool (not action-scoped) whose read actions are those listed in $readActions.
@@ -88,6 +89,12 @@ final class FakeTool implements ToolInterface
     public function getInstructions(): string
     {
         return '';
+    }
+
+    public function getFieldClassification(string $action = ''): array
+    {
+        // Wildcard-public so non-privacy tests see the fake's output unfiltered.
+        return [PiiClass::ANY => [PiiClass::PUBLIC]];
     }
 
     public function getMagentoAcl(array $input = []): string

@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\CustomerData;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
@@ -53,6 +54,17 @@ class TopSpendersAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // The bare customer id is tokenised so the assistant can still refer to the row.
+        return [
+            'period' => [PiiClass::PUBLIC],
+            'customer_id' => [PiiClass::TOKENISE, 'customer'],
+            'total_spent' => [PiiClass::PUBLIC],
+            'order_count' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

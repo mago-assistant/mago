@@ -11,6 +11,7 @@ use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Review\Model\ResourceModel\Review\CollectionFactory;
 use Magento\Review\Model\Review;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class GetStatsAction implements ActionInterface
 {
@@ -48,6 +49,18 @@ class GetStatsAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'approved' => [PiiClass::PUBLIC],
+            'pending' => [PiiClass::PUBLIC],
+            'not_approved' => [PiiClass::PUBLIC],
+            'total' => [PiiClass::PUBLIC],
+            'average_rating' => [PiiClass::PUBLIC],
+            'sku' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

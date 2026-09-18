@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Form\PageForm;
 
 use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Block\Adminhtml\ChatPanel;
 use MagoAssistant\Mago\Model\Form\PageContext;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
@@ -491,4 +492,35 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
             'clear_use_default' => (bool)($field['usesDefaultValue'] ?? false),
         ];
     }
+    public function getFieldClassification(): array
+    {
+        // client_directive has to survive the filter: ChatService emits it to the browser before
+        // withoutClientDirective() takes it back out of what the model sees. Strip it here and the
+        // form simply stops applying, with nothing to show for it.
+        return [
+            'client_directive' => [PiiClass::PUBLIC],
+            'staged' => [PiiClass::PUBLIC],
+            'creating' => [PiiClass::PUBLIC],
+            'is_new' => [PiiClass::PUBLIC],
+            'navigating' => [PiiClass::PUBLIC],
+            'field_count' => [PiiClass::PUBLIC],
+            'namespace' => [PiiClass::PUBLIC],
+            'entity_type' => [PiiClass::PUBLIC],
+            'target' => [PiiClass::PUBLIC],
+            'store_id' => [PiiClass::PUBLIC],
+            'changes' => [PiiClass::PUBLIC],
+            'path' => [PiiClass::PUBLIC],
+            'label' => [PiiClass::PUBLIC],
+            'type' => [PiiClass::PUBLIC],
+            'clear_use_default' => [PiiClass::PUBLIC],
+            // The model wrote these, so echoing them back tells it nothing it did not already have.
+            'value' => [PiiClass::PUBLIC],
+            // Existing form content the model never saw. On a customer form that is a name, a
+            // street or an address, so it is not handed over just to confirm an edit.
+            'previous_value' => [PiiClass::STRIP],
+            'entity_id' => [PiiClass::TOKENISE, 'entity'],
+            'url' => [PiiClass::TOKENISE, 'url'],
+        ];
+    }
+
 }

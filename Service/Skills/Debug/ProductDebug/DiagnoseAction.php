@@ -14,6 +14,7 @@ use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Store\Api\StoreRepositoryInterface;
 use Magento\Store\Model\Store;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class DiagnoseAction implements ActionInterface
 {
@@ -52,6 +53,31 @@ class DiagnoseAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'sku' => [PiiClass::PUBLIC],
+            'product_id' => [PiiClass::PUBLIC],
+            'type' => [PiiClass::PUBLIC],
+            'website_ids' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'visibility' => [PiiClass::PUBLIC],
+            'price' => [PiiClass::PUBLIC],
+            'is_in_stock' => [PiiClass::PUBLIC],
+            'qty' => [PiiClass::PUBLIC],
+            'manage_stock' => [PiiClass::PUBLIC],
+            'backorders' => [PiiClass::PUBLIC],
+            'issues' => [PiiClass::PUBLIC],
+            'store_id' => [PiiClass::PUBLIC],
+            'store_code' => [PiiClass::PUBLIC],
+            'store_name' => [PiiClass::PUBLIC],
+            'website_id' => [PiiClass::PUBLIC],
+            'website_assigned' => [PiiClass::PUBLIC],
+            'status_overridden' => [PiiClass::PUBLIC],
+            'visibility_overridden' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

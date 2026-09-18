@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\ProductData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class SearchAction implements ActionInterface
 {
@@ -48,6 +49,19 @@ class SearchAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'query' => [PiiClass::PUBLIC],
+            'count' => [PiiClass::PUBLIC],
+            'sku' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'price' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'type' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

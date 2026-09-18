@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Form\PageForm;
 
 use MagoAssistant\Mago\Model\Form\PageContext;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 /**
  * Describes the form currently open in the browser without any field values, so the model can see
@@ -90,4 +91,21 @@ class DescribeFormAction extends AbstractPageFormReadAction
             'type' => $field['type'],
         ];
     }
+    public function getFieldClassification(): array
+    {
+        return [
+            'namespace' => [PiiClass::PUBLIC],
+            'entity_type' => [PiiClass::PUBLIC],
+            'entity_id' => [PiiClass::TOKENISE, 'entity'],
+            'is_new_entity' => [PiiClass::PUBLIC],
+            'store_id' => [PiiClass::PUBLIC],
+            'total_fields' => [PiiClass::PUBLIC],
+            'returned_fields' => [PiiClass::PUBLIC],
+            'fields' => [PiiClass::PUBLIC],
+            'path' => [PiiClass::PUBLIC],
+            'label' => [PiiClass::PUBLIC],
+            'type' => [PiiClass::PUBLIC],
+        ];
+    }
+
 }

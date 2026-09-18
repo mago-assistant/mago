@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Marketing\CouponManager;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class GetRuleAction implements ActionInterface
@@ -46,6 +47,40 @@ class GetRuleAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // condition_type through value cover the nested condition/action_condition objects the
+        // REST rule payload carries; rule conditions are shop data.
+        return [
+            'rule_id' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'description' => [PiiClass::PUBLIC],
+            'is_active' => [PiiClass::PUBLIC],
+            'discount_amount' => [PiiClass::PUBLIC],
+            'discount_type' => [PiiClass::PUBLIC],
+            'simple_action' => [PiiClass::PUBLIC],
+            'coupon_type' => [PiiClass::PUBLIC],
+            'coupon_code' => [PiiClass::PUBLIC],
+            'uses_per_coupon' => [PiiClass::PUBLIC],
+            'uses_per_customer' => [PiiClass::PUBLIC],
+            'times_used' => [PiiClass::PUBLIC],
+            'from_date' => [PiiClass::PUBLIC],
+            'to_date' => [PiiClass::PUBLIC],
+            'sort_order' => [PiiClass::PUBLIC],
+            'stop_rules_processing' => [PiiClass::PUBLIC],
+            'website_ids' => [PiiClass::PUBLIC],
+            'customer_group_ids' => [PiiClass::PUBLIC],
+            'simple_free_shipping' => [PiiClass::PUBLIC],
+            'condition' => [PiiClass::PUBLIC],
+            'action_condition' => [PiiClass::PUBLIC],
+            'condition_type' => [PiiClass::PUBLIC],
+            'aggregator_type' => [PiiClass::PUBLIC],
+            'operator' => [PiiClass::PUBLIC],
+            'attribute_name' => [PiiClass::PUBLIC],
+            'value' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\CustomerData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
@@ -52,6 +53,20 @@ class RecentSignupsAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // The signup rows carry no direct identifiers; the bare id is tokenised so the assistant
+        // can still refer to the customer.
+        return [
+            'period' => [PiiClass::PUBLIC],
+            'total_new' => [PiiClass::PUBLIC],
+            'customer_id' => [PiiClass::TOKENISE, 'customer'],
+            'group_id' => [PiiClass::PUBLIC],
+            'registered' => [PiiClass::PUBLIC],
+            'store_id' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

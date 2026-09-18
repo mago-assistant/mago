@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\ReviewManager;
 use Magento\Review\Model\ResourceModel\Review\CollectionFactory;
 use Magento\Review\Model\Review;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class ListPendingAction implements ActionInterface
@@ -47,6 +48,21 @@ class ListPendingAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // Review free text and the reviewer nickname are never sent, not even masked; the bare
+        // review id is tokenised so the assistant can still refer to the row.
+        return [
+            'review_id' => [PiiClass::TOKENISE, 'review'],
+            'title' => [PiiClass::STRIP],
+            'nickname' => [PiiClass::STRIP],
+            'detail' => [PiiClass::STRIP],
+            'product_id' => [PiiClass::PUBLIC],
+            'created_at' => [PiiClass::PUBLIC],
+            'total' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

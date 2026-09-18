@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\System\ModuleVersion;
 
 use MagoAssistant\Mago\Api\ModuleInfo\RepositoryInterface as ModuleInfoRepository;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class GetVersionAction implements ActionInterface
 {
@@ -48,6 +49,19 @@ class GetVersionAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'message' => [PiiClass::PUBLIC],
+            'ambiguous' => [PiiClass::PUBLIC],
+            'module_name' => [PiiClass::PUBLIC],
+            'package_name' => [PiiClass::PUBLIC],
+            'version' => [PiiClass::PUBLIC],
+            'version_source' => [PiiClass::PUBLIC],
+            'is_enabled' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function execute(array $params, int $adminUserId): array

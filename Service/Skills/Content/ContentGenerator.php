@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Content;
 use Magento\Catalog\Api\Data\ProductInterface;
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 
 class ContentGenerator implements ToolInterface
@@ -139,6 +140,31 @@ class ContentGenerator implements ToolInterface
             . 'installation, ask whether the text is for all store views or for one store view (for example a '
             . 'translation) when the user did not say. Use the same store_id for the generate call and the save call, '
             . 'and repeat the scope_label in your answer.';
+    }
+
+    public function getFieldClassification(string $action = ''): array
+    {
+        return [
+            'action' => [PiiClass::PUBLIC],
+            'success' => [PiiClass::PUBLIC],
+            'sku' => [PiiClass::PUBLIC],
+            'field' => [PiiClass::PUBLIC],
+            'message' => [PiiClass::PUBLIC],
+            'note' => [PiiClass::PUBLIC],
+            'store_id' => [PiiClass::PUBLIC],
+            'scope_label' => [PiiClass::PUBLIC],
+            'store_label' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'price' => [PiiClass::PUBLIC],
+            'type' => [PiiClass::PUBLIC],
+            'current_description' => [PiiClass::PUBLIC],
+            'current_short_description' => [PiiClass::PUBLIC],
+            'current_meta_title' => [PiiClass::PUBLIC],
+            'current_meta_description' => [PiiClass::PUBLIC],
+            'url_key' => [PiiClass::PUBLIC],
+            'categories' => [PiiClass::PUBLIC],
+            'instructions' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getMagentoAcl(array $input = []): string

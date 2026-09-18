@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Content\CmsData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class UpdatePageAction implements ActionInterface
 {
@@ -53,6 +54,14 @@ class UpdatePageAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'success' => [PiiClass::PUBLIC],
+            'message' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

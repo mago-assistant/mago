@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Configuration;
 use Magento\Framework\App\Cache\Frontend\Pool as CacheFrontendPool;
 use Magento\Framework\App\Cache\TypeListInterface;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class CacheManager implements ActionScopedToolInterface
 {
@@ -100,6 +101,18 @@ class CacheManager implements ActionScopedToolInterface
     public function getInstructions(): string
     {
         return '';
+    }
+
+    public function getFieldClassification(string $action = ''): array
+    {
+        return [
+            'message' => [PiiClass::PUBLIC],
+            'id' => [PiiClass::PUBLIC],
+            'label' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'success' => [PiiClass::PUBLIC],
+            'flushed' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getMagentoAcl(array $input = []): string

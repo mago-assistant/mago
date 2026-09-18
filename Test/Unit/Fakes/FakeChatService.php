@@ -49,7 +49,8 @@ final class FakeChatService implements ChatServiceInterface
         array $toolCalls,
         ?int $adminUserId = null,
         ?callable $onChunk = null,
-        ?array $selectedIds = null
+        ?array $selectedIds = null,
+        ?int $conversationId = null
     ): array {
         $results = [];
         foreach ($toolCalls as $toolCall) {

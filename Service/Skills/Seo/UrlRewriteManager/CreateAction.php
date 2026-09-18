@@ -10,6 +10,7 @@ use Magento\UrlRewrite\Model\ResourceModel\UrlRewrite as UrlRewriteResource;
 use Magento\UrlRewrite\Model\ResourceModel\UrlRewriteCollectionFactory;
 use Magento\UrlRewrite\Model\UrlRewriteFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class CreateAction implements ActionInterface
@@ -66,6 +67,21 @@ class CreateAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'message' => [PiiClass::PUBLIC],
+            'success' => [PiiClass::PUBLIC],
+            'url_rewrite_id' => [PiiClass::PUBLIC],
+            'request_path' => [PiiClass::PUBLIC],
+            'target_path' => [PiiClass::PUBLIC],
+            'redirect_type' => [PiiClass::PUBLIC],
+            'entity_type' => [PiiClass::PUBLIC],
+            'store_id' => [PiiClass::PUBLIC],
+            'description' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string
