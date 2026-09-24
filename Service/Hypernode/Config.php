@@ -19,11 +19,6 @@ class Config
     public const XML_PATH_APP_NAME = 'mago/hypernode/app_name';
     public const XML_PATH_API_TOKEN = 'mago/hypernode/api_token';
     public const XML_PATH_ACCESS_LOG_PATH = 'mago/hypernode/access_log_path';
-    public const XML_PATH_ON_NODE = 'mago/hypernode/on_node';
-
-    public const ON_NODE_AUTO = 'auto';
-    public const ON_NODE_YES = 'yes';
-    public const ON_NODE_NO = 'no';
 
     public const API_URL = 'https://api.hypernode.com';
     public const INSIGHTS_URL = 'https://insights.hypernode.com';
@@ -89,11 +84,6 @@ class Config
      */
     public function isOnHypernode(): bool
     {
-        $setting = (string)$this->scopeConfig->getValue(self::XML_PATH_ON_NODE);
-        if ($setting === self::ON_NODE_YES || $setting === self::ON_NODE_NO) {
-            return $setting === self::ON_NODE_YES;
-        }
-
         try {
             if ($this->fileDriver->isExists(self::TOKEN_FILE) || $this->fileDriver->isExists(self::NODE_MARKER_FILE)) {
                 return true;

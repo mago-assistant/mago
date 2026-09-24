@@ -12,11 +12,6 @@
             <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
             <comment><![CDATA[Found in <code>/etc/hypernode/hypernode_api_token</code> on the node. Leave empty to read that file directly. The token is never sent to the AI provider.]]></comment>
         </field>
-        <field id="on_node" translate="label comment" type="select" sortOrder="25" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
-            <label>Magento runs on this Hypernode</label>
-            <source_model>MagoAssistant\Mago\Model\Config\Source\HypernodeOnNode</source_model>
-            <comment>Only on the node itself are live load, CPU, memory, disk and the access log reported. Auto-detect looks for /etc/hypernode, hypernode-systemctl or the app name in the hostname; set Yes when detection fails on your node.</comment>
-        </field>
         <field id="access_log_path" translate="label comment" type="text" sortOrder="30" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
             <label>Nginx access log</label>
             <comment>Path of the JSON access log the http_traffic action reads (default /var/log/nginx/access.log).</comment>

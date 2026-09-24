@@ -179,7 +179,6 @@ On a Hypernode nothing needs configuring: the app name comes from the hostname a
 |---|---|---|---|
 | App name | `mago/hypernode/app_name` | detected from hostname | The Hypernode app, e.g. `yourshop` for yourshop.hypernode.io |
 | API token | `mago/hypernode/api_token` | read from the node | Encrypted; from `/etc/hypernode/hypernode_api_token` |
-| Magento runs on this Hypernode | `mago/hypernode/on_node` | `auto` | Gate for the live `/proc` block and the access log; `yes` when auto-detection fails on your node |
 | Nginx access log | `mago/hypernode/access_log_path` | `/var/log/nginx/access.log` | JSON access log the `http_traffic` action reads (last 32 MB) |
 
 ## Documentation grounding

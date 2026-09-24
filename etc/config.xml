@@ -26,7 +26,6 @@
                 <payload_retention_days>30</payload_retention_days>
             </debug>
             <hypernode>
-                <on_node>auto</on_node>
                 <access_log_path>/var/log/nginx/access.log</access_log_path>
             </hypernode>
             <docs>
