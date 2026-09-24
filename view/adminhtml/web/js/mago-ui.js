@@ -9,7 +9,7 @@
  *   Widgets      stat, stats, sparkline, meter, ring, composition, rankedBars,
  *                columns, lines, stackedColumns, heatmap, funnel, entityList,
  *                table, record, confirmWrite, toolTrace, callout, suggestions,
- *                answerFooter, empty, skeleton
+ *                choices, answerFooter, empty, skeleton
  *   Skill cards  skillAsk, skillRunning, skillLine, skillFailed, readLine,
  *                skillIrreversible, skillBulk, skillPlan, paramPrompt,
  *                undoCallout, sessionLog, skillMenu
@@ -57,7 +57,8 @@ define([], function () {
         list: '<path d="M4 6h11M4 12h16M4 18h8"/>',
         barChart: '<path d="M4 19V9m5 10V5m5 14v-7m5 7V8"/>',
         imageOff: '<rect x="3" y="4" width="18" height="14" rx="2.5"/><path d="M4 17l5-4 3.5 2.5"/><path d="M3 3l18 18"/>',
-        sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.7 1.8L21.5 19.5l-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z"/>'
+        sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.7 1.8L21.5 19.5l-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z"/>',
+        pencil: '<path d="M16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1 1-4z"/><path d="M14.5 6.5l3 3"/>'
     };
 
     // Default English copy. Override per call through opts.labels, or globally
@@ -87,7 +88,8 @@ define([], function () {
         confirmChange: 'Confirm change',
         cannotUndo: 'Cannot be undone',
         stepOf: 'step %1 of %2',
-        ofSelected: '%1 of %2'
+        ofSelected: '%1 of %2',
+        somethingElse: 'Something else…'
     };
 
     /* ------------------------------------------------------------------ */
@@ -877,6 +879,45 @@ define([], function () {
         ]);
     }
 
+    // W19b Clarifying choices: the options for a question that was too vague to answer.
+    // {options: [{label}], other: 'Something else…'}
+    // Each option is a button, so the static HTML an answer renders to stays reachable by
+    // keyboard; the chat panel sends a picked option's label as the next message and moves the
+    // focus to the input for "other".
+    function choiceButton(label, iconName, className) {
+        var node = el('button', 'mago-suggestion mago-choice' + (className ? ' ' + className : ''), [
+            el('span', 'mago-suggestion-icon', icon(iconName, 19, 2)),
+            el('span', 'mago-suggestion-label', label),
+            icon('chevronRight', 16, 2.2)
+        ]);
+        node.type = 'button';
+        return node;
+    }
+
+    function choices(opts) {
+        var L = labels(opts);
+        var options = (opts.options || []).filter(function (o) {
+            return o && o.label;
+        });
+        var cards = options.map(function (o) {
+            var node = choiceButton(o.label, 'arrowRight');
+            if (o.onClick) {
+                node.addEventListener('click', function (e) { o.onClick(e, o); });
+            }
+            return node;
+        });
+        if (opts.other !== false) {
+            var other = choiceButton(typeof opts.other === 'string' && opts.other ? opts.other : L.somethingElse, 'pencil', 'is-other');
+            if (opts.onOther) {
+                other.addEventListener('click', opts.onOther);
+            }
+            cards.push(other);
+        }
+        return el('div', 'mago-suggestions mago-choices', [
+            el('div', 'mago-suggestion-cards', cards)
+        ]);
+    }
+
     // W20 Answer footer: primary exit plus feedback.
     // {primary: {label, href, onClick, external}, onCopy, onFeedback(vote)}
     function answerFooter(opts) {
@@ -1436,6 +1477,7 @@ define([], function () {
         toolTrace: toolTrace,
         callout: callout,
         suggestions: suggestions,
+        choices: choices,
         answerFooter: answerFooter,
         empty: empty,
         skeleton: skeleton,

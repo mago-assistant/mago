@@ -1295,6 +1295,28 @@
     }
 }
 
+// A clarifying choice is a button: reset what the browser adds so it matches the card above
+.mago-choice {
+    width: 100%;
+    font-family: var(--mago-font, inherit);
+    text-align: left;
+    cursor: pointer;
+
+    &:focus-visible {
+        outline: 2px solid var(--mago-accent, #FF7A33);
+        outline-offset: 2px;
+    }
+
+    &.is-other {
+        border-style: dashed;
+        color: var(--mago-ink-soft, #6B645F);
+
+        .mago-suggestion-icon {
+            color: var(--mago-ink-soft, #6B645F);
+        }
+    }
+}
+
 .mago-suggestion-icon {
     display: inline-flex;
     color: var(--mago-accent, #FF7A33);
