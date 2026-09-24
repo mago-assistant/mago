@@ -6,8 +6,6 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Hypernode;
 
-use Magento\Framework\App\Config\ScopeConfigInterface;
-use Magento\Framework\Encryption\EncryptorInterface;
 use Magento\Framework\Filesystem\Driver\File as FileDriver;
 use MagoAssistant\Mago\Service\Hypernode\AccessLogReader;
 use MagoAssistant\Mago\Service\Hypernode\Config;
@@ -90,14 +88,10 @@ class AccessLogReaderTest extends TestCase
 
     private function reader(): AccessLogReader
     {
-        $scopeConfig = $this->createStub(ScopeConfigInterface::class);
-        $scopeConfig->method('getValue')->willReturnCallback(
-            fn (string $path) => $path === Config::XML_PATH_ACCESS_LOG_PATH ? $this->logPath : null
-        );
-        $fileDriver = new FileDriver();
-        $config = new Config($scopeConfig, $this->createStub(EncryptorInterface::class), $fileDriver);
+        $config = $this->createStub(Config::class);
+        $config->method('getAccessLogPath')->willReturn($this->logPath);
 
-        return new AccessLogReader($fileDriver, $config);
+        return new AccessLogReader(new FileDriver(), $config);
     }
 
     /**

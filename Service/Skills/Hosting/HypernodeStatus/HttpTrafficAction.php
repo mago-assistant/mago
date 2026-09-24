@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Hosting\HypernodeStatus;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Hypernode\AccessLogReader;
+use MagoAssistant\Mago\Service\Hypernode\Config;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class HttpTrafficAction implements ActionInterface
@@ -16,7 +17,8 @@ class HttpTrafficAction implements ActionInterface
     private const MAX_MINUTES = 1440;
 
     public function __construct(
-        private readonly AccessLogReader $accessLogReader
+        private readonly AccessLogReader $accessLogReader,
+        private readonly Config $config
     ) {
     }
 
@@ -87,6 +89,10 @@ class HttpTrafficAction implements ActionInterface
     {
         $minutes = (int)($params['minutes'] ?? self::DEFAULT_MINUTES);
         $minutes = max(1, min(self::MAX_MINUTES, $minutes));
+
+        if (!$this->config->isOnHypernode()) {
+            return ['error' => $this->config->getNotOnNodeMessage()];
+        }
 
         try {
             return $this->accessLogReader->summarize($minutes);

@@ -83,6 +83,7 @@ class ServerOverviewActionTest extends TestCase
         $config->method('isOnHypernode')->willReturn($onNode);
         $config->method('getAppName')->willReturn($configured ? 'yourshop' : '');
         $config->method('getNotConfiguredMessage')->willReturn('The Hypernode API is not configured: ...');
+        $config->method('getNotOnNodeMessage')->willReturn('Magento does not run on the Hypernode itself; see Hypernode Insights.');
 
         return $config;
     }

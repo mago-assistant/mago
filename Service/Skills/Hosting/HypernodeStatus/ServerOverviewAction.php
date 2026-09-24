@@ -106,8 +106,7 @@ class ServerOverviewAction implements ActionInterface
         // Hypernode, so the live block is left out and Insights is the place for those numbers.
         $result = $this->config->isOnHypernode()
             ? ['server' => $this->systemMetrics->collect()]
-            : ['server' => null, 'server_note' => 'Magento does not run on the Hypernode itself, so live load, '
-                . 'CPU, memory and disk are not available here; see Hypernode Insights for them.'];
+            : ['server' => null, 'server_note' => $this->config->getNotOnNodeMessage()];
 
         try {
             $app = $this->apiClient->getApp();

@@ -18,13 +18,12 @@ class Config
 {
     public const XML_PATH_APP_NAME = 'mago/hypernode/app_name';
     public const XML_PATH_API_TOKEN = 'mago/hypernode/api_token';
-    public const XML_PATH_ACCESS_LOG_PATH = 'mago/hypernode/access_log_path';
 
     public const API_URL = 'https://api.hypernode.com';
     public const INSIGHTS_URL = 'https://insights.hypernode.com';
     public const TOKEN_FILE = '/etc/hypernode/hypernode_api_token';
     public const NODE_MARKER_FILE = '/usr/bin/hypernode-systemctl';
-    public const DEFAULT_ACCESS_LOG_PATH = '/var/log/nginx/access.log';
+    public const ACCESS_LOG_PATH = '/var/log/nginx/access.log';
 
     public function __construct(
         private readonly ScopeConfigInterface $scopeConfig,
@@ -74,9 +73,7 @@ class Config
 
     public function getAccessLogPath(): string
     {
-        $configured = trim((string)$this->scopeConfig->getValue(self::XML_PATH_ACCESS_LOG_PATH));
-
-        return $configured !== '' ? $configured : self::DEFAULT_ACCESS_LOG_PATH;
+        return self::ACCESS_LOG_PATH;
     }
 
     /**
@@ -100,6 +97,15 @@ class Config
     public function isApiConfigured(): bool
     {
         return $this->getAppName() !== '' && $this->getApiToken() !== '';
+    }
+
+    /**
+     * What the on-node actions answer with when PHP does not run on the Hypernode
+     */
+    public function getNotOnNodeMessage(): string
+    {
+        return 'Magento does not run on the Hypernode itself, so live load, CPU, memory, disk and the access '
+            . 'log are not available here; see Hypernode Insights at ' . self::INSIGHTS_URL . ' for them.';
     }
 
     /**

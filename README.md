@@ -164,7 +164,7 @@ directive contract it uses to reach the browser.
 The `hypernode_status` skill answers "is the server slow?" questions with live data from the Hypernode
 the store runs on: load, memory and disk (`server_overview`), busy PHP-FPM workers (`php_workers`), request
 rate, status codes, 5xx errors, cache handlers and PHP response times from the nginx JSON access log
-(`http_traffic`), recent node tasks (`recent_flows`) and custom
+(`http_traffic`, read from `/var/log/nginx/access.log`), recent node tasks (`recent_flows`) and custom
 [Hypernode Insights](https://insights.hypernode.com) annotations (`list_annotations`,
 `create_annotation`, the only write action). Every action, including the local server metrics, requires a
 configured API, and the live load, CPU, memory and disk block is only reported when PHP runs on the Hypernode
@@ -173,13 +173,13 @@ server; the token is never sent to the AI provider. Use of the skill requires th
 
 On a Hypernode nothing needs configuring: the app name comes from the hostname and the API token from
 `/etc/hypernode/hypernode_api_token`. Off-node (staging, local Docker) fill in both under
-`Stores > Configuration > Mago Assistant > Hypernode`; `http_traffic` then still needs a readable log.
+`Stores > Configuration > Mago Assistant > Hypernode`; the API actions then work, the on-node ones report
+that they are not available off the node.
 
 | Field | Config path | Default | Purpose |
 |---|---|---|---|
 | App name | `mago/hypernode/app_name` | detected from hostname | The Hypernode app, e.g. `yourshop` for yourshop.hypernode.io |
 | API token | `mago/hypernode/api_token` | read from the node | Encrypted; from `/etc/hypernode/hypernode_api_token` |
-| Nginx access log | `mago/hypernode/access_log_path` | `/var/log/nginx/access.log` | JSON access log the `http_traffic` action reads (last 32 MB) |
 
 ## Documentation grounding
 
