@@ -12,6 +12,7 @@ use MagoAssistant\Mago\Api\Config\RepositoryInterface;
 class FakeConfigRepository implements RepositoryInterface
 {
     private bool $isInternalSslVerifyEnabled = true;
+    private bool $addonFeedEnabled = true;
     private string $internalUrl = '';
     private int $maxToolIterations = 0;
     private int $customerNotificationInterval = 0;
@@ -172,6 +173,18 @@ class FakeConfigRepository implements RepositoryInterface
     public function getLanguage(): string
     {
         return '';
+    }
+
+    public function isAddonFeedEnabled(): bool
+    {
+        return $this->addonFeedEnabled;
+    }
+
+    public function withAddonFeedEnabled(bool $enabled): self
+    {
+        $this->addonFeedEnabled = $enabled;
+
+        return $this;
     }
 
     public function isDocsEnabled(): bool
