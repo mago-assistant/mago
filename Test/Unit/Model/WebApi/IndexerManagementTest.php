@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Model\WebApi;
 
+use Magento\Authorization\Model\UserContextInterface;
 use Magento\Framework\Indexer\ConfigInterface;
 use Magento\Framework\Indexer\IndexerInterface;
 use Magento\Framework\Indexer\StateInterface;
@@ -101,7 +102,8 @@ final class IndexerManagementTest extends TestCase
             $config,
             $this->makeSharedIndexValid,
             $resultFactory,
-            new ErrorLogger($this->logger, new Json())
+            new ErrorLogger($this->logger, new Json()),
+            $this->createMock(UserContextInterface::class)
         );
     }
 

@@ -6,6 +6,8 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Model\WebApi;
 
+use Magento\Authorization\Model\UserContextInterface;
+use Magento\Framework\Exception\AuthorizationException;
 use Magento\Framework\Exception\InputException;
 use Magento\Framework\Indexer\ConfigInterface;
 use Magento\Framework\Indexer\IndexerInterface;
@@ -29,18 +31,35 @@ class IndexerManagement implements IndexerManagementInterface
         private readonly ConfigInterface $config,
         private readonly MakeSharedIndexValid $makeSharedIndexValid,
         private readonly IndexerResultInterfaceFactory $indexerResultFactory,
-        private readonly ErrorLogger $errorLogger
+        private readonly ErrorLogger $errorLogger,
+        private readonly UserContextInterface $userContext
     ) {
     }
 
     public function reindexAll(): array
     {
+        $this->requireAdminUser();
+
         return $this->rebuild($this->getIndexers());
     }
 
     public function reindex(array $indexerIds): array
     {
+        $this->requireAdminUser();
+
         return $this->rebuild($this->getIndexers($indexerIds));
+    }
+
+    /**
+     * @return void
+     * @throws AuthorizationException
+     */
+    private function requireAdminUser(): void
+    {
+        $userType = $this->userContext->getUserType();
+        if ($userType !== null && (int)$userType !== UserContextInterface::USER_TYPE_ADMIN) {
+            throw new AuthorizationException(__('This endpoint requires an admin user token.'));
+        }
     }
 
     /**
