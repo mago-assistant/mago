@@ -125,7 +125,7 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
 
     public function isReindexAllowed(): bool
     {
-        return $this->isSetFlag(self::XML_PATH_ALLOW_REINDEX, null, ScopeConfigInterface::SCOPE_TYPE_DEFAULT);
+        return $this->isSetFlag(self::XML_PATH_ALLOW_REINDEX);
     }
 
     public function getAccentColor(): string
