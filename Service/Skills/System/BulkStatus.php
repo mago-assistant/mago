@@ -11,6 +11,7 @@ use Magento\Framework\Bulk\OperationInterface;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class BulkStatus implements ToolInterface
 {
@@ -99,6 +100,19 @@ class BulkStatus implements ToolInterface
     public function getInstructions(): string
     {
         return '';
+    }
+
+    public function getFieldClassification(string $action = ''): array
+    {
+        return [
+            'bulk_uuid' => [PiiClass::PUBLIC],
+            'description' => [PiiClass::PUBLIC],
+            'started_at' => [PiiClass::PUBLIC],
+            'operations' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'message' => [PiiClass::PUBLIC],
+            'result' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getMagentoAcl(array $input = []): string

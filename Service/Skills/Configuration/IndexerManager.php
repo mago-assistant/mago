@@ -129,6 +129,7 @@ class IndexerManager implements ActionScopedToolInterface
             'success' => [PiiClass::PUBLIC],
             'reindexed' => [PiiClass::PUBLIC],
             'errors' => [PiiClass::PUBLIC],
+            'bulk_uuid' => [PiiClass::PUBLIC],
         ];
     }
 
