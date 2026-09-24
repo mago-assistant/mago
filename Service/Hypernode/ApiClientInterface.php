@@ -19,14 +19,14 @@ interface ApiClientInterface
     public function getApp(): array;
 
     /**
-     * GET /v2/nats/<app>/hypernode.show-fpm-status — one line per PHP-FPM worker, as text
+     * POST /v2/nats/<app>/hypernode.show-fpm-status — one line per PHP-FPM worker, as text
      *
      * @throws ApiException
      */
     public function getFpmStatus(): string;
 
     /**
-     * GET /logbook/v1/logbooks/<app>/flows — first page of node tasks, newest first
+     * GET /logbook/v1/logbooks/<app>/flows/ — first page of node tasks, newest first
      *
      * @throws ApiException
      */

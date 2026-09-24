@@ -28,7 +28,8 @@ class ApiClient implements ApiClientInterface
 
     public function getFpmStatus(): string
     {
-        $data = $this->getJson('/v2/nats/' . $this->appName() . '/hypernode.show-fpm-status');
+        // A NATS command: the API only accepts POST here (GET answers 405), with an empty body.
+        $data = $this->request('POST', '/v2/nats/' . $this->appName() . '/hypernode.show-fpm-status');
         if (isset($data['status']) && (int)$data['status'] !== 200) {
             throw new ApiException('The node did not answer the FPM status request: ' . ($data['message'] ?? 'unknown'));
         }
@@ -38,7 +39,8 @@ class ApiClient implements ApiClientInterface
 
     public function getFlows(): array
     {
-        return $this->getJson('/logbook/v1/logbooks/' . $this->appName() . '/flows');
+        // Trailing slash matters: without it the API answers 301, which this client does not follow.
+        return $this->getJson('/logbook/v1/logbooks/' . $this->appName() . '/flows/');
     }
 
     public function listAnnotations(): array
@@ -87,9 +89,11 @@ class ApiClient implements ApiClientInterface
         $curl = $this->newCurl($token);
 
         try {
-            if ($method === 'POST') {
+            if ($method === 'POST' && $body !== null) {
                 $curl->addHeader('Content-Type', 'application/json');
-                $curl->post($url, (string)$this->json->serialize($body ?? []));
+                $curl->post($url, (string)$this->json->serialize($body));
+            } elseif ($method === 'POST') {
+                $curl->post($url, '');
             } else {
                 $curl->get($url);
             }
