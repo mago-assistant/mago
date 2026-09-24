@@ -17,10 +17,9 @@
 define([], function () {
     'use strict';
 
-    // Silence after the last final result before the countdown starts, and the countdown itself.
-    // The recogniser already waits for a pause before it finalises, so both stay short.
-    var PAUSE_MS = 400;
-    var COUNTDOWN_SECONDS = 1;
+    // Fallback for the configured wait between the last final result and the send. The recogniser
+    // already needs a pause before it finalises, so this stays short.
+    var DEFAULT_SEND_DELAY_MS = 1400;
 
     function recognitionClass() {
         return window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -34,6 +33,7 @@ define([], function () {
      * @param {HTMLElement} [options.notice] banner shown while a session is active
      * @param {string} options.lang BCP-47 tag for the recogniser
      * @param {boolean} options.autoSend
+     * @param {number} [options.sendDelay] milliseconds after the last final result before sending
      * @param {boolean} [options.handsFree] keep listening after an auto-send once the turn ended
      * @param {Function} options.t translator
      * @param {Function} [options.onSend] called when the countdown finishes
@@ -55,11 +55,12 @@ define([], function () {
 
         var recognition = null;
         var listening = false;
+        var sendDelay = parseInt(options.sendDelay, 10);
+        if (!(sendDelay >= 0)) sendDelay = DEFAULT_SEND_DELAY_MS;
         // Hands-free: set when the administrator starts a session and cleared by anything they do
         // to end it. waitingForTurn bridges the gap between an auto-send and the reply.
         var handsFree = false;
         var waitingForTurn = false;
-        var pauseTimer = null;
         var countdownTimer = null;
         var statusTimer = null;
         // Text already in the box when listening started; recognised speech is appended after it
@@ -124,10 +125,12 @@ define([], function () {
         }
 
         function clearTimers() {
-            clearTimeout(pauseTimer);
             clearInterval(countdownTimer);
-            pauseTimer = null;
             countdownTimer = null;
+        }
+
+        function countdownText(remainingMs) {
+            return remainingMs >= 1000 ? t('Sending in %1…', Math.ceil(remainingMs / 1000)) : t('Sending…');
         }
 
         // Called on every final result: the recogniser only finalises after it hears a pause, so
@@ -135,17 +138,14 @@ define([], function () {
         function scheduleAutoSend() {
             if (!options.autoSend) return;
             clearTimers();
-            pauseTimer = setTimeout(startCountdown, PAUSE_MS);
-        }
-
-        function startCountdown() {
-            var remaining = COUNTDOWN_SECONDS;
             if (!input.value.trim()) return;
-            showStatus(t('Sending in %1…', remaining), 'is-sending');
+            var due = Date.now() + sendDelay;
+            showStatus(countdownText(sendDelay), 'is-sending');
+            // One interval does both the visible countdown and the send, so they cannot drift apart.
             countdownTimer = setInterval(function () {
-                remaining -= 1;
+                var remaining = due - Date.now();
                 if (remaining > 0) {
-                    showStatus(t('Sending in %1…', remaining), 'is-sending');
+                    showStatus(countdownText(remaining), 'is-sending');
                     return;
                 }
                 clearTimers();
@@ -159,12 +159,12 @@ define([], function () {
                     stop(true);
                 }
                 if (options.onSend) options.onSend();
-            }, 1000);
+            }, Math.min(250, Math.max(50, sendDelay || 50)));
         }
 
         // Anything the administrator does with the text themselves takes over from the recogniser.
         function cancelAutoSend() {
-            if (!pauseTimer && !countdownTimer) return;
+            if (!countdownTimer) return;
             clearTimers();
             if (listening) showStatus(recordingText(), 'is-recording');
         }
@@ -232,13 +232,13 @@ define([], function () {
                 recognition = null;
                 // Chrome ends a continuous session on its own after a stretch of silence; in
                 // hands-free that is not the administrator's decision, so listen again.
-                if (handsFree && listening && !countdownTimer && !pauseTimer) {
+                if (handsFree && listening && !countdownTimer) {
                     start();
                     return;
                 }
                 if (listening) {
                     setListening(false);
-                    if (!countdownTimer && !pauseTimer) {
+                    if (!countdownTimer) {
                         showStatus(t('Recording stopped'));
                         hideStatus(1500);
                     }
@@ -264,7 +264,7 @@ define([], function () {
         }
 
         function stop(silent) {
-            var wasActive = listening || waitingForTurn || !!pauseTimer || !!countdownTimer;
+            var wasActive = listening || waitingForTurn || !!countdownTimer;
             clearTimers();
             handsFree = false;
             waitingForTurn = false;
@@ -295,7 +295,7 @@ define([], function () {
         }
 
         button.addEventListener('click', function () {
-            if (listening || waitingForTurn || pauseTimer || countdownTimer) {
+            if (listening || waitingForTurn || countdownTimer) {
                 stop();
             } else {
                 handsFree = !!options.handsFree && !!options.autoSend;
@@ -306,7 +306,7 @@ define([], function () {
         // Typing means the administrator is correcting the text: drop the countdown and stop the
         // recogniser so it cannot overwrite the edit. Enter hands the text to the normal send path.
         input.addEventListener('keydown', function (e) {
-            if (!listening && !waitingForTurn && !pauseTimer && !countdownTimer) return;
+            if (!listening && !waitingForTurn && !countdownTimer) return;
             if (e.keyCode === 13 && !e.shiftKey) { stop(true); return; }
             if (e.key && e.key.length === 1 || e.keyCode === 8 || e.keyCode === 46) stop(true);
         });

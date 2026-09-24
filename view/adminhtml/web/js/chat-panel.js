@@ -603,6 +603,7 @@ define([
         lang: config.locale,
         autoSend: !!config.voiceAutoSend,
         handsFree: !!config.voiceAutoSend && !!config.voiceHandsFree,
+        sendDelay: config.voiceSendDelay,
         t: t,
         onSend: function () { if (input.value.trim()) send(); },
         onError: function (sentence) { addMsg('assistant', esc(sentence)); }

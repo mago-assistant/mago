@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<include xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_include.xsd">
+    <group id="voice" translate="label comment" type="text" sortOrder="35" showInDefault="1" showInWebsite="1" showInStore="1">
+        <label>Voice Input</label>
+        <comment>Speak to the assistant instead of typing. Speech is converted to text by the browser's own speech recognition, so the audio is handled by the browser vendor (for example Google for Chrome), never by Mago or the AI provider. The resulting text is treated exactly like typed text.</comment>
+        <field id="enabled" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Enabled</label>
+            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+            <comment>Show a microphone button in the chat panel. Speech is turned into text by the browser's own speech recognition, so the audio is handled by the browser vendor (e.g. Google for Chrome), not by Mago or the AI provider. The recognised text is editable and treated exactly like typed text. Only shown in browsers that support speech recognition.</comment>
+        </field>
+        <field id="language" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Language</label>
+            <source_model>MagoAssistant\Mago\Model\Config\Source\SpeechLanguage</source_model>
+            <comment>The language the browser listens for. Speaking another language than the one selected here gives garbled text, so pick the language administrators actually speak rather than the interface language.</comment>
+            <depends><field id="enabled">1</field></depends>
+        </field>
+        <field id="auto_send" translate="label comment" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Send Automatically</label>
+            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+            <comment>Send the spoken message on its own after a short pause in speech. A countdown is shown first; typing or pressing the microphone cancels it. Set to No to always review and press Send yourself.</comment>
+            <depends><field id="enabled">1</field></depends>
+        </field>
+        <field id="send_delay" translate="label comment" type="text" sortOrder="35" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Send Delay (ms)</label>
+            <comment>How long to wait after speech stops before the message is sent, in milliseconds (default 1400). The browser itself already needs a moment of silence to finish a sentence, so values below 500 rarely make a difference. A countdown is shown while waiting.</comment>
+            <validate>validate-digits validate-zero-or-greater</validate>
+            <depends><field id="enabled">1</field><field id="auto_send">1</field></depends>
+        </field>
+        <field id="hands_free" translate="label comment" type="select" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Hands-free Conversation</label>
+            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+            <comment>Keep the microphone on after a spoken message is sent: once the assistant has answered it listens again for the next message, so a whole conversation can be held without touching the button. Press the microphone or start typing to stop.</comment>
+            <depends><field id="enabled">1</field><field id="auto_send">1</field></depends>
+        </field>
+    </group>
+</include>

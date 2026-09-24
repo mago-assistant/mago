@@ -168,6 +168,13 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return $this->isSetFlag(self::XML_PATH_VOICE_HANDS_FREE);
     }
 
+    public function getVoiceSendDelay(): int
+    {
+        $value = (int)$this->getStoreValue(self::XML_PATH_VOICE_SEND_DELAY);
+
+        return $value > 0 ? $value : 1400;
+    }
+
     public function getInternalUrl(): string
     {
         return trim((string)$this->getStoreValue(self::XML_PATH_INTERNAL_URL));

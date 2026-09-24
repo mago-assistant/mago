@@ -165,7 +165,8 @@ recognition (Chrome, Edge, Safari). Press it, speak, and the words appear in the
 you talk. While recording, the button turns red and a status line under the input shows what is
 happening. After a short pause in speech a countdown appears and the message is sent on its own;
 typing, or pressing the microphone again, cancels it and leaves the text in the box for you to
-edit and send yourself. Set *Send Voice Input Automatically* to No to always review first.
+edit and send yourself. *Send Delay* sets how long that pause is (default 1400 ms). Set *Send
+Automatically* to No to always review first.
 
 With *Hands-free Conversation* on (the default) the microphone stays on after a spoken message
 is sent: the panel waits for the assistant's reply and then listens again, so a whole exchange
@@ -178,13 +179,12 @@ needs its acknowledgement box ticked first; until then the word is sent as a nor
 
 The browser listens in one language at a time. By default that is the admin user's interface
 locale, which is usually English even for administrators who speak Dutch, and speaking a
-different language than the one being listened for produces garbled text. Set *Voice Input
-Language* (`mago/chat/voice_language`) to the language administrators actually speak.
+different language than the one being listened for produces garbled text. Set *Language* under Voice Input (`mago/voice/language`) to the language administrators actually speak.
 
 The audio is processed by the browser vendor's speech service, not by Mago or the AI provider.
 The resulting text is treated exactly like typed text, including privacy mode. Turn the button
-off under `Stores > Configuration > Mago Assistant > Chat Settings > Voice Input`
-(`mago/chat/voice_input`, default Yes); auto-send is `mago/chat/voice_auto_send` and hands-free `mago/chat/voice_hands_free` (both default Yes).
+off under `Stores > Configuration > Mago Assistant > Voice Input` (`mago/voice/enabled`, default
+Yes); auto-send is `mago/voice/auto_send`, its delay `mago/voice/send_delay`, hands-free `mago/voice/hands_free`.
 
 ## Documentation grounding
 

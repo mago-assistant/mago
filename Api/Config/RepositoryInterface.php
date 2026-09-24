@@ -31,10 +31,11 @@ interface RepositoryInterface
     public const XML_PATH_INTERNAL_SSL_VERIFY = 'mago/api/internal_ssl_verify';
     public const XML_PATH_LANGUAGE = 'mago/chat/language';
     public const XML_PATH_ANSWER_WIDGETS = 'mago/chat/answer_widgets';
-    public const XML_PATH_VOICE_INPUT = 'mago/chat/voice_input';
-    public const XML_PATH_VOICE_AUTO_SEND = 'mago/chat/voice_auto_send';
-    public const XML_PATH_VOICE_LANGUAGE = 'mago/chat/voice_language';
-    public const XML_PATH_VOICE_HANDS_FREE = 'mago/chat/voice_hands_free';
+    public const XML_PATH_VOICE_INPUT = 'mago/voice/enabled';
+    public const XML_PATH_VOICE_AUTO_SEND = 'mago/voice/auto_send';
+    public const XML_PATH_VOICE_LANGUAGE = 'mago/voice/language';
+    public const XML_PATH_VOICE_HANDS_FREE = 'mago/voice/hands_free';
+    public const XML_PATH_VOICE_SEND_DELAY = 'mago/voice/send_delay';
     public const XML_PATH_DOCS_ENABLED = 'mago/docs/enabled';
     public const XML_PATH_DOCS_SOURCE_REPO = 'mago/docs/source_repo';
     public const XML_PATH_DOCS_REF = 'mago/docs/ref';
@@ -171,6 +172,13 @@ interface RepositoryInterface
      * @return bool
      */
     public function isVoiceHandsFreeEnabled(): bool;
+
+    /**
+     * Milliseconds of silence after speech before a spoken message is sent
+     *
+     * @return int
+     */
+    public function getVoiceSendDelay(): int;
 
     /**
      * @return string
