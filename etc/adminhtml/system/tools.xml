@@ -7,5 +7,10 @@
             <validate>validate-digits</validate>
             <comment><![CDATA[Tool output larger than this estimated token count is truncated before it is sent to the AI, so one large result cannot crowd out the conversation (default: 4000).]]></comment>
         </field>
+        <field id="allow_reindex" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
+            <label>Allow reindexing</label>
+            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+            <comment><![CDATA[Lets the assistant queue a full reindex of one or all indexers. On large catalogs this can load the server for a long time. Requires the <code>async.operations.all</code> consumer to be running.]]></comment>
+        </field>
     </group>
 </include>

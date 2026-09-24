@@ -12,6 +12,8 @@
 
     <!-- WebApi -->
     <preference for="MagoAssistant\Mago\Api\WebApi\ChatManagementInterface" type="MagoAssistant\Mago\Model\WebApi\ChatManagement"/>
+    <preference for="MagoAssistant\Mago\Api\WebApi\IndexerManagementInterface" type="MagoAssistant\Mago\Model\WebApi\IndexerManagement"/>
+    <preference for="MagoAssistant\Mago\Api\Data\IndexerResultInterface" type="MagoAssistant\Mago\Model\Data\IndexerResult"/>
 
     <!-- Module Info Repository -->
     <preference for="MagoAssistant\Mago\Api\ModuleInfo\RepositoryInterface" type="MagoAssistant\Mago\Model\ModuleInfo\Repository"/>
@@ -73,6 +75,7 @@
                 <item name="product_debug" xsi:type="object">MagoAssistant\Mago\Service\Skills\Debug\ProductDebug</item>
                 <item name="docs_search" xsi:type="object">MagoAssistant\Mago\Service\Skills\Docs\DocsSearch</item>
                 <item name="module_version" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\ModuleVersion</item>
+                <item name="bulk_status" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\BulkStatus</item>
                 <item name="page_form" xsi:type="object">MagoAssistant\Mago\Service\Skills\Form\PageForm</item>
             </argument>
         </arguments>

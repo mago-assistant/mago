@@ -86,31 +86,29 @@ final class IndexCommandTest extends TestCase
     }
 
     #[Test]
-    public function reindexWithoutArgumentRebuildsEverythingAndListsFailures(): void
+    public function reindexWithoutArgumentQueuesABackgroundRebuild(): void
     {
         $chat = new FakeChatService(static fn (array $call): array => [
-            'success' => false,
-            'message' => '1 indexers reindexed',
-            'reindexed' => ['catalog_product_price'],
-            'errors' => ['catalogsearch_fulltext: Elasticsearch is down'],
+            'success' => true,
+            'message' => 'Reindex of all indexers queued',
+            'bulk_uuid' => 'b1c2d3e4',
         ]);
 
         $reply = $this->command($chat)->execute('reindex', [], self::ADMIN_ID, $this->noopChunk());
 
         self::assertSame([['action' => 'reindex_all']], $chat->inputs());
         self::assertSame(
-            "**1 indexer reindexed.**\n\n`catalog_product_price`\n\n"
-            . "**Failed:**\n\n- catalogsearch_fulltext: Elasticsearch is down",
+            "**Reindex of all indexers queued.**\n\nBulk operation `b1c2d3e4`.",
             $reply
         );
     }
 
     #[Test]
-    public function reindexWithIdsRebuildsEachGivenIndexerOnce(): void
+    public function reindexWithIdsQueuesEachGivenIndexerOnce(): void
     {
         $chat = new FakeChatService(static fn (array $call): array => $call['input']['indexer_id'] === 'nope'
             ? ['error' => 'Unknown indexer: nope']
-            : ['success' => true, 'message' => 'Indexer "' . $call['input']['indexer_id'] . '" has been reindexed']);
+            : ['success' => true, 'message' => 'Reindex queued', 'bulk_uuid' => 'uuid-' . $call['input']['indexer_id']]);
 
         $reply = $this->command($chat)->execute(
             'reindex',
@@ -125,9 +123,9 @@ final class IndexCommandTest extends TestCase
             ['action' => 'reindex', 'indexer_id' => 'cataloginventory_stock'],
         ], $chat->inputs());
         self::assertSame(
-            "**Indexer \"catalog_product_price\" has been reindexed.**\n\n"
+            "**Reindex of `catalog_product_price` queued.**\n\nBulk operation `uuid-catalog_product_price`.\n\n"
             . "**Error:** Unknown indexer: nope\n\n"
-            . "**Indexer \"cataloginventory_stock\" has been reindexed.**",
+            . "**Reindex of `cataloginventory_stock` queued.**\n\nBulk operation `uuid-cataloginventory_stock`.",
             $reply
         );
     }

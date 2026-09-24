@@ -117,7 +117,7 @@ class IndexCommand extends AbstractToolCommand
     }
 
     /**
-     * Reindex the given indexers one by one, or all of them when no ID is given
+     * Reindex the given indexers one by one, or queue a background rebuild when no ID is given
      *
      * @param string[] $args
      * @param int $adminUserId
@@ -130,24 +130,20 @@ class IndexCommand extends AbstractToolCommand
             return $this->reindexByIds(array_values(array_unique($args)), $adminUserId, $onChunk);
         }
 
+        return $this->reindexAll($adminUserId, $onChunk);
+    }
+
+    private function reindexAll(int $adminUserId, callable $onChunk): string
+    {
         $result = $this->runTool(['action' => 'reindex_all'], $adminUserId, $onChunk);
         if (isset($result['error'])) {
             return $this->renderError((string)$result['error']);
         }
 
-        $reindexed = array_map('strval', (array)($result['reindexed'] ?? []));
-        $errors = array_map('strval', (array)($result['errors'] ?? []));
+        $reply = '**' . ($result['message'] ?? 'Reindex of all indexers queued') . '.**';
+        $bulkUuid = $result['bulk_uuid'] ?? '';
 
-        $lines = [sprintf('**%d indexer%s reindexed.**', count($reindexed), count($reindexed) === 1 ? '' : 's')];
-        if ($reindexed !== []) {
-            $lines[] = implode(', ', array_map(static fn (string $id): string => '`' . $id . '`', $reindexed));
-        }
-        if ($errors !== []) {
-            $lines[] = '**Failed:**';
-            $lines[] = implode("\n", array_map(static fn (string $error): string => '- ' . $error, $errors));
-        }
-
-        return implode("\n\n", $lines);
+        return $bulkUuid ? $reply . "\n\nBulk operation `" . $bulkUuid . '`.' : $reply;
     }
 
     /**
@@ -163,9 +159,14 @@ class IndexCommand extends AbstractToolCommand
         $lines = [];
         foreach ($indexerIds as $indexerId) {
             $result = $this->runTool(['action' => 'reindex', 'indexer_id' => $indexerId], $adminUserId, $onChunk);
-            $lines[] = isset($result['error'])
-                ? $this->renderError((string)$result['error'])
-                : '**' . (string)($result['message'] ?? 'Indexer "' . $indexerId . '" reindexed') . '.**';
+            if (isset($result['error'])) {
+                $lines[] = $this->renderError((string)$result['error']);
+                continue;
+            }
+
+            $bulkUuid = $result['bulk_uuid'] ?? '';
+            $lines[] = '**Reindex of `' . $indexerId . '` queued.**'
+                . ($bulkUuid ? "\n\nBulk operation `" . $bulkUuid . '`.' : '');
         }
 
         return implode("\n\n", $lines);

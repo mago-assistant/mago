@@ -8,21 +8,27 @@ namespace MagoAssistant\Mago\Service\Skills\Configuration;
 
 use Magento\Framework\Indexer\IndexerRegistry;
 use Magento\Indexer\Model\Indexer\CollectionFactory;
+use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
+use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class IndexerManager implements ActionScopedToolInterface
 {
     private const ACTION_DESCRIPTIONS = [
         'status' => 'list all indexers with status',
-        'reindex' => 'reindex a specific indexer by ID, e.g. "catalog_product_price", "catalogsearch_fulltext"',
-        'reindex_all' => 'reindex all indexers',
+        'reindex' => 'reindex one indexer by ID in the background, e.g. "catalog_product_price"',
+        'reindex_all' => 'reindex all indexers in the background',
         'set_mode' => 'set indexer mode to "realtime" or "schedule"',
     ];
 
+    private const REINDEX_ACTIONS = ['reindex', 'reindex_all'];
+
     public function __construct(
         private readonly CollectionFactory $indexerCollectionFactory,
-        private readonly IndexerRegistry $indexerRegistry
+        private readonly IndexerRegistry $indexerRegistry,
+        private readonly InternalApiClient $apiClient,
+        private readonly ConfigRepository $config
     ) {
     }
 
@@ -33,7 +39,7 @@ class IndexerManager implements ActionScopedToolInterface
 
     public function getDescription(): string
     {
-        return $this->getDescriptionForActions(array_keys(self::ACTION_DESCRIPTIONS));
+        return $this->getDescriptionForActions($this->getActionNames());
     }
 
     public function getDescriptionForActions(array $actionNames): string
@@ -50,7 +56,7 @@ class IndexerManager implements ActionScopedToolInterface
 
     public function getParameterSchema(): array
     {
-        return $this->getParameterSchemaForActions(array_keys(self::ACTION_DESCRIPTIONS));
+        return $this->getParameterSchemaForActions($this->getActionNames());
     }
 
     public function getParameterSchemaForActions(array $actionNames): array
@@ -86,12 +92,22 @@ class IndexerManager implements ActionScopedToolInterface
     public function execute(array $params): array
     {
         $action = $params['action'] ?? '';
+        $indexerId = $params['indexer_id'] ?? '';
+        $adminUserId = (int)($params['_admin_user_id'] ?? 0);
+        $mode = $params['mode'] ?? '';
+
+        if (in_array($action, self::REINDEX_ACTIONS, true) && !$this->config->isReindexAllowed()) {
+            return [
+                'error' => 'Reindexing is disabled. Enable it in '
+                    . 'Stores > Configuration > Mago Assistant > Tools > Allow reindexing.',
+            ];
+        }
 
         return match ($action) {
             'status' => $this->getStatus(),
-            'reindex' => $this->reindex($params['indexer_id'] ?? ''),
-            'reindex_all' => $this->reindexAll(),
-            'set_mode' => $this->setMode($params['indexer_id'] ?? '', $params['mode'] ?? ''),
+            'reindex' => $this->reindex($indexerId, $adminUserId),
+            'reindex_all' => $this->reindexAll($adminUserId),
+            'set_mode' => $this->setMode($indexerId, $mode),
             default => ['error' => 'Unknown action: ' . $action],
         };
     }
@@ -124,6 +140,7 @@ class IndexerManager implements ActionScopedToolInterface
             'success' => [PiiClass::PUBLIC],
             'reindexed' => [PiiClass::PUBLIC],
             'errors' => [PiiClass::PUBLIC],
+            'bulk_uuid' => [PiiClass::PUBLIC],
         ];
     }
 
@@ -138,6 +155,19 @@ class IndexerManager implements ActionScopedToolInterface
             'reindex', 'reindex_all' => 'Magento_Indexer::invalidate',
             default => 'Magento_Indexer::changeMode',
         };
+    }
+
+    /**
+     * @return string[]
+     */
+    private function getActionNames(): array
+    {
+        $actionNames = array_keys(self::ACTION_DESCRIPTIONS);
+        if ($this->config->isReindexAllowed()) {
+            return $actionNames;
+        }
+
+        return array_values(array_diff($actionNames, self::REINDEX_ACTIONS));
     }
 
     private function getStatus(): array
@@ -156,50 +186,46 @@ class IndexerManager implements ActionScopedToolInterface
         return ['indexers' => $result];
     }
 
-    private function reindex(string $indexerId): array
+    private function reindex(string $indexerId, int $adminUserId): array
     {
         if (!$indexerId) {
             return ['error' => 'indexer_id parameter is required for reindex action'];
         }
 
-        try {
-            $indexer = $this->indexerRegistry->get($indexerId);
-        } catch (\Exception $e) {
-            return ['error' => 'Unknown indexer: ' . $indexerId . '. Use "status" action to list available indexers.'];
+        $available = $this->indexerCollectionFactory->create()->getAllIds();
+        if (!in_array($indexerId, $available)) {
+            $known = implode(', ', $available);
+            return ['error' => sprintf('Unknown indexer(s): %s. Available: %s', $indexerId, $known)];
         }
 
-        $indexer->reindexAll();
+        return $this->queue(
+            'mago/indexers/reindex',
+            ['indexerIds' => [$indexerId]],
+            $adminUserId
+        );
+    }
+
+    private function reindexAll(int $adminUserId): array
+    {
+        return $this->queue('mago/indexers/reindex-all', [], $adminUserId);
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>
+     */
+    private function queue(string $endpoint, array $body, int $adminUserId): array
+    {
+        $response = $this->apiClient->postAsync($endpoint, $body, $adminUserId);
+        if (isset($response['error'])) {
+            return $response;
+        }
 
         return [
             'success' => true,
-            'message' => sprintf('Indexer "%s" has been reindexed', $indexer->getTitle()),
+            'message' => 'Reindex queued',
+            'bulk_uuid' => (string)($response['bulk_uuid'] ?? ''),
         ];
-    }
-
-    private function reindexAll(): array
-    {
-        $collection = $this->indexerCollectionFactory->create();
-        $reindexed = [];
-        $errors = [];
-
-        foreach ($collection->getItems() as $indexer) {
-            try {
-                $indexer->reindexAll();
-                $reindexed[] = $indexer->getId();
-            } catch (\Exception $e) {
-                $errors[] = $indexer->getId() . ': ' . $e->getMessage();
-            }
-        }
-
-        $result = [
-            'success' => empty($errors),
-            'message' => sprintf('%d indexers reindexed', count($reindexed)),
-            'reindexed' => $reindexed,
-        ];
-        if ($errors) {
-            $result['errors'] = $errors;
-        }
-        return $result;
     }
 
     private function setMode(string $indexerId, string $mode): array

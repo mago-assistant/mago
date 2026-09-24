@@ -123,6 +123,11 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return (int)($this->getStoreValue(self::XML_PATH_MAX_RESPONSE_TOKENS) ?: 4000);
     }
 
+    public function isReindexAllowed(): bool
+    {
+        return $this->isSetFlag(self::XML_PATH_ALLOW_REINDEX);
+    }
+
     public function getAccentColor(): string
     {
         return $this->getStoreValue(self::XML_PATH_ACCENT_COLOR) ?: '#F26322';
