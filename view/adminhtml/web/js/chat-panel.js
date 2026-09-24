@@ -55,6 +55,7 @@ define([
     var SS_KEY_OPEN = 'mago_open';
     var SS_KEY_CONV = 'mago_conv';
     var SS_KEY_FULL = 'mago_fullsize';
+    var RESUME_PARAM = 'mago_conv';
     var DIRECTIVE_TYPE_FORM_WRITE = 'form_write';
     var DIRECTIVE_TYPE_FORM_NAVIGATE = 'form_navigate';
 
@@ -740,6 +741,42 @@ define([
         return href.replace(/"/g, '%22');
     }
 
+    function isAdminLink(href) {
+        var adminBase = String(config.adminBaseUrl || '');
+        var adminPath = adminBase.replace(/^https?:\/\/[^/]+/i, '');
+        return (adminBase && href.indexOf(adminBase) === 0) || (adminPath && href.indexOf(adminPath) === 0);
+    }
+
+    // sessionStorage does not follow a noopener link into a new tab, so the id travels in the URL.
+    function withResumeParam(href) {
+        if (!conversationId || href.indexOf(RESUME_PARAM + '=') !== -1) return href;
+        var hashIdx = href.indexOf('#');
+        var hash = hashIdx === -1 ? '' : href.substring(hashIdx);
+        var base = hashIdx === -1 ? href : href.substring(0, hashIdx);
+        return base + (base.indexOf('?') === -1 ? '?' : '&') + RESUME_PARAM + '=' + conversationId + hash;
+    }
+
+    function showLinkChoice(link) {
+        var href = link.getAttribute('href');
+        var existing = msgs.querySelector('.mago-link-choice');
+        if (existing) existing.remove();
+        var card = UI.skillAsk({
+            icon: 'arrowUpRight',
+            title: t('Open link'),
+            text: link.textContent.trim() || href,
+            allowLabel: t('This tab'),
+            laterLabel: t('New tab'),
+            onAllow: function() { window.location.assign(href); },
+            onLater: function() {
+                card.remove();
+                window.open(withResumeParam(href), '_blank', 'noopener');
+            }
+        });
+        card.classList.add('mago-link-choice');
+        link.parentNode.insertAdjacentElement('afterend', card);
+        card.scrollIntoView({block: 'nearest'});
+    }
+
     // Configure marked.js once if available
     if (window.marked) {
         var markedRenderer = new marked.Renderer();
@@ -889,6 +926,12 @@ define([
     msgs.addEventListener('click', function(e) {
         var scope = e.target.closest('.mago-message-content');
         if (!scope) return;
+        var link = e.target.closest('a[href]');
+        if (link && isAdminLink(link.getAttribute('href'))) {
+            e.preventDefault();
+            showLinkChoice(link);
+            return;
+        }
         var chip = e.target.closest('.mago-chip, .mago-suggestion:not([href])');
         if (chip) {
             e.preventDefault();
@@ -1481,8 +1524,45 @@ define([
         });
     }
 
-    // Restore state from sessionStorage on page load
+    function offerResume(id) {
+        try {
+            var url = new URL(window.location.href);
+            url.searchParams.delete(RESUME_PARAM);
+            window.history.replaceState(window.history.state, '', url.toString());
+        } catch(e) {}
+
+        clearMsgs();
+        conversationId = null;
+        chat.classList.remove('is-empty');
+        setSubtitle('');
+        var msgEl = addMsg('assistant', '');
+        var card = UI.skillAsk({
+            icon: 'arrowRight',
+            title: t('Continue conversation?'),
+            text: t('You opened this page from a %1 chat. Continue that conversation here, or start a new one.', config.assistantName || 'Mago'),
+            allowLabel: t('Continue'),
+            laterLabel: t('New chat'),
+            onAllow: function() { loadConversation(id); },
+            onLater: function() {
+                clearMsgs();
+                conversationId = null;
+                showGreeting();
+                saveState();
+            }
+        });
+        msgEl.querySelector('.mago-message-content').appendChild(card);
+        openPanel();
+    }
+
+    var resumeId = null;
     try {
+        resumeId = parseInt(new URLSearchParams(window.location.search).get(RESUME_PARAM), 10) || null;
+    } catch(e) {}
+
+    // Restore state from sessionStorage on page load
+    if (resumeId) {
+        offerResume(resumeId);
+    } else try {
         var wasOpen = sessionStorage.getItem(SS_KEY_OPEN) === '1';
         var savedConv = sessionStorage.getItem(SS_KEY_CONV);
         var wasFullsize = sessionStorage.getItem(SS_KEY_FULL) === '1';

@@ -69,6 +69,11 @@ class ChatPanel extends Template
         return $this->adminSession->isLoggedIn();
     }
 
+    private function getAdminBaseUrl(): string
+    {
+        return rtrim($this->_urlBuilder->getBaseUrl(), '/') . '/' . $this->_urlBuilder->getAreaFrontName() . '/';
+    }
+
     public function getJsConfig(): string
     {
         return (string)$this->json->serialize([
@@ -80,6 +85,7 @@ class ChatPanel extends Template
             'rejectUrl' => $this->getUrl('mago/chat/reject'),
             'statusUrl' => $this->getUrl('mago/chat/status'),
             'apiBaseUrl' => $this->getUrl('rest/V1/assistant'),
+            'adminBaseUrl' => $this->getAdminBaseUrl(),
             'isStreamingEnabled' => $this->configRepository->isStreamingEnabled(),
             'formFieldCap' => self::FORM_FIELD_CAP,
             'formValueLengthCap' => self::FORM_VALUE_LENGTH_CAP,
@@ -133,6 +139,13 @@ class ChatPanel extends Template
             'Action rejected. No changes were made.',
             'CMS page',
             'CMS block',
+            'Continue conversation?',
+            'You opened this page from a %1 chat. Continue that conversation here, or start a new one.',
+            'Continue',
+            'New chat',
+            'Open link',
+            'This tab',
+            'New tab',
         ];
 
         return array_combine($sentences, array_map(static fn (string $sentence): string => (string)__($sentence), $sentences));
