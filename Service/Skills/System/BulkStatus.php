@@ -112,6 +112,8 @@ class BulkStatus implements ToolInterface
             'status' => [PiiClass::PUBLIC],
             'message' => [PiiClass::PUBLIC],
             'result' => [PiiClass::PUBLIC],
+            'id' => [PiiClass::PUBLIC],
+            'title' => [PiiClass::PUBLIC],
         ];
     }
 
