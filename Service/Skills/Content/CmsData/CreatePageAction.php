@@ -10,12 +10,14 @@ use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
+use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class CreatePageAction implements ActionInterface
 {
     public function __construct(
         private readonly InternalApiClient $apiClient,
-        private readonly StoreScopeContext $scopeContext
+        private readonly StoreScopeContext $scopeContext,
+        private readonly SecureAdminUrl $secureAdminUrl
     ) {
     }
 
@@ -82,6 +84,10 @@ class CreatePageAction implements ActionInterface
             'id' => [PiiClass::PUBLIC],
             'store_id' => [PiiClass::PUBLIC],
             'store_label' => [PiiClass::PUBLIC],
+            // _links carries the edit link. Its signed url holds the admin secret key, so it crosses
+            // masked as a token and the panel swaps the real url back in on display.
+            'label' => [PiiClass::PUBLIC],
+            'url' => [PiiClass::TOKENISE, 'url'],
         ];
     }
 
@@ -130,13 +136,23 @@ class CreatePageAction implements ActionInterface
         }
 
         $storeLabel = $this->scopeContext->describeStoreTarget($storeId);
+        $pageId = $result['id'] ?? null;
 
-        return [
+        $response = [
             'success' => true,
             'message' => 'Page "' . $identifier . '" created for ' . $storeLabel,
-            'id' => $result['id'] ?? null,
+            'id' => $pageId,
             'store_id' => $storeId,
             'store_label' => $storeLabel,
         ];
+
+        if ($pageId) {
+            $response['_links'] = [[
+                'label' => 'Edit ' . $title,
+                'url' => $this->secureAdminUrl->getUrl('cms/page/edit', ['page_id' => $pageId]),
+            ]];
+        }
+
+        return $response;
     }
 }

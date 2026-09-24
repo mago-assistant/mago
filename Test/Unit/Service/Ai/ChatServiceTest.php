@@ -522,6 +522,60 @@ final class ChatServiceTest extends TestCase
         self::assertSame(['staged' => true], $results['call_1']);
     }
 
+    #[Test]
+    public function itAppendsAnEntityEditLinkToTheAnswerAfterAConfirmedWrite(): void
+    {
+        $this->grants = ['cms_data' => 'read', 'widgets' => 'write'];
+        $authorization = $this->createMock(AuthorizationInterface::class);
+        $authorization->method('isAllowed')->willReturn(true);
+        $widgets = new FakeSkill('widgets', $authorization, [
+            'make_thing' => new FakeAction('make_thing', false, [], '', [
+                'success' => true,
+                'message' => 'Thing created',
+                '_links' => [['label' => 'Edit Thing', 'url' => 'https://shop.test/admin/x/edit/id/2/key/abc/']],
+            ]),
+        ]);
+        $service = $this->buildChatService([$widgets]);
+
+        // The confirmed write hands its link to the server; the model's copy of the result loses it.
+        $results = $service->executeConfirmedTools(
+            [['id' => 'call_1', 'name' => 'widgets', 'input' => ['action' => 'make_thing']]],
+            self::ADMIN_ID
+        );
+        self::assertArrayNotHasKey('_links', $results['call_1']);
+
+        // The answer that follows carries the link, appended by the server rather than the model.
+        $this->responses = [['content' => 'Thing created.', 'tool_calls' => []]];
+        $result = $service->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertStringContainsString(
+            '[Edit Thing](https://shop.test/admin/x/edit/id/2/key/abc/)',
+            $result['content']
+        );
+    }
+
+    #[Test]
+    public function itDoesNotAppendALinkForAReadResult(): void
+    {
+        $this->grants = ['cms_data' => 'read', 'widgets' => 'write'];
+        $authorization = $this->createMock(AuthorizationInterface::class);
+        $authorization->method('isAllowed')->willReturn(true);
+        $widgets = new FakeSkill('widgets', $authorization, [
+            'peek' => new FakeAction('peek', true, [], '', [
+                '_links' => [['label' => 'Edit Thing', 'url' => 'https://shop.test/admin/x/edit/id/2/key/abc/']],
+            ]),
+        ]);
+        $service = $this->buildChatService([$widgets]);
+
+        $this->responses = [
+            ['content' => '', 'tool_calls' => [['id' => 'r1', 'name' => 'widgets', 'input' => ['action' => 'peek']]]],
+            ['content' => 'Here you go.', 'tool_calls' => []],
+        ];
+        $result = $service->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertStringNotContainsString('https://shop.test/admin', $result['content']);
+    }
+
     private function serviceWithTool(FakeTool $tool): ChatService
     {
         return new ChatService(

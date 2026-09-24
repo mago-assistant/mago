@@ -9,13 +9,15 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class CreateProductAction implements ActionInterface
 {
     private const TYPES = ['simple', 'virtual', 'downloadable', 'configurable', 'grouped', 'bundle'];
 
     public function __construct(
-        private readonly InternalApiClient $apiClient
+        private readonly InternalApiClient $apiClient,
+        private readonly SecureAdminUrl $secureAdminUrl
     ) {
     }
 
@@ -139,9 +141,9 @@ class CreateProductAction implements ActionInterface
 
     public function getFieldClassification(): array
     {
-        // Catalog data only; name/type sit under similar_products. The _links url is a relative
-        // admin route without the secret key (the signed variant is the centrally stripped
-        // admin_url), so it stays public.
+        // Catalog data only; name/type sit under similar_products. The _links url is now a signed
+        // admin url, so it holds the secret key and crosses masked as a token; the panel swaps the
+        // real url back in on display.
         return [
             'success' => [PiiClass::PUBLIC],
             'message' => [PiiClass::PUBLIC],
@@ -154,7 +156,7 @@ class CreateProductAction implements ActionInterface
             'name' => [PiiClass::PUBLIC],
             'type' => [PiiClass::PUBLIC],
             'label' => [PiiClass::PUBLIC],
-            'url' => [PiiClass::PUBLIC],
+            'url' => [PiiClass::TOKENISE, 'url'],
         ];
     }
 
@@ -198,7 +200,10 @@ TEXT;
                 '_links' => [
                     [
                         'label' => 'Edit existing ' . $sku,
-                        'url' => 'catalog/product/edit/id/' . ($this->findIdBySku($sku, $adminUserId) ?? ''),
+                        'url' => $this->secureAdminUrl->getUrl(
+                            'catalog/product/edit',
+                            ['id' => $this->findIdBySku($sku, $adminUserId) ?? '']
+                        ),
                     ],
                 ],
             ];
@@ -320,7 +325,7 @@ TEXT;
             '_links' => [
                 [
                     'label' => 'Edit ' . $name,
-                    'url' => 'catalog/product/edit/id/' . ($result['id'] ?? ''),
+                    'url' => $this->secureAdminUrl->getUrl('catalog/product/edit', ['id' => $result['id'] ?? '']),
                 ],
             ],
         ];

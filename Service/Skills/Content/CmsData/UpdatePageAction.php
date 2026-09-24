@@ -9,12 +9,14 @@ namespace MagoAssistant\Mago\Service\Skills\Content\CmsData;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class UpdatePageAction implements ActionInterface
 {
     public function __construct(
         private readonly InternalApiClient $apiClient,
-        private readonly GetPageAction $getPageAction
+        private readonly GetPageAction $getPageAction,
+        private readonly SecureAdminUrl $secureAdminUrl
     ) {
     }
 
@@ -61,6 +63,10 @@ class UpdatePageAction implements ActionInterface
         return [
             'success' => [PiiClass::PUBLIC],
             'message' => [PiiClass::PUBLIC],
+            // _links carries the edit link. Its signed url holds the admin secret key, so it crosses
+            // masked as a token and the panel swaps the real url back in on display.
+            'label' => [PiiClass::PUBLIC],
+            'url' => [PiiClass::TOKENISE, 'url'],
         ];
     }
 
@@ -104,6 +110,13 @@ class UpdatePageAction implements ActionInterface
             return ['error' => 'Failed to update page: ' . $result['error']];
         }
 
-        return ['success' => true, 'message' => 'Page "' . ($page['identifier'] ?? $identifier) . '" updated'];
+        return [
+            'success' => true,
+            'message' => 'Page "' . ($page['identifier'] ?? $identifier) . '" updated',
+            '_links' => [[
+                'label' => 'Edit ' . ($page['identifier'] ?? $identifier),
+                'url' => $this->secureAdminUrl->getUrl('cms/page/edit', ['page_id' => $pageId]),
+            ]],
+        ];
     }
 }
