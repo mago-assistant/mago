@@ -3,8 +3,9 @@ define([
     'MagoAssistant_Mago/js/chat/i18n',
     'MagoAssistant_Mago/js/chat/navigate-intent',
     'MagoAssistant_Mago/js/chat/session-log',
-    'MagoAssistant_Mago/js/chat/confirm-text'
-], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText) {
+    'MagoAssistant_Mago/js/chat/confirm-text',
+    'MagoAssistant_Mago/js/chat/voice-input'
+], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, createVoiceInput) {
     'use strict';
 
     var isPlainObject = text.isPlainObject;
@@ -304,6 +305,8 @@ define([
         chat.classList.toggle('is-busy', state);
         loading.style.display = state ? '' : 'none';
         sendBtn.disabled = state;
+        // Hands-free voice input waits for the turn to end before listening again.
+        if (!state && voiceInput) voiceInput.turnEnded();
     }
 
     // The header icon is the only way in or out of the panel, so its tooltip,
@@ -589,6 +592,56 @@ define([
         if (e.keyCode === 13 && !e.shiftKey) { e.preventDefault(); send(); }
     };
     sendBtn.onclick = send;
+
+    // Voice input (#141): browser speech recognition fills the textarea; the module hides itself
+    // when the browser has no recogniser, and the setting removes the button altogether.
+    // Voice consent (#141): once per admin user per browser. Stored client-side because the
+    // acknowledgement concerns this browser's speech service; a server-side record is a follow-up.
+    var voiceConsentKey = 'mago-voice-consent:' + String(config.adminUser || '');
+
+    function hasVoiceConsent() {
+        try { return window.localStorage.getItem(voiceConsentKey) === '1'; } catch (e) { return false; }
+    }
+
+    function requireVoiceConsent(proceed) {
+        if (hasVoiceConsent()) { proceed(); return; }
+        if (msgs.querySelector('.mago-voice-consent')) return;
+        var holder = addMsg('assistant', '');
+        var card = UI.skillAsk({
+            title: t('Voice input'),
+            text: {html: renderMd(
+                t('Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.', config.assistantName || 'Mago')
+                + '\n\n' + t('Avoid speaking customer details aloud. You can turn voice input off at any time under Stores > Configuration > Mago Assistant > Voice Input.')
+            )},
+            params: [],
+            allowLabel: t('I understand, turn on the microphone'),
+            laterLabel: t('Not now'),
+            onAllow: function () {
+                try { window.localStorage.setItem(voiceConsentKey, '1'); } catch (e) { /* private mode */ }
+                holder.remove();
+                proceed();
+            },
+            onLater: function () { holder.remove(); }
+        });
+        card.classList.add('mago-voice-consent');
+        holder.querySelector('.mago-message-content').appendChild(card);
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    var voiceInput = config.voiceInput ? createVoiceInput({
+        input: input,
+        button: qs('#mago-mic'),
+        status: qs('#mago-voice-status'),
+        notice: qs('#mago-voice-notice'),
+        lang: config.locale,
+        autoSend: !!config.voiceAutoSend,
+        handsFree: !!config.voiceAutoSend && !!config.voiceHandsFree,
+        sendDelay: config.voiceSendDelay,
+        requireConsent: requireVoiceConsent,
+        t: t,
+        onSend: function () { if (input.value.trim()) send(); },
+        onError: function (sentence) { addMsg('assistant', esc(sentence)); }
+    }) : null;
 
 
 
@@ -1014,6 +1067,7 @@ define([
     }
 
     function send() {
+        if (voiceInput) voiceInput.sending();
         var text = input.value.trim();
         if (!text || busy) return;
         hideSlashMenu();
