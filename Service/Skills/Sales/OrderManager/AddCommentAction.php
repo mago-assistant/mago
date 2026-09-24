@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Sales\OrderManager;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class AddCommentAction implements ActionInterface
@@ -59,6 +60,18 @@ class AddCommentAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // The ack's order number is a linkable id (tokenised); the message may embed it too, which
+        // the filter's vault-conceal pass covers.
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'success' => [PiiClass::PUBLIC],
+            'message' => [PiiClass::PUBLIC],
+            'order_number' => [PiiClass::TOKENISE, 'order'],
+        ];
     }
 
     public function getInstructions(): string

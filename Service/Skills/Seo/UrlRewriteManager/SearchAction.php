@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager;
 
 use Magento\UrlRewrite\Model\ResourceModel\UrlRewriteCollectionFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class SearchAction implements ActionInterface
@@ -62,6 +63,23 @@ class SearchAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'total_found' => [PiiClass::PUBLIC],
+            'count' => [PiiClass::PUBLIC],
+            'url_rewrite_id' => [PiiClass::PUBLIC],
+            'request_path' => [PiiClass::PUBLIC],
+            'target_path' => [PiiClass::PUBLIC],
+            'redirect_type' => [PiiClass::PUBLIC],
+            'entity_type' => [PiiClass::PUBLIC],
+            'entity_id' => [PiiClass::PUBLIC],
+            'store_id' => [PiiClass::PUBLIC],
+            'description' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

@@ -79,6 +79,7 @@
         <index referenceId="MAGO_USAGE_LOG_PROVIDER" indexType="btree">
             <column name="provider"/>
         </index>
+        <constraint xsi:type="foreign" referenceId="MAGO_USAGE_LOG_CONV_ID" table="mago_usage_log" column="conversation_id" referenceTable="mago_conversation" referenceColumn="entity_id" onDelete="SET NULL"/>
     </table>
 
     <table name="mago_doc" resource="default" engine="innodb" comment="Admin Assistant Documentation Corpus">
@@ -102,6 +103,26 @@
             <column name="tags"/>
             <column name="content"/>
         </index>
+    </table>
+
+    <table name="mago_pii_token" resource="default" engine="innodb" comment="Privacy Mode PII Token Vault">
+        <column xsi:type="int" name="entity_id" unsigned="true" nullable="false" identity="true" comment="Entity ID"/>
+        <column xsi:type="int" name="conversation_id" unsigned="true" nullable="false" comment="Conversation ID"/>
+        <column xsi:type="varchar" name="token" nullable="false" length="64" comment="Token"/>
+        <column xsi:type="mediumtext" name="value" nullable="false" comment="Original value the token stands for"/>
+        <column xsi:type="varchar" name="token_type" nullable="false" length="32" comment="Token type"/>
+        <column xsi:type="timestamp" name="created_at" nullable="false" default="CURRENT_TIMESTAMP" comment="Created At"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="entity_id"/>
+        </constraint>
+        <index referenceId="MAGO_PII_TOKEN_CONVERSATION_ID" indexType="btree">
+            <column name="conversation_id"/>
+        </index>
+        <constraint xsi:type="unique" referenceId="MAGO_PII_TOKEN_CONVERSATION_ID_TOKEN">
+            <column name="conversation_id"/>
+            <column name="token"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="MAGO_PII_TOKEN_CONV_ID" table="mago_pii_token" column="conversation_id" referenceTable="mago_conversation" referenceColumn="entity_id" onDelete="CASCADE"/>
     </table>
 
 </schema>

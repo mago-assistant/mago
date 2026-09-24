@@ -38,6 +38,16 @@ interface ActionInterface
     public function isReadOnly(): bool;
 
     /**
+     * How each output field crosses to the LLM under privacy mode (issue #97): field name =>
+     * [PiiClass, tokenType?], covering every key the result can contain at any depth. PiiClass::ANY
+     * classifies keys the map does not name, for output with dynamic keys. Undeclared is never
+     * public: an action that declares nothing has every scalar stripped.
+     *
+     * @return array<string,array{0:string,1?:string}>
+     */
+    public function getFieldClassification(): array;
+
+    /**
      * Execute the action
      *
      * @param array $params Tool call parameters

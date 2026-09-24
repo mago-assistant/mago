@@ -10,6 +10,7 @@ use Magento\Framework\Indexer\IndexerRegistry;
 use Magento\Indexer\Model\Indexer\CollectionFactory;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class IndexerManager implements ActionScopedToolInterface
 {
@@ -114,6 +115,21 @@ class IndexerManager implements ActionScopedToolInterface
     public function getInstructions(): string
     {
         return '';
+    }
+
+    public function getFieldClassification(string $action = ''): array
+    {
+        return [
+            'message' => [PiiClass::PUBLIC],
+            'id' => [PiiClass::PUBLIC],
+            'title' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'mode' => [PiiClass::PUBLIC],
+            'updated' => [PiiClass::PUBLIC],
+            'success' => [PiiClass::PUBLIC],
+            'reindexed' => [PiiClass::PUBLIC],
+            'errors' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getMagentoAcl(array $input = []): string

@@ -11,6 +11,7 @@ use Magento\Cron\Model\ResourceModel\Schedule\CollectionFactory;
 use Magento\Cron\Model\Schedule;
 use Magento\Cron\Model\ScheduleFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class ScheduleJobAction implements ActionInterface
 {
@@ -49,6 +50,17 @@ class ScheduleJobAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'message' => [PiiClass::PUBLIC],
+            'success' => [PiiClass::PUBLIC],
+            'schedule_id' => [PiiClass::PUBLIC],
+            'job_code' => [PiiClass::PUBLIC],
+            'scheduled_at' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

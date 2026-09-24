@@ -527,10 +527,26 @@ define([
         input.style.overflowY = full > MAX ? 'auto' : 'hidden';
     }
 
+    // Privacy mode (#97 decision 3): non-blocking hint for FP-prone patterns (postcode, loose digit
+    // runs) that the server-side scrub deliberately leaves alone; email/IBAN/BSN/VAT/phone are
+    // tokenised server-side regardless. Never blocks sending.
+    var privacyHint = qs('#mago-privacy-hint');
+    var privacyHintPatterns = [
+        /\b\d{4}\s?[A-Za-z]{2}\b/,
+        /(?:\d[\s\-]?){10,}/,
+        /[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i
+    ];
+    function updatePrivacyHint(v) {
+        if (!privacyHint) return;
+        var hit = v.length > 5 && privacyHintPatterns.some(function(p) { return p.test(v); });
+        privacyHint.hidden = !hit;
+    }
+
     input.addEventListener('input', function() {
         autoGrow();
         var v = input.value;
         sendBtn.classList.toggle('is-idle', !v.trim());
+        updatePrivacyHint(v);
         if (v.charAt(0) === '/') {
             var filter = v.substring(1);
             showSlashMenu(filter);
@@ -716,14 +732,23 @@ define([
         });
     }
 
+    // Model output is attacker-influenceable, so a link target is only ever http(s) or a local
+    // path, with quotes neutralised so it cannot break out of the href attribute.
+    function safeHref(href) {
+        href = String(href || '').replace(/[\n\r]/g, '');
+        if (!/^(https?:\/\/|\/)/i.test(href)) return '#';
+        return href.replace(/"/g, '%22');
+    }
+
     // Configure marked.js once if available
     if (window.marked) {
         var markedRenderer = new marked.Renderer();
         markedRenderer.link = function(href, title, text) {
             if (typeof href === 'object' && href !== null) { text = href.text; title = href.title; href = href.href; }
-            var isAdmin = href && (href.indexOf('/admin') !== -1 || href.charAt(0) === '/');
+            href = safeHref(href);
+            var isAdmin = href.indexOf('/admin') !== -1 || href.charAt(0) === '/';
             var target = isAdmin ? '_self' : '_blank';
-            var titleAttr = title ? ' title="' + title + '"' : '';
+            var titleAttr = title ? ' title="' + String(title).replace(/"/g, '&quot;') + '"' : '';
             return '<a href="' + href + '" target="' + target + '" rel="noopener"' + titleAttr + '>' + text + '</a>';
         };
         markedRenderer.table = function(token) {
@@ -747,18 +772,20 @@ define([
 
     function renderMd(t) {
         if (!t) return '';
-        // Use marked.js if available (loaded from CDN)
+        // Model output is attacker-influenceable (tool results can carry injected instructions), so
+        // raw HTML must never reach innerHTML: escape first, then let marked render markdown only.
+        var safe = esc(t);
         if (window.marked) {
-            return marked.parse(t);
+            return marked.parse(safe);
         }
         // Fallback: simple regex-based renderer
-        var h = esc(t);
+        var h = safe;
         h = h.replace(/```(\w*)\n([\s\S]*?)```/g, function(m,l,c){ return '<pre><code>'+c.trim()+'</code></pre>'; });
         h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
         h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
         h = h.replace(/\[([^\]]+)\]\(((?:https?:\/\/[^ )]+|\/[^ )]+))\)/g, function(m, text, url) {
-            url = url.replace(/[\n\r]+/g, '');
+            url = safeHref(url);
             var isAdmin = url.indexOf('/admin') !== -1 || url.charAt(0) === '/';
             var target = isAdmin ? '_self' : '_blank';
             return '<a href="' + url + '" target="' + target + '" rel="noopener">' + text + '</a>';
@@ -768,7 +795,7 @@ define([
             if (before.indexOf('href=') !== -1 || before.indexOf('">') !== -1) return m;
             var isAdmin = url.indexOf('/admin') !== -1;
             var target = isAdmin ? '_self' : '_blank';
-            return '<a href="' + url + '" target="' + target + '" rel="noopener">' + url + '</a>';
+            return '<a href="' + safeHref(url) + '" target="' + target + '" rel="noopener">' + url + '</a>';
         });
         h = h.replace(/\n\n/g, '</p><p>');
         h = h.replace(/\n/g, '<br>');
@@ -993,6 +1020,7 @@ define([
         input.value = '';
         sendBtn.classList.add('is-idle');
         autoGrow();
+        updatePrivacyHint('');
         setBusy(true);
         addMsg('user', renderMd(text));
 

@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class LookupOrderAction implements ActionInterface
@@ -46,6 +47,27 @@ class LookupOrderAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // Name and email are direct identifiers and never sent; the order ids are tokenised so
+        // follow-up actions can still target the order.
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'entity_id' => [PiiClass::TOKENISE, 'order'],
+            'order_number' => [PiiClass::TOKENISE, 'order'],
+            'total' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'customer' => [PiiClass::TOKENISE, 'name'],
+            'email' => [PiiClass::TOKENISE, 'email'],
+            'date' => [PiiClass::PUBLIC],
+            'sku' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'qty' => [PiiClass::PUBLIC],
+            'price' => [PiiClass::PUBLIC],
+            'row_total' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

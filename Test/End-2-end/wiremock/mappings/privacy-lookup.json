@@ -1,0 +1,59 @@
+{
+  "mappings": [
+    {
+      "name": "Privacy lookup - turn 2, the tool result carries the tokenised customer",
+      "priority": 1,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/chat/completions",
+        "bodyPatterns": [
+          {"contains": "E2E privacy lookup check"},
+          {"contains": "\"role\":\"tool\""},
+          {"contains": "[customer_"}
+        ]
+      },
+      "response": {
+        "status": 200,
+        "headers": {"Content-Type": "text/event-stream"},
+        "bodyFileName": "privacy-lookup-summary.sse",
+        "chunkedDribbleDelay": {"numberOfChunks": 10, "totalDuration": 100}
+      }
+    },
+    {
+      "name": "Privacy lookup - turn 2 fallback, no tokenised customer in the tool result",
+      "priority": 2,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/chat/completions",
+        "bodyPatterns": [
+          {"contains": "E2E privacy lookup check"},
+          {"contains": "\"role\":\"tool\""}
+        ]
+      },
+      "response": {
+        "status": 200,
+        "headers": {"Content-Type": "text/event-stream"},
+        "bodyFileName": "privacy-lookup-missing.sse",
+        "chunkedDribbleDelay": {"numberOfChunks": 10, "totalDuration": 100}
+      }
+    },
+    {
+      "name": "Privacy lookup - turn 1, look the canary customer up",
+      "priority": 3,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/chat/completions",
+        "bodyPatterns": [
+          {"contains": "E2E privacy lookup check"},
+          {"doesNotMatch": "(?s).*\"role\":\"tool\".*"}
+        ]
+      },
+      "response": {
+        "status": 200,
+        "headers": {"Content-Type": "text/event-stream"},
+        "bodyFileName": "privacy-lookup-tool-call.sse",
+        "chunkedDribbleDelay": {"numberOfChunks": 20, "totalDuration": 200}
+      }
+    }
+  ]
+}

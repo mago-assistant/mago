@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\ProductData;
 
 use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class LowStockAction implements ActionInterface
 {
@@ -48,6 +49,17 @@ class LowStockAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'threshold' => [PiiClass::PUBLIC],
+            'sku' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'qty' => [PiiClass::PUBLIC],
+            'price' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Docs\DocsSearch;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Model\Doc\Repository as DocRepository;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class SearchAction implements ActionInterface
 {
@@ -50,6 +51,19 @@ class SearchAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'note' => [PiiClass::PUBLIC],
+            'id' => [PiiClass::PUBLIC],
+            'title' => [PiiClass::PUBLIC],
+            'description' => [PiiClass::PUBLIC],
+            'url' => [PiiClass::PUBLIC],
+            'edition' => [PiiClass::PUBLIC],
+            'snippet' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

@@ -1,15 +1,11 @@
 // Config Tab Icon
-.admin__page-nav._collapsed.mago-tab .title:before {
-    display: none;
-}
-
 .admin__page-nav._collapsed.mago-tab .title,
 .admin__page-nav._collapsed._show.mago-tab .title {
-    background-image: url('@{baseDir}MagoAssistant_Mago/images/mago-icon.svg') !important;
-    background-position: 16px center;
+    background-image: url('@{baseDir}MagoAssistant_Mago/images/mago-icon.svg');
+    background-position: 15px center;
     background-repeat: no-repeat;
-    background-size: auto 50%;
-    text-indent: 42px;
+    background-size: 20px auto;
+    padding-left: 5.2rem;
 }
 
 // Mago Assistant Chat Panel
@@ -686,6 +682,14 @@ html:has(body.mago-active) {
     gap: 8px;
     flex-shrink: 0;
     position: relative;
+}
+
+.mago-privacy-hint {
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 3px 20px 8px;
+    color: var(--mago-ink, #373330);
+    opacity: 0.7;
 }
 
 .mago-input {

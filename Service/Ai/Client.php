@@ -11,6 +11,7 @@ use MageOS\AiBase\Api\AiClientInterface;
 use MageOS\AiBase\Api\Data\ChatResponseInterface;
 use MageOS\AiBase\Api\Data\StreamChunkType;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
+use MagoAssistant\Mago\Service\Privacy\EgressTripwire;
 
 /**
  * The assistant's one way to reach an AI provider.
@@ -26,11 +27,13 @@ class Client
      * @param AiClientFactoryInterface $clientFactory
      * @param ConfigRepository $configRepository
      * @param RequestFactory $requestFactory
+     * @param EgressTripwire|null $tripwire
      */
     public function __construct(
         private readonly AiClientFactoryInterface $clientFactory,
         private readonly ConfigRepository $configRepository,
-        private readonly RequestFactory $requestFactory
+        private readonly RequestFactory $requestFactory,
+        private readonly ?EgressTripwire $tripwire = null
     ) {
     }
 
@@ -59,6 +62,7 @@ class Client
      */
     public function chat(AiClientInterface $client, array $messages, array $tools): array
     {
+        $this->tripwire?->inspect($messages);
         $request = $this->requestFactory->create($messages, $tools);
 
         return $this->toArray($client->chat($request, $this->buildOptions()));
@@ -78,6 +82,7 @@ class Client
      */
     public function stream(AiClientInterface $client, array $messages, array $tools, callable $onChunk): array
     {
+        $this->tripwire?->inspect($messages);
         $request = $this->requestFactory->create($messages, $tools);
         $stream = $client->streamChat($request, $this->buildOptions());
 

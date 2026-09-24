@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\System\CronStatus;
 use Magento\Cron\Model\ResourceModel\Schedule\CollectionFactory;
 use Magento\Cron\Model\Schedule;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class ListRunningAction implements ActionInterface
 {
@@ -40,6 +41,18 @@ class ListRunningAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'schedule_id' => [PiiClass::PUBLIC],
+            'job_code' => [PiiClass::PUBLIC],
+            'executed_at' => [PiiClass::PUBLIC],
+            'running_since' => [PiiClass::PUBLIC],
+            'possibly_stuck' => [PiiClass::PUBLIC],
+            'count' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

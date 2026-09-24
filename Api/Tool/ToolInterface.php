@@ -63,6 +63,16 @@ interface ToolInterface
     public function isReadOnlyAction(array $input): bool;
 
     /**
+     * How the fields of one invocation's result cross to the LLM under privacy mode (issue #97).
+     * Action-scoped tools answer for the named action; a flat tool ignores $action. Same shape and
+     * semantics as ActionInterface::getFieldClassification(): undeclared is never public.
+     *
+     * @param string $action
+     * @return array<string,array{0:string,1?:string}>
+     */
+    public function getFieldClassification(string $action = ''): array;
+
+    /**
      * Native Magento ACL resource required for a specific invocation.
      * Mixed tools return the resource matching the action in $input; an empty
      * $input (or an unknown action) must resolve to the most restrictive

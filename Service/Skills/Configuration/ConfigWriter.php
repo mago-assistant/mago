@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Configuration;
 use Magento\Config\Model\ResourceModel\Config as ConfigResource;
 use Magento\Framework\App\Cache\TypeListInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 
 class ConfigWriter implements ToolInterface
@@ -120,6 +121,16 @@ class ConfigWriter implements ToolInterface
             . 'user names a website or store view, pass scope "websites" or "stores" with the id from the store scope '
             . 'list; never guess an id. Use config_reader first when you need to know whether a deeper scope already '
             . 'overrides the value. Repeat the resulting scope_label in your answer.';
+    }
+
+    public function getFieldClassification(string $action = ''): array
+    {
+        // Config values are dynamic paths; wildcard-public preserves today's denylist behavior,
+        // the config egress surface itself is tracked as issue #106 (denylist to allowlist).
+        return [
+            'message' => [PiiClass::PUBLIC],
+            PiiClass::ANY => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getMagentoAcl(array $input = []): string

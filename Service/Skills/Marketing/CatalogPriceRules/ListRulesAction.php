@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
 use Magento\CatalogRule\Model\ResourceModel\Rule\CollectionFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class ListRulesAction implements ActionInterface
@@ -46,6 +47,22 @@ class ListRulesAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'total_count' => [PiiClass::PUBLIC],
+            'rule_id' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'is_active' => [PiiClass::PUBLIC],
+            'discount_amount' => [PiiClass::PUBLIC],
+            'discount_type' => [PiiClass::PUBLIC],
+            'from_date' => [PiiClass::PUBLIC],
+            'to_date' => [PiiClass::PUBLIC],
+            'sort_order' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

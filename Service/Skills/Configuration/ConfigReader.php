@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Configuration;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 
 class ConfigReader implements ToolInterface
@@ -166,6 +167,15 @@ class ConfigReader implements ToolInterface
             . 'A default-scope read on a multi-store installation also returns "overrides": every website or store view '
             . 'that uses a different value. Report those overrides to the user instead of presenting the default as '
             . 'the only value.';
+    }
+
+    public function getFieldClassification(string $action = ''): array
+    {
+        // Config values are dynamic paths; wildcard-public preserves today's denylist behavior,
+        // the config egress surface itself is tracked as issue #106 (denylist to allowlist).
+        return [
+            PiiClass::ANY => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getMagentoAcl(array $input = []): string

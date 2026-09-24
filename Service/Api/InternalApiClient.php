@@ -272,11 +272,42 @@ class InternalApiClient
         }
 
         if ($statusCode >= 400) {
-            $message = $decoded['message'] ?? ('API error (HTTP ' . $statusCode . ')');
+            $message = $this->renderMessage(
+                (string)($decoded['message'] ?? ('API error (HTTP ' . $statusCode . ')')),
+                is_array($decoded['parameters'] ?? null) ? $decoded['parameters'] : []
+            );
+
             return ['error' => $message];
         }
 
         // Some endpoints return a scalar (e.g. an ID or bool) instead of an object
         return is_array($decoded) ? $decoded : ['result' => $decoded];
+    }
+
+    /**
+     * Magento hands a web api error back as an unrendered phrase and its arguments, so the message
+     * on its own still reads 'The status "%1" is not part of the order status history'. Putting the
+     * arguments back is the difference between an admin reading which status was refused and
+     * reading a placeholder.
+     *
+     * @param array<array-key,mixed> $parameters
+     */
+    private function renderMessage(string $message, array $parameters): string
+    {
+        if ($parameters === []) {
+            return $message;
+        }
+
+        $replacements = [];
+        $index = 1;
+        foreach ($parameters as $key => $value) {
+            if (!is_scalar($value)) {
+                continue;
+            }
+            $replacements['%' . (is_string($key) ? $key : $index)] = (string)$value;
+            $index++;
+        }
+
+        return strtr($message, $replacements);
     }
 }

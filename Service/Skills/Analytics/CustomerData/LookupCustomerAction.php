@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\CustomerData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class LookupCustomerAction implements ActionInterface
@@ -25,7 +26,9 @@ class LookupCustomerAction implements ActionInterface
 
     public function getDescription(): string
     {
-        return 'Search for a customer by name or email';
+        return 'Search the customer accounts for a name or email. Registered accounts only: '
+            . 'someone who ordered as a guest has no account and will not be found here, so a '
+            . 'question about a named person\'s orders goes to sales_data customer_orders instead';
     }
 
     public function getParameterSchema(): array
@@ -33,7 +36,9 @@ class LookupCustomerAction implements ActionInterface
         return [
             'search' => [
                 'type' => 'string',
-                'description' => 'Customer name or email to search for',
+                'description' => 'Customer name, email address or customer id to search for. Required by lookup_customer '
+                    . 'and used by no other action, so do not pick lookup_customer when the question '
+                    . 'names nobody to search for.',
             ],
             'limit' => [
                 'type' => 'integer',
@@ -50,6 +55,26 @@ class LookupCustomerAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // Direct identifiers are tokenised, not dropped: the provider sees [name_1] and the panel
+        // shows the admin the real value. City and country stay public so "which customers are in
+        // X" keeps working.
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'entity_id' => [PiiClass::TOKENISE, 'customer'],
+            'name' => [PiiClass::TOKENISE, 'name'],
+            'email' => [PiiClass::TOKENISE, 'email'],
+            'telephone' => [PiiClass::TOKENISE, 'phone'],
+            'country' => [PiiClass::PUBLIC],
+            'city' => [PiiClass::PUBLIC],
+            'registered' => [PiiClass::PUBLIC],
+            // The miss message quotes what the admin searched for, which is a name or an address.
+            // An empty results list already says "nothing found".
+            'message' => [PiiClass::STRIP],
+        ];
     }
 
     public function getInstructions(): string
@@ -70,7 +95,17 @@ class LookupCustomerAction implements ActionInterface
 
         $limit = max(1, min((int)($params['limit'] ?? 10), 10));
 
-        if (str_contains($search, '@')) {
+        if (ctype_digit(trim($search))) {
+            // The assistant refers to a customer by the id it was given, so the admin asks about
+            // "customer 32". Searching that as a name finds nobody, which reads as "this customer
+            // does not exist" for a customer we just showed them.
+            $searchParams = $this->apiClient->buildSearchCriteria(
+                [['field' => 'entity_id', 'value' => trim($search), 'condition_type' => 'eq']],
+                $limit,
+                1,
+                [['field' => 'created_at', 'direction' => 'DESC']]
+            );
+        } elseif (str_contains($search, '@')) {
             $searchParams = $this->apiClient->buildSearchCriteria(
                 [['field' => 'email', 'value' => '%' . trim($search) . '%', 'condition_type' => 'like']],
                 $limit,

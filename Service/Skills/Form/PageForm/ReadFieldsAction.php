@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Form\PageForm;
 
 use MagoAssistant\Mago\Model\Form\PageContext;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 /**
  * Returns the current values of named fields on the form open in the browser, including edits the
@@ -96,4 +97,20 @@ class ReadFieldsAction extends AbstractPageFormReadAction
 
         return null;
     }
+    public function getFieldClassification(): array
+    {
+        // Structure only. A form field's value is whatever the admin has open, and on a customer or
+        // order form that is a name, an address or a phone number, so the value itself never
+        // crosses; the model still learns which fields exist and which were found.
+        return [
+            'namespace' => [PiiClass::PUBLIC],
+            'found' => [PiiClass::PUBLIC],
+            'fields' => [PiiClass::PUBLIC],
+            'path' => [PiiClass::PUBLIC],
+            'label' => [PiiClass::PUBLIC],
+            'message' => [PiiClass::PUBLIC],
+            'value' => [PiiClass::STRIP],
+        ];
+    }
+
 }

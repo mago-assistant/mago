@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
@@ -40,7 +41,7 @@ class SearchOrdersAction implements ActionInterface
             ],
             'period' => [
                 'type' => 'string',
-                'description' => 'Time period: "today", "yesterday", "7days", "30days", "this_month", "last_month", "this_year", "YYYY-MM" for a specific month, or "YYYY-MM-DD:YYYY-MM-DD" for a custom range',
+                'description' => 'Time period: "today", "yesterday", "7days", "30days", "this_month", "last_month", "this_year", "all" for no lower bound, "YYYY-MM" for a specific month, or "YYYY-MM-DD:YYYY-MM-DD" for a custom range',
             ],
             'limit' => [
                 'type' => 'integer',
@@ -57,6 +58,27 @@ class SearchOrdersAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // The customer name is a direct identifier and never sent; the order ids are tokenised.
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'query' => [PiiClass::PUBLIC],
+            'period' => [PiiClass::PUBLIC],
+            'results_count' => [PiiClass::PUBLIC],
+            'entity_id' => [PiiClass::TOKENISE, 'order'],
+            'order_number' => [PiiClass::TOKENISE, 'order'],
+            'order_total' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'customer' => [PiiClass::TOKENISE, 'name'],
+            'date' => [PiiClass::PUBLIC],
+            'product_sku' => [PiiClass::PUBLIC],
+            'product_name' => [PiiClass::PUBLIC],
+            'qty' => [PiiClass::PUBLIC],
+            'line_total' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

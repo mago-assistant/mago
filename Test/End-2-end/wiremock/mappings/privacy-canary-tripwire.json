@@ -1,0 +1,19 @@
+{
+  "mappings": [
+    {
+      "name": "Privacy canary tripwire - any provider request leaking the canary email fails loudly",
+      "priority": 99,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/chat/completions",
+        "bodyPatterns": [
+          {"matches": "(?s).*privacy-canary@example\\.test.*"}
+        ]
+      },
+      "response": {
+        "status": 500,
+        "body": "PRIVACY LEAK: the request to the provider contains the canary customer email (privacy-mode.spec.ts)."
+      }
+    }
+  ]
+}

@@ -95,6 +95,8 @@ class Confirm extends Action implements HttpPostActionInterface
                 ? array_values(array_map('strval', $postData['tool_call_ids']))
                 : null;
 
+            $conversationId = (int)$message['conversation_id'];
+
             // The status events carry the server's own measurement per tool, which is the number
             // the live card prints; keeping it means a reloaded card does not disagree with what
             // the admin just watched happen.
@@ -108,13 +110,13 @@ class Confirm extends Action implements HttpPostActionInterface
                     }
                     $this->sendSse($type, $data);
                 },
-                $selectedIds
+                $selectedIds,
+                $conversationId
             );
 
             $toolCalls = $this->withResultStatus($toolCalls, $results, $durations);
             $this->conversationRepository->resolveConfirmation($messageId, true, $adminUserId, $toolCalls);
 
-            $conversationId = (int)$message['conversation_id'];
             foreach ($results as $toolCallId => $result) {
                 $this->conversationRepository->addMessage(
                     $conversationId,

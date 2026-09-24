@@ -78,6 +78,12 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
             <div class="mago-header-text">
                 <div class="mago-title-row">
                     <span class="mago-title"><?= $escaper->escapeHtml($assistantName) ?></span>
+                    <?php /* EU AI Act art. 50: make clear the administrator is interacting with AI. */ ?>
+                    <span class="mago-ai-badge"
+                          style="font-size:11px;line-height:1;padding:2px 7px;border-radius:9px;background:rgba(0,0,0,.07);opacity:.75;white-space:nowrap;"
+                          title="<?= $escaper->escapeHtmlAttr(__('You are interacting with an AI assistant, not a human.')) ?>">
+                        <?= $escaper->escapeHtml(__('AI assistant')) ?>
+                    </span>
                     <span class="mago-working-pill" aria-live="polite">
                         <span class="mago-spinner"></span><?= $escaper->escapeHtml(__('Working')) ?>
                     </span>
@@ -149,6 +155,11 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
         <button type="button" id="mago-send" class="mago-send-btn is-idle" title="<?= $escaper->escapeHtmlAttr(__('Send')) ?>">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="13 5 20 12 13 19"/></svg>
         </button>
+    </div>
+    <?php /* Privacy mode (#97 decision 3): non-blocking hint for FP-prone patterns the silent scrub
+           does not cover; certain classes (email, IBAN, BSN, VAT, phone) are tokenised server-side. */ ?>
+    <div id="mago-privacy-hint" class="mago-privacy-hint" hidden>
+        <?= $escaper->escapeHtml(__('This looks like personal data. It is filtered best-effort before reaching the AI provider; avoid pasting customer details.')) ?>
     </div>
 </div>
 

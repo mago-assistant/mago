@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class CreateProductAction implements ActionInterface
 {
@@ -134,6 +135,27 @@ class CreateProductAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // Catalog data only; name/type sit under similar_products. The _links url is a relative
+        // admin route without the secret key (the signed variant is the centrally stripped
+        // admin_url), so it stays public.
+        return [
+            'success' => [PiiClass::PUBLIC],
+            'message' => [PiiClass::PUBLIC],
+            'sku' => [PiiClass::PUBLIC],
+            'id' => [PiiClass::PUBLIC],
+            'missing' => [PiiClass::PUBLIC],
+            'next_step' => [PiiClass::PUBLIC],
+            'hint' => [PiiClass::PUBLIC],
+            'not_created' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'type' => [PiiClass::PUBLIC],
+            'label' => [PiiClass::PUBLIC],
+            'url' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Navigation;
 
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\EntityRouteMap;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
@@ -31,8 +32,9 @@ class AdminNavigator implements ToolInterface
             . '(2) Direct link: pass "entity_type" + "entity_id" to get a link to a specific record '
             . '(use after fetching entity data from sales_data, customer_data, or product_data). '
             . 'ALWAYS use this tool when the user asks where to find something in the admin. '
-            . 'ALWAYS include the returned URLs as markdown links in your response, '
-            . 'e.g. [Orders](https://store.com/admin/sales/order/key/...)';
+            . 'Link only to a url this tool returned, copied exactly as it came back. Never build '
+            . 'one from a pattern: an admin url carries a secret key, so a url you assembled '
+            . 'yourself does not open anything. Have no url? Name the admin page in words instead.';
     }
 
     public function getParameterSchema(): array
@@ -146,6 +148,21 @@ class AdminNavigator implements ToolInterface
     public function getInstructions(): string
     {
         return '';
+    }
+
+    public function getFieldClassification(string $action = ''): array
+    {
+        // url embeds the admin secret key (/key/<hash>/), so it is tokenised (#107): the provider
+        // only ever sees [url_N] while display rehydration hands the admin the real clickable link.
+        // entity_id can be a bare customer or order id, so it is tokenised too.
+        return [
+            'label' => [PiiClass::PUBLIC],
+            'category' => [PiiClass::PUBLIC],
+            'url' => [PiiClass::TOKENISE, 'url'],
+            'entity_type' => [PiiClass::PUBLIC],
+            'entity_id' => [PiiClass::TOKENISE, 'entity'],
+            'message' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getMagentoAcl(array $input = []): string

@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
 use Magento\CatalogRule\Api\CatalogRuleRepositoryInterface;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class GetRuleAction implements ActionInterface
@@ -46,6 +47,33 @@ class GetRuleAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // type through aggregator cover the nested conditions tree from asArray(); rule
+        // conditions are shop data.
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'rule_id' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'is_active' => [PiiClass::PUBLIC],
+            'discount_amount' => [PiiClass::PUBLIC],
+            'discount_type' => [PiiClass::PUBLIC],
+            'from_date' => [PiiClass::PUBLIC],
+            'to_date' => [PiiClass::PUBLIC],
+            'sort_order' => [PiiClass::PUBLIC],
+            'stop_further_rules' => [PiiClass::PUBLIC],
+            'website_ids' => [PiiClass::PUBLIC],
+            'customer_group_ids' => [PiiClass::PUBLIC],
+            'type' => [PiiClass::PUBLIC],
+            'attribute' => [PiiClass::PUBLIC],
+            'operator' => [PiiClass::PUBLIC],
+            'value' => [PiiClass::PUBLIC],
+            'is_value_processed' => [PiiClass::PUBLIC],
+            'attribute_scope' => [PiiClass::PUBLIC],
+            'aggregator' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

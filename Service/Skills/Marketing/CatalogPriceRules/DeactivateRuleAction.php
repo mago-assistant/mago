@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
 use Magento\CatalogRule\Api\CatalogRuleRepositoryInterface;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class DeactivateRuleAction implements ActionInterface
@@ -46,6 +47,17 @@ class DeactivateRuleAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'message' => [PiiClass::PUBLIC],
+            'success' => [PiiClass::PUBLIC],
+            'rule_id' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

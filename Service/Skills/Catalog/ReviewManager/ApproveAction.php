@@ -10,6 +10,7 @@ use Magento\Review\Model\Review;
 use Magento\Review\Model\ReviewFactory;
 use Magento\Review\Model\ResourceModel\Review as ReviewResource;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class ApproveAction implements ActionInterface
 {
@@ -47,6 +48,16 @@ class ApproveAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // The ack message embeds a bare review id, too short for the vault-conceal pass to catch;
+        // success alone tells the model the write worked.
+        return [
+            'success' => [PiiClass::PUBLIC],
+            'message' => [PiiClass::STRIP],
+        ];
     }
 
     public function getInstructions(): string

@@ -41,12 +41,15 @@ interface ChatServiceInterface
      * @param callable|null $onChunk
      * @param string[]|null $selectedIds Tool call IDs the user ticked in a bulk confirmation; null
      *        runs them all, an unticked call is answered with a "skipped" result instead of running
+     * @param int|null $conversationId Binds the privacy vault so persisted tokenised arguments
+     *        rehydrate on this fresh request; pass it on every confirm round-trip
      * @return array Results keyed by tool call ID
      */
     public function executeConfirmedTools(
         array $toolCalls,
         ?int $adminUserId = null,
         ?callable $onChunk = null,
-        ?array $selectedIds = null
+        ?array $selectedIds = null,
+        ?int $conversationId = null
     ): array;
 }

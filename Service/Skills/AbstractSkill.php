@@ -203,6 +203,14 @@ abstract class AbstractSkill implements ActionScopedToolInterface, IrreversibleT
         return implode("\n\n", $parts);
     }
 
+    public function getFieldClassification(string $action = ''): array
+    {
+        $target = $this->actions[$action] ?? null;
+
+        // Unknown action: nothing is declared, so the filter strips every scalar (fail closed).
+        return $target ? $target->getFieldClassification() : [];
+    }
+
     public function getMagentoAcl(array $input = []): string
     {
         return '';

@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Sales\OrderManager;
 
 use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class CreateCreditmemoAction implements IrreversibleActionInterface
@@ -63,6 +64,19 @@ class CreateCreditmemoAction implements IrreversibleActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // The ack's ids are linkable (tokenised); the message may embed the order number, which the
+        // filter's vault-conceal pass covers.
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'success' => [PiiClass::PUBLIC],
+            'message' => [PiiClass::PUBLIC],
+            'creditmemo_id' => [PiiClass::TOKENISE, 'creditmemo'],
+            'order_number' => [PiiClass::TOKENISE, 'order'],
+        ];
     }
 
     public function getInstructions(): string

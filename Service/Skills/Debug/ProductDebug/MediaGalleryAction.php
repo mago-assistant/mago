@@ -13,6 +13,7 @@ use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Store\Api\StoreRepositoryInterface;
 use Magento\Store\Model\Store;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class MediaGalleryAction implements ActionInterface
 {
@@ -59,6 +60,32 @@ class MediaGalleryAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'sku' => [PiiClass::PUBLIC],
+            'product_id' => [PiiClass::PUBLIC],
+            'image_count' => [PiiClass::PUBLIC],
+            'image_roles' => [PiiClass::PUBLIC],
+            'roles' => [PiiClass::PUBLIC],
+            'entries' => [PiiClass::PUBLIC],
+            'value_id' => [PiiClass::PUBLIC],
+            'file' => [PiiClass::PUBLIC],
+            'label' => [PiiClass::PUBLIC],
+            'position' => [PiiClass::PUBLIC],
+            'disabled' => [PiiClass::PUBLIC],
+            'disabled_overridden' => [PiiClass::PUBLIC],
+            'overridden' => [PiiClass::PUBLIC],
+            'global_scope' => [PiiClass::PUBLIC],
+            'store_views' => [PiiClass::PUBLIC],
+            'store_id' => [PiiClass::PUBLIC],
+            'store_code' => [PiiClass::PUBLIC],
+            'store_name' => [PiiClass::PUBLIC],
+            'issues' => [PiiClass::PUBLIC],
+            'value' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\System\CronStatus;
 
 use Magento\Cron\Model\ResourceModel\Schedule\CollectionFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 
 class ListFailedAction implements ActionInterface
@@ -54,6 +55,20 @@ class ListFailedAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'schedule_id' => [PiiClass::PUBLIC],
+            'job_code' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'messages' => [PiiClass::PUBLIC],
+            'scheduled_at' => [PiiClass::PUBLIC],
+            'executed_at' => [PiiClass::PUBLIC],
+            'finished_at' => [PiiClass::PUBLIC],
+            'count' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

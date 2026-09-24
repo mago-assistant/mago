@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 
 class TopProductsAction implements ActionInterface
@@ -34,7 +35,7 @@ class TopProductsAction implements ActionInterface
         return [
             'period' => [
                 'type' => 'string',
-                'description' => 'Time period: "today", "yesterday", "7days", "30days", "this_month", "last_month", "this_year", "YYYY-MM" for a specific month, or "YYYY-MM-DD:YYYY-MM-DD" for a custom range',
+                'description' => 'Time period: "today", "yesterday", "7days", "30days", "this_month", "last_month", "this_year", "all" for no lower bound, "YYYY-MM" for a specific month, or "YYYY-MM-DD:YYYY-MM-DD" for a custom range',
             ],
             'limit' => [
                 'type' => 'integer',
@@ -51,6 +52,17 @@ class TopProductsAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'period' => [PiiClass::PUBLIC],
+            'sku' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'qty_ordered' => [PiiClass::PUBLIC],
+            'revenue' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

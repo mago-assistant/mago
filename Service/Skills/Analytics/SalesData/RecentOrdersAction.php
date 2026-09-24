@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class RecentOrdersAction implements ActionInterface
@@ -48,6 +49,22 @@ class RecentOrdersAction implements ActionInterface
         return true;
     }
 
+    public function getFieldClassification(): array
+    {
+        // The order ids are tokenised so follow-up actions can still target the order.
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'entity_id' => [PiiClass::TOKENISE, 'order'],
+            'order_number' => [PiiClass::TOKENISE, 'order'],
+            'total' => [PiiClass::PUBLIC],
+            'status' => [PiiClass::PUBLIC],
+            'customer' => [PiiClass::TOKENISE, 'name'],
+            'items' => [PiiClass::PUBLIC],
+            'store_id' => [PiiClass::PUBLIC],
+            'date' => [PiiClass::PUBLIC],
+        ];
+    }
+
     public function getInstructions(): string
     {
         return '';
@@ -81,6 +98,7 @@ class RecentOrdersAction implements ActionInterface
                 'order_number' => $order['increment_id'] ?? '',
                 'total' => round((float)($order['grand_total'] ?? 0), 2),
                 'status' => $order['status'] ?? '',
+                'customer' => trim(($order['customer_firstname'] ?? '') . ' ' . ($order['customer_lastname'] ?? '')),
                 'items' => (int)($order['total_item_count'] ?? 0),
                 'store_id' => (int)($order['store_id'] ?? 0),
                 'date' => $order['created_at'] ?? '',

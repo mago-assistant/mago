@@ -24,6 +24,7 @@ use MagoAssistant\Mago\Service\Command\CommandRunner;
 use MagoAssistant\Mago\Service\Conversation\NavigationNoteInjector;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Form\PageContextNormalizer;
+use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 
 class Stream extends Action implements HttpPostActionInterface
 {
@@ -45,7 +46,8 @@ class Stream extends Action implements HttpPostActionInterface
         private readonly PageContextNormalizer $pageContextNormalizer,
         private readonly PageContextHolder $pageContextHolder,
         private readonly NavigationNoteInjector $navigationNoteInjector,
-        private readonly PageLocationRecorder $pageLocationRecorder
+        private readonly PageLocationRecorder $pageLocationRecorder,
+        private readonly PrivacyService $privacyService
     ) {
         parent::__construct($context);
     }
@@ -74,7 +76,16 @@ class Stream extends Action implements HttpPostActionInterface
             $pageContext = $this->pageContextNormalizer->normalize($rawPageContext);
             $this->pageContextHolder->set($pageContext, $this->pageContextNormalizer->isDenied($rawPageContext));
 
-            $this->debugLogger->addLog('Stream Request', ['raw_body' => $this->redactedPostData($postData)]);
+            // Debug-gated AND masked: the raw typed message is exactly what decision 1 keeps out of
+            // persistence, and this log has no conversation to tokenise into, so values are masked
+            // irreversibly by class. The page context is still summarised so the entry stays readable.
+            if ($this->configRepository->isDebugEnabled()) {
+                $this->debugLogger->addLog('Stream Request', [
+                    'raw_body' => $this->privacyService->maskText(
+                        (string)$this->json->serialize($this->redactedPostData($postData))
+                    ),
+                ]);
+            }
 
             $message = $postData['message'] ?? '';
             $conversationId = !empty($postData['conversation_id']) ? (int)$postData['conversation_id'] : null;
@@ -117,7 +128,17 @@ class Stream extends Action implements HttpPostActionInterface
                 $this->terminateResponse();
             }
 
-            $conversationId = $this->resolveConversation($conversationId, $adminUserId, $message);
+            $isNewConversation = $conversationId === null;
+            $conversationId = $this->resolveConversation($conversationId, $adminUserId);
+
+            // The stored copy is tokenised, not raw (#97 decision 1). The vault is bound first so the
+            // tokens persist and later turns and the history view resolve them; the title is derived
+            // from the scrubbed text for the same reason.
+            $this->privacyService->beginConversation($conversationId);
+            $message = $this->privacyService->scrubText($message);
+            if ($isNewConversation) {
+                $this->conversationRepository->updateTitle($conversationId, $this->privacyService->safeTitle($message));
+            }
             $messageId = $this->conversationRepository->addMessage($conversationId, 'user', $message);
             if ($pageContext !== null) {
                 $this->pageLocationRecorder->record($messageId, $pageContext->toLocation());
@@ -246,8 +267,17 @@ class Stream extends Action implements HttpPostActionInterface
      */
     private function runCommand(string $message, ?int $conversationId, int $adminUserId, string $adminName): never
     {
-        $conversationId = $this->resolveConversation($conversationId, $adminUserId, $message);
-        $this->conversationRepository->addMessage($conversationId, 'user', $message);
+        $isNewConversation = $conversationId === null;
+        $conversationId = $this->resolveConversation($conversationId, $adminUserId);
+
+        // The command itself runs on the raw text (a token would corrupt its arguments); only the
+        // stored copy is tokenised (#97 decision 1).
+        $this->privacyService->beginConversation($conversationId);
+        $storedMessage = $this->privacyService->scrubText($message);
+        if ($isNewConversation) {
+            $this->conversationRepository->updateTitle($conversationId, $this->privacyService->safeTitle($storedMessage));
+        }
+        $this->conversationRepository->addMessage($conversationId, 'user', $storedMessage);
 
         $this->sendSse('conversation', [
             'conversation_id' => $conversationId,
@@ -261,7 +291,12 @@ class Stream extends Action implements HttpPostActionInterface
                 $this->sendSse($type, $data);
             }
         );
-        $this->debugLogger->addLog('Slash Command', ['message' => $message, 'content_length' => strlen($content)]);
+        if ($this->configRepository->isDebugEnabled()) {
+            $this->debugLogger->addLog('Slash Command', [
+                'message' => $this->privacyService->maskText($message),
+                'content_length' => strlen($content),
+            ]);
+        }
 
         $this->sendSse('text', ['text' => $content]);
         $messageId = $this->conversationRepository->addMessage($conversationId, 'assistant', $content);
@@ -274,12 +309,14 @@ class Stream extends Action implements HttpPostActionInterface
     }
 
     /**
-     * Existing conversation of this admin, or a new one titled after the message
+     * Existing conversation of this admin, or a new one (titled by the caller after scrubbing)
      */
-    private function resolveConversation(?int $conversationId, int $adminUserId, string $message): int
+    private function resolveConversation(?int $conversationId, int $adminUserId): int
     {
         if (!$conversationId) {
-            return $this->conversationRepository->create($adminUserId, mb_substr($message, 0, 50));
+            // Created with the default title; the caller sets the real one from the scrubbed message
+            // once the vault is bound (the id has to exist before text can be tokenised into it).
+            return $this->conversationRepository->create($adminUserId);
         }
 
         // Reject posting into another admin's conversation

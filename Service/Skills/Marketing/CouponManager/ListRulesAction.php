@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Marketing\CouponManager;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class ListRulesAction implements ActionInterface
@@ -46,6 +47,24 @@ class ListRulesAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public function getFieldClassification(): array
+    {
+        return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
+            'total_count' => [PiiClass::PUBLIC],
+            'rule_id' => [PiiClass::PUBLIC],
+            'name' => [PiiClass::PUBLIC],
+            'is_active' => [PiiClass::PUBLIC],
+            'discount_amount' => [PiiClass::PUBLIC],
+            'discount_type' => [PiiClass::PUBLIC],
+            'from_date' => [PiiClass::PUBLIC],
+            'to_date' => [PiiClass::PUBLIC],
+            'coupon_type' => [PiiClass::PUBLIC],
+            'uses_per_coupon' => [PiiClass::PUBLIC],
+            'times_used' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string

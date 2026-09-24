@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class AddConfigurableVariantsAction implements ActionInterface
 {
@@ -57,6 +58,21 @@ class AddConfigurableVariantsAction implements ActionInterface
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public function getFieldClassification(): array
+    {
+        // Catalog data only. The _links url is a relative admin route without the secret key
+        // (the signed variant is the centrally stripped admin_url), so it stays public.
+        return [
+            'success' => [PiiClass::PUBLIC],
+            'message' => [PiiClass::PUBLIC],
+            'sku' => [PiiClass::PUBLIC],
+            'label' => [PiiClass::PUBLIC],
+            'reused' => [PiiClass::PUBLIC],
+            'created_so_far' => [PiiClass::PUBLIC],
+            'url' => [PiiClass::PUBLIC],
+        ];
     }
 
     public function getInstructions(): string
