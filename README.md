@@ -161,7 +161,10 @@ directive contract it uses to reach the browser.
 ### Voice input
 
 The chat panel shows a microphone button next to Send in browsers with built-in speech
-recognition (Chrome, Edge, Safari). Press it, speak, and the words appear in the input field as
+recognition (Chrome, Edge, Safari). The first time an administrator presses it, a card explains
+that the audio is handled by the browser vendor's speech service, outside Mago's control, and
+asks them to acknowledge that before the microphone turns on. The acknowledgement is remembered
+per admin user in that browser. After that, press it, speak, and the words appear in the input field as
 you talk. While recording, the button turns red and a status line under the input shows what is
 happening. After a short pause in speech a countdown appears and the message is sent on its own;
 typing, or pressing the microphone again, cancels it and leaves the text in the box for you to

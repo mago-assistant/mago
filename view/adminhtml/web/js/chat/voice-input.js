@@ -37,6 +37,8 @@ define([], function () {
      * @param {boolean} [options.handsFree] keep listening after an auto-send once the turn ended
      * @param {Function} options.t translator
      * @param {Function} [options.onSend] called when the countdown finishes
+     * @param {Function} [options.requireConsent] called with a continuation on the first use;
+     *        the session only starts when the continuation is invoked
      * @param {Function} [options.onError] receives a sentence to show the administrator
      * @returns {{isSupported: boolean, stop: Function, sending: Function, turnEnded: Function}}
      */
@@ -294,12 +296,20 @@ define([], function () {
             start();
         }
 
+        function beginSession() {
+            handsFree = !!options.handsFree && !!options.autoSend;
+            start();
+        }
+
         button.addEventListener('click', function () {
             if (listening || waitingForTurn || countdownTimer) {
                 stop();
+            } else if (options.requireConsent) {
+                // The audio leaves the browser for its vendor's speech service, which Mago does
+                // not control; the administrator confirms they know that before the first session.
+                options.requireConsent(beginSession);
             } else {
-                handsFree = !!options.handsFree && !!options.autoSend;
-                start();
+                beginSession();
             }
         });
 

@@ -164,6 +164,11 @@ class ChatPanel extends Template
             'Recording stopped',
             'Hands-free — speak, a pause sends',
             'Waiting for the reply…',
+            'Voice input',
+            'Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.',
+            'Avoid speaking customer details aloud. You can turn voice input off at any time under Stores > Configuration > Mago Assistant > Voice Input.',
+            'I understand, turn on the microphone',
+            'Not now',
             // Comma-separated words a translation pack may add for answering a confirmation card by
             // voice; chat-panel.js ignores the value when it is left untranslated.
             'voice words: allow',
