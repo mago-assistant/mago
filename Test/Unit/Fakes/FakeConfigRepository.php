@@ -194,4 +194,9 @@ class FakeConfigRepository implements RepositoryInterface
     {
         return $this->maxResponseTokens;
     }
+
+    public function isReindexAllowed(): bool
+    {
+        return false;
+    }
 }
