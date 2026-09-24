@@ -9,11 +9,13 @@ namespace MagoAssistant\Mago\Model\WebApi;
 use Magento\Authorization\Model\UserContextInterface;
 use Magento\Framework\Exception\AuthorizationException;
 use Magento\Framework\Exception\InputException;
+use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Indexer\ConfigInterface;
 use Magento\Framework\Indexer\IndexerInterface;
 use Magento\Framework\Indexer\StateInterface;
 use Magento\Indexer\Model\Indexer\CollectionFactory;
 use Magento\Indexer\Model\Processor\MakeSharedIndexValid;
+use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Api\Data\IndexerResultInterface;
 use MagoAssistant\Mago\Api\Data\IndexerResultInterfaceFactory;
 use MagoAssistant\Mago\Api\WebApi\IndexerManagementInterface;
@@ -32,19 +34,22 @@ class IndexerManagement implements IndexerManagementInterface
         private readonly MakeSharedIndexValid $makeSharedIndexValid,
         private readonly IndexerResultInterfaceFactory $indexerResultFactory,
         private readonly ErrorLogger $errorLogger,
-        private readonly UserContextInterface $userContext
+        private readonly UserContextInterface $userContext,
+        private readonly ConfigRepository $configRepository
     ) {
     }
 
     public function reindexAll(): array
     {
         $this->requireAdminUser();
+        $this->requireReindexAllowed();
         return $this->rebuild($this->getIndexers());
     }
 
     public function reindex(array $indexerIds): array
     {
         $this->requireAdminUser();
+        $this->requireReindexAllowed();
         return $this->rebuild($this->getIndexers($indexerIds));
     }
 
@@ -57,6 +62,20 @@ class IndexerManagement implements IndexerManagementInterface
         $userType = $this->userContext->getUserType();
         if ($userType !== null && (int)$userType !== UserContextInterface::USER_TYPE_ADMIN) {
             throw new AuthorizationException(__('This endpoint requires an admin user token.'));
+        }
+    }
+
+    /**
+     * @return void
+     * @throws LocalizedException
+     */
+    private function requireReindexAllowed(): void
+    {
+        if (!$this->configRepository->isReindexAllowed()) {
+            throw new LocalizedException(__(
+                'Reindexing is disabled. Enable it in '
+                . 'Stores > Configuration > Mago Assistant > Tools > Allow reindexing.'
+            ));
         }
     }
 

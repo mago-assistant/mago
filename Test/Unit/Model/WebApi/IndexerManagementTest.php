@@ -18,6 +18,7 @@ use MagoAssistant\Mago\Api\Data\IndexerResultInterfaceFactory;
 use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Model\Data\IndexerResult;
 use MagoAssistant\Mago\Model\WebApi\IndexerManagement;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeConfigRepository;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeLogger;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -103,7 +104,8 @@ final class IndexerManagementTest extends TestCase
             $this->makeSharedIndexValid,
             $resultFactory,
             new ErrorLogger($this->logger, new Json()),
-            $this->createMock(UserContextInterface::class)
+            $this->createMock(UserContextInterface::class),
+            (new FakeConfigRepository())->withReindexAllowed(true)
         );
     }
 

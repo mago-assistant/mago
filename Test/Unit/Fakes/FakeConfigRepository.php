@@ -15,6 +15,7 @@ class FakeConfigRepository implements RepositoryInterface
     private string $internalUrl = '';
     private int $maxToolIterations = 0;
     private bool $answerWidgets = false;    private int $maxResponseTokens = 0;
+    private bool $reindexAllowed = false;
 
     public function withMaxToolIterations(int $maxToolIterations): self
     {
@@ -195,8 +196,15 @@ class FakeConfigRepository implements RepositoryInterface
         return $this->maxResponseTokens;
     }
 
+    public function withReindexAllowed(bool $isAllowed): self
+    {
+        $this->reindexAllowed = $isAllowed;
+
+        return $this;
+    }
+
     public function isReindexAllowed(): bool
     {
-        return false;
+        return $this->reindexAllowed;
     }
 }
