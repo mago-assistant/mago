@@ -39,14 +39,12 @@ class IndexerManagement implements IndexerManagementInterface
     public function reindexAll(): array
     {
         $this->requireAdminUser();
-
         return $this->rebuild($this->getIndexers());
     }
 
     public function reindex(array $indexerIds): array
     {
         $this->requireAdminUser();
-
         return $this->rebuild($this->getIndexers($indexerIds));
     }
 
