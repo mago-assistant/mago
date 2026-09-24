@@ -74,6 +74,7 @@
                 <item name="docs_search" xsi:type="object">MagoAssistant\Mago\Service\Skills\Docs\DocsSearch</item>
                 <item name="module_version" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\ModuleVersion</item>
                 <item name="page_form" xsi:type="object">MagoAssistant\Mago\Service\Skills\Form\PageForm</item>
+                <item name="hypernode_status" xsi:type="object">MagoAssistant\Mago\Service\Skills\Hosting\HypernodeStatus</item>
             </argument>
         </arguments>
     </type>
@@ -171,6 +172,28 @@
                 <item name="list_failed" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\CronStatus\ListFailedAction</item>
                 <item name="health_check" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\CronStatus\HealthCheckAction</item>
                 <item name="schedule_job" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\CronStatus\ScheduleJobAction</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!-- Skill Actions: HypernodeStatus -->
+    <type name="MagoAssistant\Mago\Service\Skills\Hosting\HypernodeStatus">
+        <arguments>
+            <argument name="actions" xsi:type="array">
+                <item name="server_overview" xsi:type="object">MagoAssistant\Mago\Service\Skills\Hosting\HypernodeStatus\ServerOverviewAction</item>
+                <item name="php_workers" xsi:type="object">MagoAssistant\Mago\Service\Skills\Hosting\HypernodeStatus\PhpWorkersAction</item>
+                <item name="http_traffic" xsi:type="object">MagoAssistant\Mago\Service\Skills\Hosting\HypernodeStatus\HttpTrafficAction</item>
+                <item name="recent_flows" xsi:type="object">MagoAssistant\Mago\Service\Skills\Hosting\HypernodeStatus\RecentFlowsAction</item>
+                <item name="list_annotations" xsi:type="object">MagoAssistant\Mago\Service\Skills\Hosting\HypernodeStatus\ListAnnotationsAction</item>
+                <item name="create_annotation" xsi:type="object">MagoAssistant\Mago\Service\Skills\Hosting\HypernodeStatus\CreateAnnotationAction</item>
+            </argument>
+        </arguments>
+    </type>
+    <preference for="MagoAssistant\Mago\Service\Hypernode\ApiClientInterface" type="MagoAssistant\Mago\Service\Hypernode\ApiClient"/>
+    <type name="Magento\Config\Model\Config\TypePool">
+        <arguments>
+            <argument name="sensitive" xsi:type="array">
+                <item name="mago/hypernode/api_token" xsi:type="string">1</item>
             </argument>
         </arguments>
     </type>

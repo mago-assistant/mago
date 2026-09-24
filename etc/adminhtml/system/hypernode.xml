@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<include xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_include.xsd">
+    <group id="hypernode" translate="label comment" sortOrder="45" showInDefault="1" showInWebsite="0" showInStore="0">
+        <label>Hypernode</label>
+        <comment><![CDATA[Lets the assistant report server load, PHP-FPM workers, HTTP traffic and Hypernode Insights annotations through the <code>hypernode_status</code> skill. On a Hypernode the app name and token are detected automatically; fill them in only to override or when Magento runs elsewhere.]]></comment>
+        <field id="app_name" translate="label comment" type="text" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0">
+            <label>App name</label>
+            <comment>The Hypernode app name, e.g. "yourshop" for yourshop.hypernode.io. Leave empty to detect it from the hostname.</comment>
+        </field>
+        <field id="api_token" translate="label comment" type="obscure" sortOrder="20" showInDefault="1" showInWebsite="0" showInStore="0">
+            <label>API token</label>
+            <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
+            <comment><![CDATA[Found in <code>/etc/hypernode/hypernode_api_token</code> on the node. Leave empty to read that file directly. The token is never sent to the AI provider.]]></comment>
+        </field>
+        <field id="on_node" translate="label comment" type="select" sortOrder="25" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
+            <label>Magento runs on this Hypernode</label>
+            <source_model>MagoAssistant\Mago\Model\Config\Source\HypernodeOnNode</source_model>
+            <comment>Only on the node itself are live load, CPU, memory, disk and the access log reported. Auto-detect looks for /etc/hypernode, hypernode-systemctl or the app name in the hostname; set Yes when detection fails on your node.</comment>
+        </field>
+        <field id="access_log_path" translate="label comment" type="text" sortOrder="30" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
+            <label>Nginx access log</label>
+            <comment>Path of the JSON access log the http_traffic action reads (default /var/log/nginx/access.log).</comment>
+        </field>
+    </group>
+</include>

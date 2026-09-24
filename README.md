@@ -132,6 +132,7 @@ These calls verify the TLS certificate by default. If the internal URL points at
 | Navigation | `admin_navigator` | Read |
 | Documentation | `docs_search` | Read |
 | Form Access | `page_form` | Read / Stage (never saves) |
+| Hosting | `hypernode_status` | Read / Write (annotations) |
 
 See [docs/skills-examples.md](docs/skills-examples.md) for example prompts per skill and [docs/skills-roadmap.md](docs/skills-roadmap.md) for the full roadmap of planned skills.
 
@@ -157,6 +158,29 @@ the administrator to confirm — it never writes to the database itself, only in
 the administrator would type into, so their own Save button is what persists anything. See
 [docs/form-access.md](docs/form-access.md) for what it can see, which forms are excluded, and the
 directive contract it uses to reach the browser.
+
+## Hypernode server performance
+
+The `hypernode_status` skill answers "is the server slow?" questions with live data from the Hypernode
+the store runs on: load, memory and disk (`server_overview`), busy PHP-FPM workers (`php_workers`), request
+rate, status codes, 5xx errors, cache handlers and PHP response times from the nginx JSON access log
+(`http_traffic`), recent node tasks (`recent_flows`) and custom
+[Hypernode Insights](https://insights.hypernode.com) annotations (`list_annotations`,
+`create_annotation`, the only write action). Every action, including the local server metrics, requires a
+configured API, and the live load, CPU, memory and disk block is only reported when PHP runs on the Hypernode
+itself: elsewhere those `/proc` values describe the machine running Docker, not the node. Client addresses, users and query strings never leave the
+server; the token is never sent to the AI provider. Use of the skill requires the `Magento_Backend::system` ACL.
+
+On a Hypernode nothing needs configuring: the app name comes from the hostname and the API token from
+`/etc/hypernode/hypernode_api_token`. Off-node (staging, local Docker) fill in both under
+`Stores > Configuration > Mago Assistant > Hypernode`; `http_traffic` then still needs a readable log.
+
+| Field | Config path | Default | Purpose |
+|---|---|---|---|
+| App name | `mago/hypernode/app_name` | detected from hostname | The Hypernode app, e.g. `yourshop` for yourshop.hypernode.io |
+| API token | `mago/hypernode/api_token` | read from the node | Encrypted; from `/etc/hypernode/hypernode_api_token` |
+| Magento runs on this Hypernode | `mago/hypernode/on_node` | `auto` | Gate for the live `/proc` block and the access log; `yes` when auto-detection fails on your node |
+| Nginx access log | `mago/hypernode/access_log_path` | `/var/log/nginx/access.log` | JSON access log the `http_traffic` action reads (last 32 MB) |
 
 ## Documentation grounding
 

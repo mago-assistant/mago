@@ -133,6 +133,26 @@ Where is the email templates page?
 
 ---
 
+## Hosting
+
+### hypernode_status (read-only, except `create_annotation`)
+Server performance of the Hypernode the store runs on. Works out of the box on a Hypernode; elsewhere
+set the app name and API token under Stores > Configuration > Mago Assistant > Hypernode.
+
+```
+Is the server slow right now?
+How busy are the PHP workers?
+Show the HTTP traffic of the last 30 minutes
+How many 5xx errors did we serve in the past hour, and on which pages?
+What is the Varnish hit rate at the moment?
+Which plan are we on and how full is the disk?
+What changed on the node recently?
+List the Insights annotations
+Mark "Price import finished" in Insights   (requires confirmation)
+```
+
+---
+
 ## Combined Prompts
 
 The assistant can combine multiple skills in a single request:
