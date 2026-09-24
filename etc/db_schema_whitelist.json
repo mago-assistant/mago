@@ -1,10 +1,10 @@
 {
     "mago_conversation": {
         "column": {
-            "entity_id": true,
             "admin_user_id": true,
-            "title": true,
             "created_at": true,
+            "entity_id": true,
+            "title": true,
             "updated_at": true
         },
         "constraint": {
@@ -14,80 +14,19 @@
             "MAGO_CONVERSATION_ADMIN_USER_ID": true
         }
     },
-    "mago_message": {
-        "column": {
-            "entity_id": true,
-            "conversation_id": true,
-            "role": true,
-            "content": true,
-            "tool_calls": true,
-            "tool_call_id": true,
-            "pending_confirmation": true,
-            "created_at": true,
-            "page_context": true
-        },
-        "constraint": {
-            "PRIMARY": true,
-            "MAGO_MSG_CONV_ID": true
-        },
-        "index": {
-            "MAGO_MESSAGE_CONVERSATION_ID": true,
-            "MAGO_MESSAGE_ROLE": true
-        }
-    },
-    "mago_skill_permission": {
-        "column": {
-            "entity_id": true,
-            "admin_user_id": true,
-            "skill_name": true,
-            "permission": true
-        },
-        "constraint": {
-            "PRIMARY": true,
-            "MAGO_SKILL_PERM_USER_SKILL": true
-        },
-        "index": {
-            "MAGO_SKILL_PERM_ADMIN_USER_ID": true
-        }
-    },
-    "mago_usage_log": {
-        "column": {
-            "entity_id": true,
-            "admin_user_id": true,
-            "conversation_id": true,
-            "provider": true,
-            "model": true,
-            "input_tokens": true,
-            "output_tokens": true,
-            "total_tokens": true,
-            "skill_names": true,
-            "request_payload": true,
-            "response_payload": true,
-            "created_at": true
-        },
-        "constraint": {
-            "PRIMARY": true,
-            "MAGO_USAGE_LOG_CONV_ID": true
-        },
-        "index": {
-            "MAGO_USAGE_LOG_ADMIN_USER_ID": true,
-            "MAGO_USAGE_LOG_CREATED_AT": true,
-            "MAGO_USAGE_LOG_PROVIDER": true
-        }
-    },
     "mago_doc": {
         "column": {
-            "entity_id": true,
-            "source": true,
-            "path": true,
-            "title": true,
-            "description": true,
-            "tags": true,
-            "edition": true,
-            "url": true,
             "content": true,
+            "description": true,
+            "edition": true,
+            "entity_id": true,
+            "path": true,
+            "source": true,
             "source_sha": true,
-            "updated_at": true
+            "tags": true,
+            "title": true,
+            "updated_at": true,
+            "url": true
         },
         "constraint": {
             "PRIMARY": true
@@ -96,22 +35,111 @@
             "MAGO_DOC_FULLTEXT": true
         }
     },
-    "mago_pii_token": {
+    "mago_flag": {
         "column": {
-            "entity_id": true,
+            "admin_user_id": true,
+            "answer_preview": true,
             "conversation_id": true,
-            "token": true,
-            "value": true,
-            "token_type": true,
-            "created_at": true
+            "created_at": true,
+            "entity_id": true,
+            "message_id": true,
+            "model": true,
+            "note": true,
+            "skills": true,
+            "snapshot": true,
+            "status": true,
+            "updated_at": true
         },
         "constraint": {
-            "PRIMARY": true,
+            "MAGO_FLAG_CONV_ID": true,
+            "MAGO_FLAG_MESSAGE_ID_UNIQUE": true,
+            "MAGO_FLAG_MSG_ID": true,
+            "PRIMARY": true
+        },
+        "index": {
+            "MAGO_FLAG_ADMIN_USER_ID": true,
+            "MAGO_FLAG_CREATED_AT": true,
+            "MAGO_FLAG_FULLTEXT": true,
+            "MAGO_FLAG_STATUS": true
+        }
+    },
+    "mago_message": {
+        "column": {
+            "content": true,
+            "conversation_id": true,
+            "created_at": true,
+            "entity_id": true,
+            "page_context": true,
+            "pending_confirmation": true,
+            "role": true,
+            "tool_call_id": true,
+            "tool_calls": true
+        },
+        "constraint": {
+            "MAGO_MSG_CONV_ID": true,
+            "PRIMARY": true
+        },
+        "index": {
+            "MAGO_MESSAGE_CONVERSATION_ID": true,
+            "MAGO_MESSAGE_ROLE": true
+        }
+    },
+    "mago_pii_token": {
+        "column": {
+            "conversation_id": true,
+            "created_at": true,
+            "entity_id": true,
+            "token": true,
+            "token_type": true,
+            "value": true
+        },
+        "constraint": {
+            "MAGO_PII_TOKEN_CONVERSATION_ID_TOKEN": true,
             "MAGO_PII_TOKEN_CONV_ID": true,
-            "MAGO_PII_TOKEN_CONVERSATION_ID_TOKEN": true
+            "PRIMARY": true
         },
         "index": {
             "MAGO_PII_TOKEN_CONVERSATION_ID": true
+        }
+    },
+    "mago_skill_permission": {
+        "column": {
+            "admin_user_id": true,
+            "entity_id": true,
+            "permission": true,
+            "skill_name": true
+        },
+        "constraint": {
+            "MAGO_SKILL_PERM_USER_SKILL": true,
+            "PRIMARY": true
+        },
+        "index": {
+            "MAGO_SKILL_PERM_ADMIN_USER_ID": true
+        }
+    },
+    "mago_usage_log": {
+        "column": {
+            "admin_user_id": true,
+            "conversation_id": true,
+            "created_at": true,
+            "entity_id": true,
+            "input_tokens": true,
+            "model": true,
+            "output_tokens": true,
+            "provider": true,
+            "request_payload": true,
+            "response_payload": true,
+            "skill_names": true,
+            "total_tokens": true
+        },
+        "constraint": {
+            "MAGO_USAGE_LOG_CONV_ID": true,
+            "PRIMARY": true
+        },
+        "index": {
+            "MAGO_USAGE_LOG_ADMIN_USER_ID": true,
+            "MAGO_USAGE_LOG_CREATED_AT": true,
+            "MAGO_USAGE_LOG_PROVIDER": true
         }
     }
 }

@@ -662,6 +662,57 @@ html:has(body.mago-active) {
     }
 }
 
+// Flag an answer: a quiet control that only shows itself when the answer is
+// hovered, and stays visible once the answer is actually flagged.
+.mago-msg-flag {
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    color: var(--mago-ink-muted, #9A918B);
+    cursor: pointer;
+    display: block;
+    line-height: 0;
+    margin-top: 6px;
+    opacity: 0;
+    padding: 4px;
+    transition: opacity .12s ease, color .12s ease;
+
+    &:hover,
+    &:focus-visible {
+        background: var(--mago-surface, #F7F5F3);
+        color: var(--mago-ink, #373330);
+        opacity: 1;
+    }
+
+    &[disabled] {
+        cursor: default;
+        opacity: .4;
+    }
+
+    &.is-flagged {
+        color: var(--mago-accent, #FF7A33);
+        opacity: 1;
+    }
+}
+
+.mago-message.is-assistant:hover .mago-msg-flag {
+    opacity: 1;
+}
+
+// The "why" card and the line that replaces it both belong to the answer above
+// them, so they sit tight against it rather than floating in the thread.
+.mago-flag-ask {
+    margin-top: 8px;
+}
+
+.mago-flag-line {
+    margin-top: 6px;
+
+    &.is-failed {
+        color: var(--mago-danger, #B8402A);
+    }
+}
+
 // Message timestamp
 .mago-msg-time {
     font-size: 10px;
@@ -930,4 +981,70 @@ body.mago-active.mago-fullsize .page-wrapper {
     outline: 2px solid var(--mago-accent, #E8710A);
     outline-offset: 2px;
     border-radius: 2px;
+}
+
+// Flagged Answers detail page — plain admin page, not the panel, so it only
+// needs its blocks to be readable rather than styled like a chat bubble.
+// Flagged Answers detail page. Magento's own page-section and table-secondary
+// carry the layout; only the payload blocks and the status pill are ours.
+.mago-flag-view {
+    .mago-flag-meta {
+        width: 100%;
+
+        th {
+            color: #666;
+            font-weight: 600;
+            text-align: left;
+            white-space: nowrap;
+            width: 180px;
+        }
+    }
+
+    .mago-flag-status {
+        border-radius: 12px;
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 2px 10px;
+
+        &.is-open {
+            background: #fdf0d5;
+            color: #8a5a00;
+        }
+
+        &.is-resolved {
+            background: #e5efe5;
+            color: #006400;
+        }
+    }
+
+    .mago-flag-subtitle {
+        font-size: 14px;
+        margin: 18px 0 8px;
+    }
+
+    .mago-flag-content {
+        background: #f8f8f8;
+        border: 1px solid #e3e3e3;
+        border-radius: 3px;
+        margin: 0 0 12px;
+        max-height: 420px;
+        overflow: auto;
+        padding: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .mago-flag-message {
+        margin-bottom: 16px;
+
+        > strong {
+            color: #666;
+            display: block;
+            font-size: 11px;
+            letter-spacing: .06em;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+    }
 }

@@ -1,0 +1,142 @@
+<?php
+/**
+ * Copyright © Mago Assistant
+ *
+ * @var \MagoAssistant\Mago\Block\Adminhtml\Flag\View $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+$flag = $block->getFlag();
+$answer = $block->getAnswer();
+$usage = $block->getUsage();
+$environment = $block->getEnvironment();
+?>
+<?php if (!$flag): ?>
+    <div class="message message-error"><?= $escaper->escapeHtml(__('This flagged answer no longer exists.')) ?></div>
+<?php else: ?>
+<div class="mago-flag-view">
+    <div class="admin__page-section">
+        <div class="admin__page-section-title">
+            <span class="title"><?= $escaper->escapeHtml(__('Details')) ?></span>
+        </div>
+        <div class="admin__page-section-content">
+            <table class="admin__table-secondary mago-flag-meta">
+                <tbody>
+                <tr>
+                    <th><?= $escaper->escapeHtml(__('Status')) ?></th>
+                    <td>
+                        <span class="mago-flag-status is-<?= $escaper->escapeHtmlAttr((string)$flag['status']) ?>">
+                            <?= $escaper->escapeHtml(ucfirst((string)$flag['status'])) ?>
+                        </span>
+                    </td>
+                </tr>
+                <tr>
+                    <th><?= $escaper->escapeHtml(__('Flagged at')) ?></th>
+                    <td><?= $escaper->escapeHtml($block->formatFlagDate((string)$flag['created_at'])) ?></td>
+                </tr>
+                <?php if (!empty($flag['note'])): ?>
+                <tr>
+                    <th><?= $escaper->escapeHtml(__('Note')) ?></th>
+                    <td><?= $escaper->escapeHtml((string)$flag['note']) ?></td>
+                </tr>
+                <?php endif; ?>
+                <tr>
+                    <th><?= $escaper->escapeHtml(__('Model')) ?></th>
+                    <td>
+                        <?= $escaper->escapeHtml(trim(
+                            ($usage['provider'] ?? '') . ' ' . ($usage['model'] ?? '')
+                        )) ?>
+                        <?php if (!empty($usage['input_tokens'])): ?>
+                            · <?= $escaper->escapeHtml(__(
+                                '%1 in, %2 out',
+                                $usage['input_tokens'],
+                                $usage['output_tokens'] ?? 0
+                            )) ?>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php if (!empty($usage['skill_names'])): ?>
+                <tr>
+                    <th><?= $escaper->escapeHtml(__('Skills')) ?></th>
+                    <td><?= $escaper->escapeHtml((string)$usage['skill_names']) ?></td>
+                </tr>
+                <?php endif; ?>
+                <tr>
+                    <th><?= $escaper->escapeHtml(__('Environment')) ?></th>
+                    <td>
+                        <?= $escaper->escapeHtml(__(
+                            'Mago %1 · Magento %2 · PHP %3',
+                            $environment['module_version'] ?? '?',
+                            $environment['magento_version'] ?? '?',
+                            $environment['php_version'] ?? '?'
+                        )) ?>
+                    </td>
+                </tr>
+                <?php if ($block->getConversationUrl()): ?>
+                <tr>
+                    <th><?= $escaper->escapeHtml(__('Conversation')) ?></th>
+                    <td>
+                        <a href="<?= $escaper->escapeUrl($block->getConversationUrl()) ?>">
+                            <?= $escaper->escapeHtml(__('Open the conversation')) ?>
+                        </a>
+                    </td>
+                </tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="admin__page-section">
+        <div class="admin__page-section-title">
+            <span class="title"><?= $escaper->escapeHtml(__('The flagged answer')) ?></span>
+        </div>
+    <pre class="mago-flag-content"><?= $escaper->escapeHtml((string)($answer['content'] ?? '')) ?></pre>
+
+    <?php if (!empty($answer['tool_calls'])): ?>
+        <h3 class="mago-flag-subtitle"><?= $escaper->escapeHtml(__('Tool calls')) ?></h3>
+        <pre class="mago-flag-content"><?= $escaper->escapeHtml($block->pretty($answer['tool_calls'])) ?></pre>
+    <?php endif; ?>
+    </div>
+
+    <div class="admin__page-section">
+        <div class="admin__page-section-title">
+            <span class="title"><?= $escaper->escapeHtml(__('Leading up to it')) ?></span>
+        </div>
+    <?php foreach ($block->getContext() as $message): ?>
+        <div class="mago-flag-message">
+            <strong><?= $escaper->escapeHtml((string)$message['role']) ?></strong>
+            <pre class="mago-flag-content"><?= $escaper->escapeHtml((string)($message['content'] ?? '')) ?></pre>
+            <?php if (!empty($message['tool_calls'])): ?>
+                <pre class="mago-flag-content"><?= $escaper->escapeHtml($block->pretty($message['tool_calls'])) ?></pre>
+            <?php endif; ?>
+        </div>
+    <?php endforeach; ?>
+
+    </div>
+
+    <div class="admin__page-section">
+        <div class="admin__page-section-title">
+            <span class="title"><?= $escaper->escapeHtml(__('What went over the wire')) ?></span>
+        </div>
+    <?php if ($block->hasPayloads()): ?>
+        <h3 class="mago-flag-subtitle"><?= $escaper->escapeHtml(__('Request')) ?></h3>
+        <pre class="mago-flag-content"><?= $escaper->escapeHtml($block->pretty($usage['request_payload'] ?? null)) ?></pre>
+        <h3 class="mago-flag-subtitle"><?= $escaper->escapeHtml(__('Response')) ?></h3>
+        <pre class="mago-flag-content"><?= $escaper->escapeHtml($block->pretty($usage['response_payload'] ?? null)) ?></pre>
+    <?php else: ?>
+        <div class="message message-notice">
+            <?= $escaper->escapeHtml(__(
+                'No provider payloads were captured. They are only recorded while debug logging is on, under Stores > Configuration > Mago Assistant > Debug.'
+            )) ?>
+        </div>
+    <?php endif; ?>
+
+    </div>
+
+    <div class="message message-notice">
+        <?= $escaper->escapeHtml(__(
+            'The JSON download contains this conversation as it was stored, so it can hold store and customer data. Read it before attaching it to a public issue.'
+        )) ?>
+    </div>
+</div>
+<?php endif; ?>

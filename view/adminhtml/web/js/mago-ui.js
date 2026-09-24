@@ -49,6 +49,7 @@ define([], function () {
         chevronUp: '<path d="M18 15l-6-6-6 6"/>',
         chevronRight: '<path d="M9 6l6 6-6 6"/>',
         copy: '<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5H6a2 2 0 0 0-2 2v9"/>',
+        flag: '<path d="M5 21V4.5h13l-2.5 4 2.5 4H5"/>',
         thumbsUp: '<path d="M7 11v9H4v-9h3Zm0 0 4-7a2.5 2.5 0 0 1 2.5 3.2L13 11h5.5a2 2 0 0 1 2 2.4l-1.2 5.2a2 2 0 0 1-2 1.4H7"/>',
         thumbsDown: '<path d="M17 13V4h3v9h-3Zm0 0-4 7a2.5 2.5 0 0 1-2.5-3.2L11 13H5.5a2 2 0 0 1-2-2.4l1.2-5.2A2 2 0 0 1 6.7 4H17"/>',
         search: '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/>',

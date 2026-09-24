@@ -303,6 +303,24 @@
         </arguments>
     </type>
 
+    <!--
+        Flagged Answers grid. The standard DataProvider over a SearchResult collection, so the
+        toolbar's filters, sorting and paging are Magento's own rather than something to reimplement.
+    -->
+    <virtualType name="MagoFlagGridCollection" type="MagoAssistant\Mago\Model\ResourceModel\Flag\Grid">
+        <arguments>
+            <argument name="mainTable" xsi:type="string">mago_flag</argument>
+            <argument name="resourceModel" xsi:type="string">MagoAssistant\Mago\Model\ResourceModel\Flag</argument>
+        </arguments>
+    </virtualType>
+    <type name="Magento\Framework\View\Element\UiComponent\DataProvider\CollectionFactory">
+        <arguments>
+            <argument name="collections" xsi:type="array">
+                <item name="mago_flags_listing_data_source" xsi:type="string">MagoFlagGridCollection</item>
+            </argument>
+        </arguments>
+    </type>
+
     <!-- Debug Logger -->
     <virtualType name="MagoAssistantMagoDebugHandler" type="MagoAssistant\Mago\Logger\Handler\Debug"/>
     <virtualType name="MagoAssistantMagoDebugLogger" type="Magento\Framework\Logger\Monolog">
