@@ -148,6 +148,33 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return $this->isSetFlag(self::XML_PATH_ANSWER_WIDGETS);
     }
 
+    public function isVoiceInputEnabled(): bool
+    {
+        return $this->isSetFlag(self::XML_PATH_VOICE_INPUT);
+    }
+
+    public function isVoiceAutoSendEnabled(): bool
+    {
+        return $this->isSetFlag(self::XML_PATH_VOICE_AUTO_SEND);
+    }
+
+    public function getVoiceLanguage(): string
+    {
+        return trim((string)$this->getStoreValue(self::XML_PATH_VOICE_LANGUAGE)) ?: 'auto';
+    }
+
+    public function isVoiceHandsFreeEnabled(): bool
+    {
+        return $this->isSetFlag(self::XML_PATH_VOICE_HANDS_FREE);
+    }
+
+    public function getVoiceSendDelay(): int
+    {
+        $value = (int)$this->getStoreValue(self::XML_PATH_VOICE_SEND_DELAY);
+
+        return $value > 0 ? $value : 1400;
+    }
+
     public function getInternalUrl(): string
     {
         return trim((string)$this->getStoreValue(self::XML_PATH_INTERNAL_URL));

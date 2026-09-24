@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Block\Adminhtml;
 use Magento\Backend\Block\Template;
 use Magento\Backend\Block\Template\Context;
 use Magento\Backend\Model\Auth\Session as AdminSession;
+use Magento\Framework\Locale\ResolverInterface as LocaleResolver;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Service\Command\CommandRegistry;
@@ -54,6 +55,7 @@ class ChatPanel extends Template
         private readonly CommandRegistry $commandRegistry,
         private readonly CommandRunner $commandRunner,
         private readonly FormPolicy $formPolicy,
+        private readonly LocaleResolver $localeResolver,
         array $data = []
     ) {
         parent::__construct($context, $data);
@@ -81,6 +83,11 @@ class ChatPanel extends Template
             'statusUrl' => $this->getUrl('mago/chat/status'),
             'apiBaseUrl' => $this->getUrl('rest/V1/assistant'),
             'isStreamingEnabled' => $this->configRepository->isStreamingEnabled(),
+            'voiceInput' => $this->configRepository->isVoiceInputEnabled(),
+            'voiceAutoSend' => $this->configRepository->isVoiceAutoSendEnabled(),
+            'voiceHandsFree' => $this->configRepository->isVoiceHandsFreeEnabled(),
+            'voiceSendDelay' => $this->configRepository->getVoiceSendDelay(),
+            'locale' => $this->getSpeechLocale(),
             'formFieldCap' => self::FORM_FIELD_CAP,
             'formValueLengthCap' => self::FORM_VALUE_LENGTH_CAP,
             'formOptionCap' => self::FORM_OPTION_CAP,
@@ -89,6 +96,21 @@ class ChatPanel extends Template
             'formDenyRoutes' => $this->formPolicy->getDeniedRoutePatterns(),
             'i18n' => $this->getPanelTranslations(),
         ]);
+    }
+
+    /**
+     * BCP-47 tag for the browser's speech recognition: the Voice Input Language setting, or the
+     * admin's interface locale (nl_NL becomes nl-NL) when that is left on "auto". The Response
+     * Language setting is a display name meant for the model, so it cannot drive the recogniser.
+     */
+    private function getSpeechLocale(): string
+    {
+        $configured = $this->configRepository->getVoiceLanguage();
+        if ($configured !== '' && $configured !== 'auto') {
+            return $configured;
+        }
+
+        return str_replace('_', '-', (string)$this->localeResolver->getLocale());
     }
 
     /**
@@ -133,6 +155,25 @@ class ChatPanel extends Template
             'Action rejected. No changes were made.',
             'CMS page',
             'CMS block',
+            'Speak your message',
+            'Stop listening',
+            'Listening…',
+            'Recording — speak now',
+            'Sending in %1…',
+            'Sending…',
+            'Recording stopped',
+            'Hands-free — speak, a pause sends',
+            'Waiting for the reply…',
+            'Voice input',
+            'Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.',
+            'Avoid speaking customer details aloud. You can turn voice input off at any time under Stores > Configuration > Mago Assistant > Voice Input.',
+            'I understand, turn on the microphone',
+            'Not now',
+            // Comma-separated words a translation pack may add for answering a confirmation card by
+            // voice; chat-panel.js ignores the value when it is left untranslated.
+            'voice words: allow',
+            'voice words: reject',
+            'Microphone access was denied. Allow it in the browser to use voice input.',
         ];
 
         return array_combine($sentences, array_map(static fn (string $sentence): string => (string)__($sentence), $sentences));

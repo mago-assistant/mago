@@ -18,6 +18,13 @@
                 <accent_color>#F26322</accent_color>
                 <text_color>#FFFFFF</text_color>
             </chat>
+            <voice>
+                <enabled>1</enabled>
+                <language>auto</language>
+                <auto_send>1</auto_send>
+                <send_delay>1400</send_delay>
+                <hands_free>1</hands_free>
+            </voice>
             <tools>
                 <max_response_tokens>4000</max_response_tokens>
             </tools>

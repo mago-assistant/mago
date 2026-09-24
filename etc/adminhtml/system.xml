@@ -22,6 +22,7 @@
             </group>
             <include path="MagoAssistant_Mago::system/api.xml"/>
             <include path="MagoAssistant_Mago::system/chat.xml"/>
+            <include path="MagoAssistant_Mago::system/voice.xml"/>
             <include path="MagoAssistant_Mago::system/tools.xml"/>
             <include path="MagoAssistant_Mago::system/docs.xml"/>
             <include path="MagoAssistant_Mago::system/debug.xml"/>
