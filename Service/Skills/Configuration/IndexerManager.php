@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Configuration;
 
 use Magento\Framework\Indexer\IndexerRegistry;
 use Magento\Indexer\Model\Indexer\CollectionFactory;
+use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
@@ -21,10 +22,13 @@ class IndexerManager implements ActionScopedToolInterface
         'set_mode' => 'set indexer mode to "realtime" or "schedule"',
     ];
 
+    private const REINDEX_ACTIONS = ['reindex', 'reindex_all'];
+
     public function __construct(
         private readonly CollectionFactory $indexerCollectionFactory,
         private readonly IndexerRegistry $indexerRegistry,
-        private readonly InternalApiClient $apiClient
+        private readonly InternalApiClient $apiClient,
+        private readonly ConfigRepository $config
     ) {
     }
 
@@ -35,7 +39,7 @@ class IndexerManager implements ActionScopedToolInterface
 
     public function getDescription(): string
     {
-        return $this->getDescriptionForActions(array_keys(self::ACTION_DESCRIPTIONS));
+        return $this->getDescriptionForActions($this->getActionNames());
     }
 
     public function getDescriptionForActions(array $actionNames): string
@@ -52,7 +56,7 @@ class IndexerManager implements ActionScopedToolInterface
 
     public function getParameterSchema(): array
     {
-        return $this->getParameterSchemaForActions(array_keys(self::ACTION_DESCRIPTIONS));
+        return $this->getParameterSchemaForActions($this->getActionNames());
     }
 
     public function getParameterSchemaForActions(array $actionNames): array
@@ -91,6 +95,13 @@ class IndexerManager implements ActionScopedToolInterface
         $indexerId = $params['indexer_id'] ?? '';
         $adminUserId = (int)($params['_admin_user_id'] ?? 0);
         $mode = $params['mode'] ?? '';
+
+        if (in_array($action, self::REINDEX_ACTIONS, true) && !$this->config->isReindexAllowed()) {
+            return [
+                'error' => 'Reindexing is disabled. Enable it in '
+                    . 'Stores > Configuration > Mago Assistant > Tools > Allow reindexing.',
+            ];
+        }
 
         return match ($action) {
             'status' => $this->getStatus(),
@@ -144,6 +155,19 @@ class IndexerManager implements ActionScopedToolInterface
             'reindex', 'reindex_all' => 'Magento_Indexer::invalidate',
             default => 'Magento_Indexer::changeMode',
         };
+    }
+
+    /**
+     * @return string[]
+     */
+    private function getActionNames(): array
+    {
+        $actionNames = array_keys(self::ACTION_DESCRIPTIONS);
+        if ($this->config->isReindexAllowed()) {
+            return $actionNames;
+        }
+
+        return array_values(array_diff($actionNames, self::REINDEX_ACTIONS));
     }
 
     private function getStatus(): array
