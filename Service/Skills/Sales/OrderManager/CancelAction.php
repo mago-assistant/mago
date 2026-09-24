@@ -55,6 +55,7 @@ class CancelAction implements IrreversibleActionInterface
         // The ack's ids are linkable (tokenised); the message may embed the order number, which the
         // filter's vault-conceal pass covers.
         return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
             'success' => [PiiClass::PUBLIC],
             'message' => [PiiClass::PUBLIC],
             'order_number' => [PiiClass::TOKENISE, 'order'],

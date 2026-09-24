@@ -125,7 +125,10 @@ class ChatService implements ChatServiceInterface
                 $messages[] = [
                     'role' => 'tool',
                     'tool_call_id' => $toolCall['id'],
-                    'content' => json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    'content' => json_encode(
+                        $this->withoutClientDirective($result),
+                        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+                    ),
                 ];
 
                 $this->injectToolInstructions($toolCall, $adminUserId, $messages, $instructedTools);
@@ -221,15 +224,24 @@ class ChatService implements ChatServiceInterface
                             $describedCalls[] = $tc;
                             continue;
                         }
+                        // Display copy only (#97 decision 5): the admin must see the real values
+                        // they are approving, not opaque tokens; the persisted tool_calls stay
+                        // tokenised and are re-checked on the confirm round-trip. describeRisk()
+                        // reads the same copy, because looking an impact up by mago://order_1 finds
+                        // nothing and the card then loses its list for precisely the irreversible
+                        // actions it exists to spell out.
+                        $shownInput = $this->privacyService->rehydrateArguments(
+                            $this->inputForAction($t, $tc['input'] ?? [])
+                        );
                         $details = [
                             'id' => (string)($tc['id'] ?? ''),
                             'name' => $tc['name'],
                             'description' => $t->getDescription(),
-                            // Display copy only (#97 decision 5): the admin must see the real values
-                            // they are approving, not opaque tokens; the persisted tool_calls stay
-                            // tokenised and are re-checked on the confirm round-trip.
-                            'input' => $this->privacyService->rehydrateArguments($tc['input'] ?? []),
-                        ] + $this->describeRisk($t, $tc['input'] ?? [], $adminUserId);
+                            'input' => $shownInput,
+                        ] + $this->describeRisk($t, $shownInput, $adminUserId);
+                        if ($this->privacyService->containsPersonalToken($tc['input'] ?? [])) {
+                            $details['sensitive'] = true;
+                        }
                         $confirmTools[] = $details;
                         $describedCalls[] = $tc + $details;
                     }
@@ -522,6 +534,17 @@ class ChatService implements ChatServiceInterface
         return $result;
     }
 
+    /**
+     * The part of a tool result that only the browser reads, if the tool sent one
+     *
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>|null
+     */
+    private function clientDirectiveOf(array $result): ?array
+    {
+        return is_array($result[self::CLIENT_DIRECTIVE_KEY] ?? null) ? $result[self::CLIENT_DIRECTIVE_KEY] : null;
+    }
+
     private function executeTool(array $toolCall, ?int $adminUserId = null): array
     {
         $tool = $this->toolRegistry->getTool($toolCall['name'], $adminUserId);
@@ -545,11 +568,11 @@ class ChatService implements ChatServiceInterface
                 ]);
             }
             $input = $toolCall['input'] ?? [];
-            // A sensitive-class token (masked personal value, admin URL) never rehydrates into a
-            // write, resolvable or not: prompt injection could otherwise steer it into stored data
-            // an attacker can read back (the rehydration-oracle chain). Checked BEFORE rehydration.
+            // An admin URL token never rehydrates into a write, resolvable or not: it embeds the
+            // admin secret key. Masked personal values do rehydrate (#114); the confirmation card
+            // shows them in plain text with a warning instead. Checked BEFORE rehydration.
             if (!$tool->isReadOnlyAction($input) && $this->privacyService->containsSensitiveToken($input)) {
-                return ['error' => 'This action would write a masked personal value into data. Ask the '
+                return ['error' => 'This action would write an admin URL into data. Ask the '
                     . 'administrator to enter it directly on the form or in the request.'];
             }
             // The model only ever saw tokens for scrubbed values, so swap them back to real values on
@@ -566,12 +589,16 @@ class ChatService implements ChatServiceInterface
                 $input['_admin_user_id'] = $adminUserId;
             }
             $result = $tool->execute($input);
-            // Privacy filter runs here, before the result is capped and sent to the LLM.
-            $result = $this->privacyService->filterToolResult($classes, $result);
+            // Privacy filter runs here, before the result is capped and sent to the LLM. The
+            // client_directive bypasses it: it only ever goes to the browser, which checks the real
+            // entity id against the open form and stages the real values, so a token there makes
+            // every form write fail the identity check.
+            $directive = $this->clientDirectiveOf($result);
+            $result = $this->privacyService->filterToolResult($classes, $this->withoutClientDirective($result));
             if ($this->configRepository->isDebugEnabled()) {
                 $this->debugLogger->addLog('Tool Result', ['tool' => $toolCall['name'], 'result' => $result]);
             }
-            return $this->capToolResult($result, $toolCall['name']);
+            return $this->capToolResult($this->withClientDirective($result, $directive), $toolCall['name']);
         } catch (\Throwable $e) {
             $this->errorLogger->addLog('Tool Error', [
                 'tool' => $toolCall['name'],
@@ -595,9 +622,7 @@ class ChatService implements ChatServiceInterface
         // A client_directive is stripped again before the tool message is built, so it never
         // spends context: it neither counts towards the cap nor may be truncated away with the
         // rest, or a confirmed write would be staged nowhere with nothing said about it.
-        $directive = is_array($result[self::CLIENT_DIRECTIVE_KEY] ?? null)
-            ? $result[self::CLIENT_DIRECTIVE_KEY]
-            : null;
+        $directive = $this->clientDirectiveOf($result);
         $result = $this->withoutClientDirective($result);
 
         $maxBytes = $this->configRepository->getMaxResponseTokens() * self::BYTES_PER_TOKEN_ESTIMATE;
@@ -909,5 +934,34 @@ class ChatService implements ChatServiceInterface
             $this->errorLogger->addLog('StoreScopeContext', $e->getMessage());
             return '';
         }
+    }
+
+    /**
+     * The parameters the chosen action actually takes. A skill offers one flat schema for all its
+     * actions, and the model fills in every key it is shown, so a status change arrives carrying
+     * capture, carrier_code and the credit memo adjustments. On the confirmation card that is worse
+     * than noise: the admin is asked to approve a status change while reading "capture: true".
+     *
+     * @param array<array-key,mixed> $input
+     * @return array<array-key,mixed>
+     */
+    private function inputForAction(object $tool, array $input): array
+    {
+        $action = (string)($input['action'] ?? '');
+        if ($action === '' || !method_exists($tool, 'getParameterSchemaForActions')) {
+            return $input;
+        }
+
+        $schema = $tool->getParameterSchemaForActions([$action]);
+        $known = array_keys($schema['properties'] ?? []);
+        if ($known === []) {
+            return $input;
+        }
+
+        return array_filter(
+            $input,
+            static fn (mixed $value, string|int $key): bool => in_array((string)$key, $known, true),
+            ARRAY_FILTER_USE_BOTH
+        );
     }
 }

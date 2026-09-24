@@ -22,7 +22,6 @@ class SalesData extends AbstractSkill
 
     protected function getBaseInstructions(): string
     {
-        return 'All order results include admin_url – always include these as markdown links in your response. '
-            . 'Do NOT call admin_navigator separately for orders, the URLs are already in the data.';
+        return 'A result about one record carries an admin_url, masked as a token like mago://url_1. Link it only when the answer is about that one record, writing the token exactly as it came back. A count, a total or a list gets no link: there is no single record to open, and a link to nothing in particular is noise under every answer. Never write an admin url yourself, one you assembled is missing the secret key and opens nothing.';
     }
 }

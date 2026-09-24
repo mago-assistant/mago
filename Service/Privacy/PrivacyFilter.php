@@ -19,11 +19,11 @@ namespace MagoAssistant\Mago\Service\Privacy;
 class PrivacyFilter
 {
     /**
-     * Dropped from every result whatever its classification: admin_url embeds the admin secret key
-     * (/key/<hash>/) and must never reach the LLM. (AdminNavigator's own "url" field is the tool's
-     * deliverable, a separate concern; see the admin_url sibling issue.)
+     * An admin url embeds the admin secret key, so it may never cross as itself. It is masked
+     * instead of dropped, so the panel can hand the admin a link that opens, and a wildcard-public
+     * tool cannot make it public by accident.
      */
-    private const ALWAYS_STRIP = ['admin_url'];
+    private const NEVER_PUBLIC = ['admin_url' => 'url'];
 
     /**
      * Kept whatever the classification so a tool's failure or ACL denial can still be explained,
@@ -62,10 +62,6 @@ class PrivacyFilter
         foreach ($node as $key => $value) {
             $keyStr = is_string($key) ? $key : null;
 
-            if ($keyStr !== null && in_array($keyStr, self::ALWAYS_STRIP, true)) {
-                continue;
-            }
-
             // A list element carries no key of its own, so it answers to the rule of the key the
             // list sits under; a named key always re-matches against the map.
             $rule = $keyStr !== null
@@ -91,10 +87,19 @@ class PrivacyFilter
 
             $class = $rule[0] ?? PiiClass::STRIP;
 
+            if ($keyStr !== null && isset(self::NEVER_PUBLIC[$keyStr]) && $class === PiiClass::PUBLIC) {
+                $class = PiiClass::TOKENISE;
+                $rule = [PiiClass::TOKENISE, self::NEVER_PUBLIC[$keyStr]];
+            }
+
             if ($class === PiiClass::PUBLIC) {
                 $out[$key] = $this->keep($value);
             } elseif ($class === PiiClass::TOKENISE) {
-                $out[$key] = $this->vault->tokenise((string)$value, $rule[1] ?? 'value');
+                // An absent value identifies nobody, so it crosses as the nothing it is rather than
+                // as a token standing for a row that does not exist.
+                $out[$key] = $value === null || $value === ''
+                    ? $value
+                    : $this->vault->tokenise((string)$value, $rule[1] ?? 'value');
             }
             // STRIP (declared, or the fail-closed default for an undeclared field): drop it.
         }
@@ -115,9 +120,12 @@ class PrivacyFilter
         }
 
         // Defang any token-lookalike arriving in tool output BEFORE minting real tokens, so a forged
-        // "[email_1]" planted in a wildcard-public tool's data (a poisoned product name, CMS text)
-        // cannot reach the model and be echoed into an argument that then rehydrates to a real value.
+        // "mago://email_1" planted in a wildcard-public tool's data (a poisoned product name, CMS
+        // text) cannot reach the model and be echoed into an argument that then rehydrates to a real
+        // value. Both shapes are defanged: conversations minted before the change still hold the
+        // bracket form, and a forgery can wear either.
         $value = (string)preg_replace('/\[([a-z]+_\d+)\]/', '($1)', $value);
+        $value = (string)preg_replace('#mago://([a-z]+_\d+)#', '($1)', $value);
 
         // A value the vault already tokenised (an order number, an id) has no signature the
         // heuristic can match when a tool echoes it back in free text; the vault itself does.

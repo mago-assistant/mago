@@ -52,6 +52,31 @@ final class DbSchemaTest extends TestCase
         );
     }
 
+    #[Test]
+    public function theTokenVaultCannotHoldTheSameTokenTwiceInAConversation(): void
+    {
+        // Two requests in one conversation read the same highest number and mint the same token for
+        // different values. Without the key the later row wins the next load and one conversation
+        // reads another's value, which is the one thing the vault exists to prevent.
+        $columns = null;
+        foreach ($this->schema->table as $table) {
+            if ((string)$table['name'] !== 'mago_pii_token') {
+                continue;
+            }
+            foreach ($table->constraint as $constraint) {
+                if ((string)$constraint->attributes('xsi', true)['type'] !== 'unique') {
+                    continue;
+                }
+                $columns = [];
+                foreach ($constraint->column as $column) {
+                    $columns[] = (string)$column['name'];
+                }
+            }
+        }
+
+        self::assertSame(['conversation_id', 'token'], $columns);
+    }
+
     private function hasColumn(\SimpleXMLElement $table, string $column): bool
     {
         foreach ($table->column as $candidate) {

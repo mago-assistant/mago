@@ -41,7 +41,7 @@ class SearchOrdersAction implements ActionInterface
             ],
             'period' => [
                 'type' => 'string',
-                'description' => 'Time period: "today", "yesterday", "7days", "30days", "this_month", "last_month", "this_year", "YYYY-MM" for a specific month, or "YYYY-MM-DD:YYYY-MM-DD" for a custom range',
+                'description' => 'Time period: "today", "yesterday", "7days", "30days", "this_month", "last_month", "this_year", "all" for no lower bound, "YYYY-MM" for a specific month, or "YYYY-MM-DD:YYYY-MM-DD" for a custom range',
             ],
             'limit' => [
                 'type' => 'integer',
@@ -64,6 +64,7 @@ class SearchOrdersAction implements ActionInterface
     {
         // The customer name is a direct identifier and never sent; the order ids are tokenised.
         return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
             'query' => [PiiClass::PUBLIC],
             'period' => [PiiClass::PUBLIC],
             'results_count' => [PiiClass::PUBLIC],
@@ -71,7 +72,7 @@ class SearchOrdersAction implements ActionInterface
             'order_number' => [PiiClass::TOKENISE, 'order'],
             'order_total' => [PiiClass::PUBLIC],
             'status' => [PiiClass::PUBLIC],
-            'customer' => [PiiClass::STRIP],
+            'customer' => [PiiClass::TOKENISE, 'name'],
             'date' => [PiiClass::PUBLIC],
             'product_sku' => [PiiClass::PUBLIC],
             'product_name' => [PiiClass::PUBLIC],

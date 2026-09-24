@@ -118,6 +118,10 @@
         <index referenceId="MAGO_PII_TOKEN_CONVERSATION_ID" indexType="btree">
             <column name="conversation_id"/>
         </index>
+        <constraint xsi:type="unique" referenceId="MAGO_PII_TOKEN_CONVERSATION_ID_TOKEN">
+            <column name="conversation_id"/>
+            <column name="token"/>
+        </constraint>
         <constraint xsi:type="foreign" referenceId="MAGO_PII_TOKEN_CONV_ID" table="mago_pii_token" column="conversation_id" referenceTable="mago_conversation" referenceColumn="entity_id" onDelete="CASCADE"/>
     </table>
 

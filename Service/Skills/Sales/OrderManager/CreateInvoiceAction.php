@@ -67,6 +67,7 @@ class CreateInvoiceAction implements ActionInterface
         // The ack's order number is a linkable id (tokenised); the message may embed it too, which
         // the filter's vault-conceal pass covers.
         return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
             'success' => [PiiClass::PUBLIC],
             'message' => [PiiClass::PUBLIC],
             'invoice_id' => [PiiClass::TOKENISE, 'invoice'],

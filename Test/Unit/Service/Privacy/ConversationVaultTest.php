@@ -57,8 +57,8 @@ class ConversationVaultTest extends TestCase
 
         $vault->beginConversation(2);
 
-        self::assertSame('[email_1]', $vault->tokenise('two@example.com', 'email'));
-        self::assertSame('two@example.com', $vault->rehydrate('[email_1]'));
+        self::assertSame('mago://email_1', $vault->tokenise('two@example.com', 'email'));
+        self::assertSame('two@example.com', $vault->rehydrate('mago://email_1'));
     }
 
     #[Test]
@@ -66,8 +66,8 @@ class ConversationVaultTest extends TestCase
     {
         $vault = new ConversationVault();
 
-        self::assertSame('[email_1]', $vault->tokenise('jan@example.com', 'email'));
-        self::assertSame('I mailed jan@example.com', $vault->rehydrate('I mailed [email_1]'));
+        self::assertSame('mago://email_1', $vault->tokenise('jan@example.com', 'email'));
+        self::assertSame('I mailed jan@example.com', $vault->rehydrate('I mailed mago://email_1'));
     }
 
     #[Test]
@@ -94,12 +94,12 @@ class ConversationVaultTest extends TestCase
 
         $turnOne = new ConversationVault($storage);
         $turnOne->beginConversation(7);
-        $turnOne->tokenise('a@example.com', 'email'); // [email_1]
+        $turnOne->tokenise('a@example.com', 'email'); // mago://email_1
 
         $turnTwo = new ConversationVault($storage);
         $turnTwo->beginConversation(7);
 
-        self::assertSame('[email_2]', $turnTwo->tokenise('b@example.com', 'email'));
+        self::assertSame('mago://email_2', $turnTwo->tokenise('b@example.com', 'email'));
     }
 
     #[Test]
@@ -114,7 +114,7 @@ class ConversationVaultTest extends TestCase
         $b = new ConversationVault($storage);
         $b->beginConversation(2);
 
-        self::assertSame('[email_1]', $b->tokenise('b@example.com', 'email'));
-        self::assertFalse($b->has('[email_1]') && $b->rehydrate('[email_1]') === 'a@example.com');
+        self::assertSame('mago://email_1', $b->tokenise('b@example.com', 'email'));
+        self::assertFalse($b->has('mago://email_1') && $b->rehydrate('mago://email_1') === 'a@example.com');
     }
 }

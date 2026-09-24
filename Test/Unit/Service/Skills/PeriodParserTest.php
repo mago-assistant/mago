@@ -20,12 +20,60 @@ class PeriodParserTest extends TestCase
     }
 
     #[Test]
+    public function itUnderstandsThePeriodsAModelWritesOutInWords(): void
+    {
+        foreach (['last week', 'past week', 'last 7 days'] as $period) {
+            self::assertSame(
+                $this->periodParser->getFromDate('7days'),
+                $this->periodParser->getFromDate($period),
+                $period
+            );
+        }
+    }
+
+    #[Test]
+    public function allReachesBackFurtherThanAnyStoreHasData(): void
+    {
+        [$from, $to] = $this->periodParser->parse('all');
+
+        self::assertSame('1970-01-01 00:00:00', $from);
+        self::assertSame((new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d 23:59:59'), $to);
+    }
+
+    #[Test]
+    public function theFromDateReadsTheSameVocabularyAsParse(): void
+    {
+        self::assertSame('1970-01-01 00:00:00', $this->periodParser->getFromDate('all'));
+        self::assertSame('2026-01-01 00:00:00', $this->periodParser->getFromDate('2026-01-01:2026-01-31'));
+        self::assertSame('2026-08-01 00:00:00', $this->periodParser->getFromDate('2026-08'));
+    }
+
+    #[Test]
+    public function theFromDateRefusesAPeriodItDoesNotKnow(): void
+    {
+        // It used to answer about the last thirty days, so a question about a range nobody parsed
+        // came back looking answered.
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->periodParser->getFromDate('sinds 2020');
+    }
+
+    #[Test]
     public function itParsesAnExplicitDateRange(): void
     {
         [$from, $to] = $this->periodParser->parse('2026-01-01:2026-01-31');
 
         self::assertSame('2026-01-01 00:00:00', $from);
         self::assertSame('2026-01-31 23:59:59', $to);
+    }
+
+    #[Test]
+    public function itParsesAWholeYearWrittenAsFourDigits(): void
+    {
+        [$from, $to] = $this->periodParser->parse('2026');
+
+        self::assertSame('2026-01-01 00:00:00', $from);
+        self::assertSame('2026-12-31 23:59:59', $to);
     }
 
     #[Test]

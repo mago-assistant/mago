@@ -54,6 +54,7 @@ class GetRuleAction implements ActionInterface
         // type through aggregator cover the nested conditions tree from asArray(); rule
         // conditions are shop data.
         return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
             'rule_id' => [PiiClass::PUBLIC],
             'name' => [PiiClass::PUBLIC],
             'is_active' => [PiiClass::PUBLIC],

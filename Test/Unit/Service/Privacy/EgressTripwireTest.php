@@ -46,7 +46,7 @@ class EgressTripwireTest extends TestCase
         $logger->expects(self::never())->method('addLog');
 
         $this->tripwire(true, State::MODE_DEVELOPER, $logger)->inspect([
-            ['role' => 'user', 'content' => 'Mail [email_1] about [order_1]'],
+            ['role' => 'user', 'content' => 'Mail mago://email_1 about mago://order_1'],
             ['role' => 'assistant', 'content' => 'Done.'],
         ]);
     }

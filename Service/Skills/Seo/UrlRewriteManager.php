@@ -32,6 +32,9 @@ class UrlRewriteManager extends AbstractSkill
             . 'Only delete "custom" type rewrites — auto-generated ones regenerate via indexer. '
             . 'Redirect types: 0 = internal rewrite (no redirect), 301 = permanent, 302 = temporary. '
             . 'Always use 301 for permanent URL changes, 302 for temporary campaigns. '
-            . 'All rewrite results include admin_url – always include these as markdown links in your response.';
+            . 'Every result carries an admin_url, masked as a token like [url_1]. Always include it as a '
+            . 'markdown link, writing the token exactly as it came back; the panel swaps the real address '
+            . 'in for the admin. Never write an admin url yourself: one you assembled is missing the '
+            . 'secret key and opens nothing.';
     }
 }

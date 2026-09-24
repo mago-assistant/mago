@@ -68,6 +68,7 @@ class SearchAction implements ActionInterface
     public function getFieldClassification(): array
     {
         return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
             'total_found' => [PiiClass::PUBLIC],
             'count' => [PiiClass::PUBLIC],
             'url_rewrite_id' => [PiiClass::PUBLIC],

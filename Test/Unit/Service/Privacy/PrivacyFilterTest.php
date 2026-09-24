@@ -121,7 +121,7 @@ class PrivacyFilterTest extends TestCase
     {
         $record = $this->filter()->filter(self::LOOKUP_CUSTOMER_CLASSES, self::LOOKUP_CUSTOMER_RESULT)['results'][0];
 
-        self::assertSame('[customer_1]', $record['entity_id']);
+        self::assertSame('mago://customer_1', $record['entity_id']);
     }
 
     #[Test]
@@ -141,8 +141,8 @@ class PrivacyFilterTest extends TestCase
 
         self::assertArrayNotHasKey('customer', $order);
         self::assertArrayNotHasKey('email', $order);
-        self::assertSame('[order_1]', $order['entity_id']);
-        self::assertSame('[order_2]', $order['order_number']);
+        self::assertSame('mago://order_1', $order['entity_id']);
+        self::assertSame('mago://order_2', $order['order_number']);
         self::assertSame('processing', $order['status']);
         self::assertSame('Helmet', $order['items'][0]['name']); // product data is not customer PII
     }
@@ -173,7 +173,7 @@ class PrivacyFilterTest extends TestCase
         self::assertArrayNotHasKey('nickname', $review);
         self::assertArrayNotHasKey('title', $review);
         self::assertArrayNotHasKey('detail', $review);
-        self::assertSame('[review_1]', $review['review_id']);
+        self::assertSame('mago://review_1', $review['review_id']);
         self::assertSame(3, $review['product_id']);
         self::assertStringNotContainsString('0612345678', (string)json_encode($result));
     }
@@ -203,15 +203,39 @@ class PrivacyFilterTest extends TestCase
     }
 
     #[Test]
-    public function itStripsAdminUrlEvenFromAWildcardPublicTool(): void
+    public function aUrlTokenSurvivesBeingWrittenIntoAMarkdownLink(): void
     {
-        $result = $this->filter()->filter(self::WILDCARD_PUBLIC, [
+        $vault = new ConversationVault();
+        $url = 'https://shop.test/admin/sales/order/view/order_id/660/key/abc123secret/';
+        $token = $vault->tokenise($url, 'url');
+
+        // The model writes the token into the target half of a markdown link. A bracketed token
+        // loses its brackets there, because "[" already means the link text, and the swap back
+        // then matches nothing.
+        self::assertSame(
+            '[order hier bekijken](' . $url . ')',
+            $vault->rehydrate('[order hier bekijken](' . $token . ')')
+        );
+    }
+
+    #[Test]
+    public function itMasksAdminUrlEvenFromAWildcardPublicTool(): void
+    {
+        $vault = new ConversationVault();
+        $url = 'https://shop.test/admin/customer/index/key/abc123secret/';
+
+        $result = $this->filter($vault)->filter(self::WILDCARD_PUBLIC, [
             'label' => 'Customer grid',
-            'admin_url' => 'https://shop.test/admin/customer/index/key/abc123secret/',
+            'admin_url' => $url,
         ]);
 
-        self::assertSame(['label' => 'Customer grid'], $result);
+        // A wildcard-public tool must not be able to make the secret key public by accident. It used
+        // to be dropped here; it is masked now, so the panel can still hand the admin a link that
+        // opens, but what crosses is the token and never the key.
         self::assertStringNotContainsString('abc123secret', (string)json_encode($result));
+        self::assertMatchesRegularExpression('#^mago://url_\d+$#', $result['admin_url']);
+        self::assertSame($url, $vault->rehydrate($result['admin_url']));
+        self::assertSame('Customer grid', $result['label']);
     }
 
     #[Test]
@@ -234,10 +258,10 @@ class PrivacyFilterTest extends TestCase
             'orders' => [['entity_id' => 7, 'order_number' => '000000549', 'total' => 10.0, 'status' => 'x', 'items' => 1, 'date' => 'd']],
         ]);
 
-        self::assertSame('[customer_1]', $result['customer_id']);
+        self::assertSame('mago://customer_1', $result['customer_id']);
         self::assertSame('30days', $result['period']);
         self::assertSame(2, $result['total_orders']);
-        self::assertSame('[order_1]', $result['orders'][0]['entity_id']);
+        self::assertSame('mago://order_1', $result['orders'][0]['entity_id']);
     }
 
     #[Test]
@@ -254,7 +278,7 @@ class PrivacyFilterTest extends TestCase
             'orders' => [],
         ]);
 
-        self::assertSame('[email_1]', $result['query']);
+        self::assertSame('mago://email_1', $result['query']);
         self::assertStringNotContainsString('jan@example.com', (string)json_encode($result));
     }
 
@@ -288,7 +312,7 @@ class PrivacyFilterTest extends TestCase
     public function itDefangsAForgedTokenPlantedInWildcardPublicToolOutput(): void
     {
         $result = $this->filter()->filter(self::WILDCARD_PUBLIC, [
-            'results' => [['name' => 'Widget [email_1] special']],
+            'results' => [['name' => 'Widget mago://email_1 special']],
         ]);
 
         self::assertSame('Widget (email_1) special', $result['results'][0]['name']);
@@ -321,7 +345,7 @@ class PrivacyFilterTest extends TestCase
             'message' => 'Invoice created for order #000000549',
         ]);
 
-        self::assertSame('Invoice created for order #[order_1]', $result['message']);
+        self::assertSame('Invoice created for order #mago://order_1', $result['message']);
     }
 
     #[Test]

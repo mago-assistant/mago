@@ -54,6 +54,7 @@ class GetRuleAction implements ActionInterface
         // condition_type through value cover the nested condition/action_condition objects the
         // REST rule payload carries; rule conditions are shop data.
         return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
             'rule_id' => [PiiClass::PUBLIC],
             'name' => [PiiClass::PUBLIC],
             'description' => [PiiClass::PUBLIC],

@@ -52,6 +52,7 @@ class ListRulesAction implements ActionInterface
     public function getFieldClassification(): array
     {
         return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
             'total_count' => [PiiClass::PUBLIC],
             'rule_id' => [PiiClass::PUBLIC],
             'name' => [PiiClass::PUBLIC],

@@ -7,7 +7,9 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Model\Privacy;
 
 use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\DB\Adapter\DuplicateException;
 use MagoAssistant\Mago\Api\Privacy\VaultStorageInterface;
+use MagoAssistant\Mago\Logger\DebugLogger;
 use MagoAssistant\Mago\Logger\ErrorLogger;
 
 /**
@@ -21,7 +23,8 @@ class DbVaultStorage implements VaultStorageInterface
 
     public function __construct(
         private readonly ResourceConnection $resourceConnection,
-        private readonly ErrorLogger $errorLogger
+        private readonly ErrorLogger $errorLogger,
+        private readonly DebugLogger $debugLogger
     ) {
     }
 
@@ -56,6 +59,16 @@ class DbVaultStorage implements VaultStorageInterface
                 'token' => $token,
                 'value' => $value,
                 'token_type' => $type,
+            ]);
+        } catch (DuplicateException $e) {
+            // Two requests in one conversation (a stream still running beside a confirm, or a double
+            // submit) both read the same highest number and mint the same token for different
+            // values. The unique key turns that into a refused insert rather than a second row that
+            // wins the next load and hands one conversation another's value. The token that lost
+            // simply does not persist, and reads back as an unresolved one.
+            $this->debugLogger->addLog('PII vault persist skipped a duplicate token', [
+                'conversation_id' => $conversationId,
+                'token' => $token,
             ]);
         } catch (\Throwable $e) {
             $this->errorLogger->addLog('PII vault persist', $e->getMessage());

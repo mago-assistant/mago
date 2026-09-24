@@ -72,7 +72,11 @@ class ConversationVault
         }
 
         $number = ($this->counters[$type] ?? 0) + 1;
-        $token = sprintf('[%s_%d]', $type, $number);
+        // Machine syntax, deliberately. A bracketed token reads as a placeholder: asked for a
+        // Dutch answer the model rewrote [name_1] as [naam], and inside a markdown link it dropped
+        // the brackets altogether. A scheme-shaped token survives both, because it does not look
+        // like anything the model is supposed to fill in or translate.
+        $token = sprintf('mago://%s_%d', $type, $number);
         $this->remember($type, $value, $token);
 
         if ($this->conversationId !== null && $this->storage !== null) {
@@ -127,7 +131,7 @@ class ConversationVault
         $this->valueByToken[$token] = $value;
         $this->concealMap = null;
 
-        if (preg_match('/_(\d+)\]$/', $token, $m) === 1) {
+        if (preg_match('/_(\d+)\]?$/', $token, $m) === 1) {
             $this->counters[$type] = max($this->counters[$type] ?? 0, (int)$m[1]);
         }
     }

@@ -338,6 +338,33 @@ export default class MagentoApi {
   async createCustomerWithAddress(
     request: APIRequestContext,
     customer: {email: string, firstname: string, lastname: string, city: string, telephone: string}
+  ) {
+    const response = await request.post('/rest/V1/customers', {
+      headers: {Authorization: 'Bearer ' + await this.getToken(request)},
+      data: {
+        customer: {
+          email: customer.email,
+          firstname: customer.firstname,
+          lastname: customer.lastname,
+          addresses: [
+            {
+              default_billing: true,
+              default_shipping: true,
+              firstname: customer.firstname,
+              lastname: customer.lastname,
+              street: ['Teststraat 1'],
+              city: customer.city,
+              postcode: '1234 AB',
+              country_id: 'NL',
+              telephone: customer.telephone,
+            },
+          ],
+        },
+      },
+    });
+
+    return response.json();
+  }
 
   async deleteCustomerByEmail(request: APIRequestContext, email: string) {
     const customer = await this.findCustomer(request, email);

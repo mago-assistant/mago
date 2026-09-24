@@ -21,14 +21,14 @@ class PiiHeuristicTest extends TestCase
     #[Test]
     public function itTokenisesAnEmailAddress(): void
     {
-        self::assertSame('mail [email_1] please', $this->scrub('mail jan@example.com please'));
+        self::assertSame('mail mago://email_1 please', $this->scrub('mail jan@example.com please'));
     }
 
     #[Test]
     public function itTokenisesAValidIbanButLeavesAnInvalidOne(): void
     {
         // NL91ABNA0417164300 is a valid test IBAN (mod-97 == 1).
-        self::assertSame('pay to [iban_1]', $this->scrub('pay to NL91ABNA0417164300'));
+        self::assertSame('pay to mago://iban_1', $this->scrub('pay to NL91ABNA0417164300'));
         self::assertSame('ref NL00ABNA0417164300', $this->scrub('ref NL00ABNA0417164300'));
     }
 
@@ -36,29 +36,29 @@ class PiiHeuristicTest extends TestCase
     public function itTokenisesAValidBsnButLeavesAnOrdinaryNineDigitNumber(): void
     {
         // 111222333 passes the 11-proef; 123456789 does not.
-        self::assertSame('bsn [bsn_1]', $this->scrub('bsn 111222333'));
+        self::assertSame('bsn mago://bsn_1', $this->scrub('bsn 111222333'));
         self::assertSame('order 123456789', $this->scrub('order 123456789'));
     }
 
     #[Test]
     public function itTokenisesADutchVatNumber(): void
     {
-        self::assertSame('vat [vat_1]', $this->scrub('vat NL123456789B01'));
+        self::assertSame('vat mago://vat_1', $this->scrub('vat NL123456789B01'));
     }
 
     #[Test]
     public function itTokenisesADutchMobileNumber(): void
     {
-        self::assertSame('call [phone_1]', $this->scrub('call 0612345678'));
-        self::assertSame('call [phone_1]', $this->scrub('call +31612345678'));
+        self::assertSame('call mago://phone_1', $this->scrub('call 0612345678'));
+        self::assertSame('call mago://phone_1', $this->scrub('call +31612345678'));
     }
 
     #[Test]
     public function itTokenisesInternationalAndGroupedFormats(): void
     {
-        self::assertSame('call [phone_1]', $this->scrub('call +31 6 12345678'));
-        self::assertSame('call [phone_1]', $this->scrub('call 0031612345678'));
-        self::assertSame('bsn [bsn_1]', $this->scrub('bsn 111 222 333'));
+        self::assertSame('call mago://phone_1', $this->scrub('call +31 6 12345678'));
+        self::assertSame('call mago://phone_1', $this->scrub('call 0031612345678'));
+        self::assertSame('bsn mago://bsn_1', $this->scrub('bsn 111 222 333'));
     }
 
     #[Test]
@@ -78,7 +78,7 @@ class PiiHeuristicTest extends TestCase
     public function theSameValueGetsTheSameTokenAcrossOneScrub(): void
     {
         self::assertSame(
-            'from [email_1] to [email_1]',
+            'from mago://email_1 to mago://email_1',
             $this->scrub('from jan@example.com to jan@example.com')
         );
     }

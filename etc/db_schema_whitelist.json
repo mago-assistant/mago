@@ -107,7 +107,8 @@
         },
         "constraint": {
             "PRIMARY": true,
-            "MAGO_PII_TOKEN_CONV_ID": true
+            "MAGO_PII_TOKEN_CONV_ID": true,
+            "MAGO_PII_TOKEN_CONVERSATION_ID_TOKEN": true
         },
         "index": {
             "MAGO_PII_TOKEN_CONVERSATION_ID": true

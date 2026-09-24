@@ -55,10 +55,11 @@ class ListApprovedAction implements ActionInterface
         // Review free text and the reviewer nickname are never sent, not even masked; the bare
         // review id is tokenised so the assistant can still refer to the row.
         return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
             'review_id' => [PiiClass::TOKENISE, 'review'],
-            'title' => [PiiClass::STRIP],
-            'nickname' => [PiiClass::STRIP],
-            'detail' => [PiiClass::STRIP],
+            'nickname' => [PiiClass::TOKENISE, 'nickname'],
+            'title' => [PiiClass::TOKENISE, 'reviewtitle'],
+            'detail' => [PiiClass::TOKENISE, 'reviewtext'],
             'product_id' => [PiiClass::PUBLIC],
             'created_at' => [PiiClass::PUBLIC],
             'total' => [PiiClass::PUBLIC],

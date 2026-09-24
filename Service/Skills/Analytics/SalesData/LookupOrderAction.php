@@ -54,12 +54,13 @@ class LookupOrderAction implements ActionInterface
         // Name and email are direct identifiers and never sent; the order ids are tokenised so
         // follow-up actions can still target the order.
         return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
             'entity_id' => [PiiClass::TOKENISE, 'order'],
             'order_number' => [PiiClass::TOKENISE, 'order'],
             'total' => [PiiClass::PUBLIC],
             'status' => [PiiClass::PUBLIC],
-            'customer' => [PiiClass::STRIP],
-            'email' => [PiiClass::STRIP],
+            'customer' => [PiiClass::TOKENISE, 'name'],
+            'email' => [PiiClass::TOKENISE, 'email'],
             'date' => [PiiClass::PUBLIC],
             'sku' => [PiiClass::PUBLIC],
             'name' => [PiiClass::PUBLIC],

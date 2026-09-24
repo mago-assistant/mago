@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Sales\OrderManager;
 
+use Magento\Sales\Model\ResourceModel\Order\Status\CollectionFactory as StatusCollectionFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
@@ -16,7 +17,8 @@ class UpdateStatusAction implements ActionInterface
     public function __construct(
         private readonly InternalApiClient $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl,
-        private readonly OrderResolver $orderResolver
+        private readonly OrderResolver $orderResolver,
+        private readonly StatusCollectionFactory $statusCollectionFactory
     ) {
     }
 
@@ -39,7 +41,10 @@ class UpdateStatusAction implements ActionInterface
             ],
             'status' => [
                 'type' => 'string',
-                'description' => 'New order status (e.g. "processing", "complete", "holded")',
+                'enum' => $this->availableStatuses(),
+                'description' => 'The status to set. These are the statuses this store actually has; '
+                    . 'there is no "shipped" among them, because shipping an order creates a shipment '
+                    . 'rather than changing its status.',
             ],
             'comment' => [
                 'type' => 'string',
@@ -67,6 +72,7 @@ class UpdateStatusAction implements ActionInterface
         // The ack's order number is a linkable id (tokenised); the message may embed it too, which
         // the filter's vault-conceal pass covers.
         return [
+            'admin_url' => [PiiClass::TOKENISE, 'url'],
             'success' => [PiiClass::PUBLIC],
             'message' => [PiiClass::PUBLIC],
             'order_number' => [PiiClass::TOKENISE, 'order'],
@@ -131,5 +137,23 @@ class UpdateStatusAction implements ActionInterface
             'new_status' => $newStatus,
             'admin_url' => $this->secureAdminUrl->getUrl('sales/order/view', ['order_id' => $entityId]),
         ];
+    }
+
+    /**
+     * The statuses this store has, read from the store rather than assumed. A model asked to ship an
+     * order reaches for a status called "shipped", which Magento has never had, and the web api
+     * refuses it after the write has already been confirmed. Offering the real list up front is the
+     * difference between a question it can answer and a guess it cannot.
+     *
+     * @return string[]
+     */
+    private function availableStatuses(): array
+    {
+        $statuses = [];
+        foreach ($this->statusCollectionFactory->create() as $status) {
+            $statuses[] = (string)$status->getStatus();
+        }
+
+        return $statuses;
     }
 }

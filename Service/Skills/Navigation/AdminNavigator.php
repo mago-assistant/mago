@@ -32,8 +32,9 @@ class AdminNavigator implements ToolInterface
             . '(2) Direct link: pass "entity_type" + "entity_id" to get a link to a specific record '
             . '(use after fetching entity data from sales_data, customer_data, or product_data). '
             . 'ALWAYS use this tool when the user asks where to find something in the admin. '
-            . 'ALWAYS include the returned URLs as markdown links in your response, '
-            . 'e.g. [Orders](https://store.com/admin/sales/order/key/...)';
+            . 'Link only to a url this tool returned, copied exactly as it came back. Never build '
+            . 'one from a pattern: an admin url carries a secret key, so a url you assembled '
+            . 'yourself does not open anything. Have no url? Name the admin page in words instead.';
     }
 
     public function getParameterSchema(): array
