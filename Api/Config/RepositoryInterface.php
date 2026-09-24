@@ -31,6 +31,9 @@ interface RepositoryInterface
     public const XML_PATH_INTERNAL_SSL_VERIFY = 'mago/api/internal_ssl_verify';
     public const XML_PATH_LANGUAGE = 'mago/chat/language';
     public const XML_PATH_ANSWER_WIDGETS = 'mago/chat/answer_widgets';
+    public const XML_PATH_VOICE_INPUT = 'mago/chat/voice_input';
+    public const XML_PATH_VOICE_AUTO_SEND = 'mago/chat/voice_auto_send';
+    public const XML_PATH_VOICE_LANGUAGE = 'mago/chat/voice_language';
     public const XML_PATH_DOCS_ENABLED = 'mago/docs/enabled';
     public const XML_PATH_DOCS_SOURCE_REPO = 'mago/docs/source_repo';
     public const XML_PATH_DOCS_REF = 'mago/docs/ref';
@@ -139,6 +142,27 @@ interface RepositoryInterface
      * @return bool
      */
     public function isAnswerWidgetsEnabled(): bool;
+
+    /**
+     * Whether the chat panel offers a microphone button (browser speech recognition)
+     *
+     * @return bool
+     */
+    public function isVoiceInputEnabled(): bool;
+
+    /**
+     * Whether a spoken message is sent on its own once the administrator stops talking
+     *
+     * @return bool
+     */
+    public function isVoiceAutoSendEnabled(): bool;
+
+    /**
+     * BCP-47 tag for the speech recogniser, or "auto" to follow the admin interface locale
+     *
+     * @return string
+     */
+    public function getVoiceLanguage(): string;
 
     /**
      * @return string

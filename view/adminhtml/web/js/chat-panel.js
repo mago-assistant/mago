@@ -3,8 +3,9 @@ define([
     'MagoAssistant_Mago/js/chat/i18n',
     'MagoAssistant_Mago/js/chat/navigate-intent',
     'MagoAssistant_Mago/js/chat/session-log',
-    'MagoAssistant_Mago/js/chat/confirm-text'
-], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText) {
+    'MagoAssistant_Mago/js/chat/confirm-text',
+    'MagoAssistant_Mago/js/chat/voice-input'
+], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, createVoiceInput) {
     'use strict';
 
     var isPlainObject = text.isPlainObject;
@@ -590,6 +591,19 @@ define([
     };
     sendBtn.onclick = send;
 
+    // Voice input (#141): browser speech recognition fills the textarea; the module hides itself
+    // when the browser has no recogniser, and the setting removes the button altogether.
+    var voiceInput = config.voiceInput ? createVoiceInput({
+        input: input,
+        button: qs('#mago-mic'),
+        status: qs('#mago-voice-status'),
+        lang: config.locale,
+        autoSend: !!config.voiceAutoSend,
+        t: t,
+        onSend: function () { if (input.value.trim()) send(); },
+        onError: function (sentence) { addMsg('assistant', esc(sentence)); }
+    }) : null;
+
 
 
     function loadHistory() {
@@ -1013,8 +1027,71 @@ define([
         };
     }
 
+    // Spoken (or typed) answers to a pending confirmation card (#141). A one- or two-word reply
+    // that only means "allow" or "reject" presses the matching button instead of going to the
+    // model, in English plus whatever the translation pack adds. The irreversible card keeps its
+    // acknowledgement checkbox: while it is unticked the button is disabled and the word is sent
+    // as an ordinary message, so speech never skips that step.
+    var CONFIRM_WORDS = {
+        allow: ['allow', 'yes', 'ok', 'okay', 'confirm', 'go ahead', 'do it', 'run', 'approve',
+            'toestaan', 'sta toe', 'ja', 'oke', 'oké', 'akkoord', 'bevestig', 'bevestigen', 'doe maar', 'ga door', 'uitvoeren', 'goedkeuren'],
+        reject: ['reject', 'no', 'nope', 'cancel', 'deny', 'not now', 'stop', 'skip', 'later',
+            'weiger', 'weigeren', 'nee', 'annuleer', 'annuleren', 'niet nu', 'afwijzen', 'wijs af', 'overslaan', 'niet doen']
+    };
+
+    function confirmWordList(kind) {
+        var extra = t(kind === 'allow' ? 'voice words: allow' : 'voice words: reject');
+        var list = CONFIRM_WORDS[kind].slice();
+        if (extra.indexOf('voice words:') !== 0) {
+            list = list.concat(extra.split(',').map(function (w) { return w.trim(); }).filter(Boolean));
+        }
+        return list;
+    }
+
+    function normalizeReply(text) {
+        return String(text || '').toLowerCase().replace(/[.!?,;:…]+$/g, '').replace(/\s+/g, ' ').trim();
+    }
+
+    function pendingConfirmButton(kind) {
+        var cards = msgs.querySelectorAll('.mago-confirm-actions');
+        if (!cards.length) return null;
+        var actions = cards[cards.length - 1];
+        var btn = actions.querySelector(kind === 'allow' ? '.mago-btn--confirm' : '.mago-btn--reject');
+        return btn && !btn.disabled ? btn : null;
+    }
+
+    // Speech recognisers pad a one-word answer ("Ja, toestaan.", "toe staan"), so a short reply
+    // counts when it contains a word from exactly one of the two lists, compared with spaces and
+    // punctuation removed. Anything longer than five words is a real message for the model.
+    function mentionsAny(reply, words) {
+        var compact = reply.replace(/[^a-z0-9\u00C0-\u024F]/g, '');
+        return words.some(function (w) {
+            var cw = w.replace(/[^a-z0-9\u00C0-\u024F]/g, '');
+            return cw && (compact === cw || new RegExp('(^|\\s)' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)').test(reply) || (compact.length <= cw.length + 4 && compact.indexOf(cw) !== -1));
+        });
+    }
+
+    function answerPendingConfirm(text) {
+        var reply = normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!reply || reply.split(' ').length > 5) return false;
+        var allow = mentionsAny(reply, confirmWordList('allow'));
+        var reject = mentionsAny(reply, confirmWordList('reject'));
+        if (allow === reject) return false;
+        var kind = allow ? 'allow' : 'reject';
+        var btn = pendingConfirmButton(kind);
+        if (!btn) return false;
+        input.value = '';
+        sendBtn.classList.add('is-idle');
+        autoGrow();
+        updatePrivacyHint('');
+        btn.click();
+        return true;
+    }
+
     function send() {
+        if (voiceInput) voiceInput.stop();
         var text = input.value.trim();
+        if (text && answerPendingConfirm(text)) return;
         if (!text || busy) return;
         hideSlashMenu();
         input.value = '';

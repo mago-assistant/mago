@@ -17,6 +17,23 @@
             <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
             <comment>Let the assistant answer with stat cards, charts, tables and record lists instead of plain text where the data allows it. Adds a short instruction block to every request.</comment>
         </field>
+        <field id="voice_input" translate="label comment" type="select" sortOrder="17" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Voice Input</label>
+            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+            <comment>Show a microphone button in the chat panel. Speech is turned into text by the browser's own speech recognition, so the audio is handled by the browser vendor (e.g. Google for Chrome), not by Mago or the AI provider. The recognised text is editable and treated exactly like typed text. Only shown in browsers that support speech recognition.</comment>
+        </field>
+        <field id="voice_language" translate="label comment" type="select" sortOrder="17" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Voice Input Language</label>
+            <source_model>MagoAssistant\Mago\Model\Config\Source\SpeechLanguage</source_model>
+            <comment>The language the browser listens for. Speaking another language than the one selected here gives garbled text, so pick the language administrators actually speak rather than the interface language.</comment>
+            <depends><field id="voice_input">1</field></depends>
+        </field>
+        <field id="voice_auto_send" translate="label comment" type="select" sortOrder="19" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Send Voice Input Automatically</label>
+            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+            <comment>Send the spoken message on its own after a short pause in speech. A countdown is shown first; typing or pressing the microphone cancels it. Set to No to always review and press Send yourself.</comment>
+            <depends><field id="voice_input">1</field></depends>
+        </field>
         <field id="max_tool_iterations" translate="label comment" type="text" sortOrder="20" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
             <label>Max Tool Iterations</label>
             <comment>Maximum number of tool call loops per message (default: 10)</comment>

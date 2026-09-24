@@ -14,7 +14,11 @@ class FakeConfigRepository implements RepositoryInterface
     private bool $isInternalSslVerifyEnabled = true;
     private string $internalUrl = '';
     private int $maxToolIterations = 0;
-    private bool $answerWidgets = false;    private int $maxResponseTokens = 0;
+    private bool $answerWidgets = false;
+    private bool $voiceInput = true;
+    private bool $voiceAutoSend = true;
+    private string $voiceLanguage = 'auto';
+    private int $maxResponseTokens = 0;
 
     public function withMaxToolIterations(int $maxToolIterations): self
     {
@@ -41,6 +45,43 @@ class FakeConfigRepository implements RepositoryInterface
     {
         return $this->answerWidgets;
     }
+
+    public function withVoiceInput(bool $enabled): self
+    {
+        $this->voiceInput = $enabled;
+
+        return $this;
+    }
+
+    public function isVoiceInputEnabled(): bool
+    {
+        return $this->voiceInput;
+    }
+
+    public function withVoiceAutoSend(bool $enabled): self
+    {
+        $this->voiceAutoSend = $enabled;
+
+        return $this;
+    }
+
+    public function isVoiceAutoSendEnabled(): bool
+    {
+        return $this->voiceAutoSend;
+    }
+
+    public function withVoiceLanguage(string $language): self
+    {
+        $this->voiceLanguage = $language;
+
+        return $this;
+    }
+
+    public function getVoiceLanguage(): string
+    {
+        return $this->voiceLanguage;
+    }
+
     public function withInternalSslVerifyEnabled(bool $isEnabled): self
     {
         $this->isInternalSslVerifyEnabled = $isEnabled;
