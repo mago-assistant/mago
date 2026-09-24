@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Content\CmsData;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\CreateBlockAction;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
+use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\BuildsStoreLayouts;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -32,6 +33,10 @@ class CreateBlockActionTest extends TestCase
 
         self::assertTrue($result['success']);
         self::assertSame('Block "footer-links" created for all store views', $result['message']);
+        self::assertSame(
+            [['label' => 'Edit Footer links', 'url' => 'https://admin.example/cms/block/edit/block_id/3/']],
+            $result['_links']
+        );
     }
 
     #[Test]
@@ -74,6 +79,11 @@ class CreateBlockActionTest extends TestCase
 
     private function actionWith(InternalApiClient $apiClient): CreateBlockAction
     {
-        return new CreateBlockAction($apiClient, new StoreScopeContext($this->multiStoreManager()));
+        $secureAdminUrl = $this->createMock(SecureAdminUrl::class);
+        $secureAdminUrl->method('getUrl')
+            ->with('cms/block/edit', ['block_id' => 3])
+            ->willReturn('https://admin.example/cms/block/edit/block_id/3/');
+
+        return new CreateBlockAction($apiClient, new StoreScopeContext($this->multiStoreManager()), $secureAdminUrl);
     }
 }

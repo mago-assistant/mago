@@ -9,12 +9,14 @@ namespace MagoAssistant\Mago\Service\Skills\Content\CmsData;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class UpdateBlockAction implements ActionInterface
 {
     public function __construct(
         private readonly InternalApiClient $apiClient,
-        private readonly GetBlockAction $getBlockAction
+        private readonly GetBlockAction $getBlockAction,
+        private readonly SecureAdminUrl $secureAdminUrl
     ) {
     }
 
@@ -61,6 +63,10 @@ class UpdateBlockAction implements ActionInterface
         return [
             'success' => [PiiClass::PUBLIC],
             'message' => [PiiClass::PUBLIC],
+            // _links carries the edit link. Its signed url holds the admin secret key, so it crosses
+            // masked as a token and the panel swaps the real url back in on display.
+            'label' => [PiiClass::PUBLIC],
+            'url' => [PiiClass::TOKENISE, 'url'],
         ];
     }
 
@@ -104,6 +110,13 @@ class UpdateBlockAction implements ActionInterface
             return ['error' => 'Failed to update block: ' . $result['error']];
         }
 
-        return ['success' => true, 'message' => 'Block "' . ($block['identifier'] ?? $identifier) . '" updated'];
+        return [
+            'success' => true,
+            'message' => 'Block "' . ($block['identifier'] ?? $identifier) . '" updated',
+            '_links' => [[
+                'label' => 'Edit ' . ($block['identifier'] ?? $identifier),
+                'url' => $this->secureAdminUrl->getUrl('cms/block/edit', ['block_id' => $blockId]),
+            ]],
+        ];
     }
 }

@@ -53,6 +53,15 @@ class ChatService implements ChatServiceInterface
     }
 
     /**
+     * Edit links for entities the writes in this request just created or changed, waiting to be
+     * appended to the answer that follows. Populated in executeTool and drained when the final
+     * answer is returned; scoped to one request (a fresh PHP process, so nothing leaks between them).
+     *
+     * @var list<array{label: string, url: string}>
+     */
+    private array $pendingEntityLinks = [];
+
+    /**
      * Some models (gpt-4o in particular) answer a tool result with an empty completion, or announce
      * the next step in prose without calling the tool. One follow-up turn recovers both cases.
      */
@@ -97,6 +106,10 @@ class ChatService implements ChatServiceInterface
                     $nudged = true;
                     continue;
                 }
+                $response['content'] = $this->appendMarkdown(
+                    (string)($response['content'] ?? ''),
+                    $this->takeEntityLinksMarkdown()
+                );
                 return $response;
             }
 
@@ -191,6 +204,13 @@ class ChatService implements ChatServiceInterface
                 }
                 if (!empty($allToolCalls)) {
                     $response['executed_tool_calls'] = $allToolCalls;
+                }
+                $linkMd = $this->takeEntityLinksMarkdown();
+                if ($linkMd !== '') {
+                    $response['content'] = $this->appendMarkdown((string)($response['content'] ?? ''), $linkMd);
+                    // The model's own text already streamed; add the link as one more display delta,
+                    // rehydrated to the real signed url the same way every other display copy is.
+                    $onChunk('text', ['text' => "\n\n" . $this->privacyService->displayText($linkMd)]);
                 }
                 return $response;
             }
@@ -528,6 +548,95 @@ class ChatService implements ChatServiceInterface
         return $result;
     }
 
+    /**
+     * Pull the admin edit link out of a write result and hold it for the answer that follows. The
+     * url is already tokenised (mago://url_n) by the privacy filter, so it is safe to carry into the
+     * stored content and is swapped back to the signed url only on the display copy. A read result,
+     * and a per-row link nested inside a list (not at the top level), are left untouched.
+     *
+     * @param array<string, mixed> $input
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>
+     */
+    private function collectEntityLinks(ToolInterface $tool, array $input, array $result): array
+    {
+        if (isset($result['error']) || $tool->isReadOnlyAction($input)) {
+            return $result;
+        }
+
+        if (is_array($result['_links'] ?? null)) {
+            foreach ($result['_links'] as $link) {
+                if (is_array($link) && is_string($link['url'] ?? null) && $link['url'] !== '') {
+                    $this->pendingEntityLinks[] = [
+                        'label' => (string)($link['label'] ?? ''),
+                        'url' => $link['url'],
+                    ];
+                }
+            }
+            unset($result['_links']);
+        }
+
+        if (is_string($result['admin_url'] ?? null) && $result['admin_url'] !== '') {
+            $this->pendingEntityLinks[] = ['label' => '', 'url' => $result['admin_url']];
+            unset($result['admin_url']);
+        }
+
+        return $result;
+    }
+
+    /**
+     * The held edit links as markdown, in the same token form the answer is stored in, drained so a
+     * link is appended once. Deduplicated by url, since a bulk write can hand back the same link
+     * more than once.
+     */
+    private function takeEntityLinksMarkdown(): string
+    {
+        if ($this->pendingEntityLinks === []) {
+            return '';
+        }
+
+        $lines = [];
+        $seen = [];
+        foreach ($this->pendingEntityLinks as $link) {
+            $url = $link['url'];
+            if ($url === '' || isset($seen[$url])) {
+                continue;
+            }
+            $seen[$url] = true;
+            $lines[] = '[' . $this->linkLabel($link['label']) . '](' . $url . ')';
+        }
+        $this->pendingEntityLinks = [];
+
+        return implode("\n\n", $lines);
+    }
+
+    /**
+     * A safe markdown link label: never empty, and without the brackets that would close the label
+     * early and break the link.
+     */
+    private function linkLabel(string $label): string
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return 'Open in admin';
+        }
+
+        return str_replace(['[', ']'], ['(', ')'], $label);
+    }
+
+    /**
+     * Append server-generated markdown to an answer, on its own paragraph, or return the answer
+     * unchanged when there is nothing to add.
+     */
+    private function appendMarkdown(string $content, string $markdown): string
+    {
+        if ($markdown === '') {
+            return $content;
+        }
+
+        return $content === '' ? $markdown : rtrim($content) . "\n\n" . $markdown;
+    }
+
     private function executeTool(array $toolCall, ?int $adminUserId = null): array
     {
         $tool = $this->toolRegistry->getTool($toolCall['name'], $adminUserId);
@@ -574,6 +683,10 @@ class ChatService implements ChatServiceInterface
             $result = $tool->execute($input);
             // Privacy filter runs here, before the result is capped and sent to the LLM.
             $result = $this->privacyService->filterToolResult($classes, $result);
+            // An entity a write just created or changed carries an edit link; hold it for the answer
+            // that follows and take it out of what the model sees, so the panel shows the link
+            // deterministically instead of relying on the model to copy the token into its prose.
+            $result = $this->collectEntityLinks($tool, $input, $result);
             if ($this->configRepository->isDebugEnabled()) {
                 $this->debugLogger->addLog('Tool Result', ['tool' => $toolCall['name'], 'result' => $result]);
             }
