@@ -20,6 +20,7 @@ define([], function () {
     // Fallback for the configured wait between the last final result and the send. The recogniser
     // already needs a pause before it finalises, so this stays short.
     var DEFAULT_SEND_DELAY_MS = 1400;
+    var MAX_RESTARTS = 5;
 
     function recognitionClass() {
         return window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -65,6 +66,7 @@ define([], function () {
         var waitingForTurn = false;
         var countdownTimer = null;
         var statusTimer = null;
+        var restarts = 0;
         // Text already in the box when listening started; recognised speech is appended after it
         // so an interrupted sentence can be resumed without losing what was typed before.
         var prefix = '';
@@ -152,7 +154,6 @@ define([], function () {
                 }
                 clearTimers();
                 if (handsFree) {
-                    // Keep the session flagged so the panel's turn-end resumes it.
                     waitingForTurn = true;
                     stopRecogniser();
                     setListening(false);
@@ -162,13 +163,6 @@ define([], function () {
                 }
                 if (options.onSend) options.onSend();
             }, Math.min(250, Math.max(50, sendDelay || 50)));
-        }
-
-        // Anything the administrator does with the text themselves takes over from the recogniser.
-        function cancelAutoSend() {
-            if (!countdownTimer) return;
-            clearTimers();
-            if (listening) showStatus(recordingText(), 'is-recording');
         }
 
         function start() {
@@ -189,18 +183,17 @@ define([], function () {
                 if (rec !== recognition) return;
                 var finalText = '';
                 var interimText = '';
-                var gotFinal = false;
                 for (var i = 0; i < event.results.length; i++) {
                     var transcript = event.results[i][0].transcript;
                     if (event.results[i].isFinal) finalText += transcript;
                     else interimText += transcript;
                 }
-                gotFinal = event.results.length > 0 && event.results[event.results.length - 1].isFinal;
+                var gotFinal = event.results.length > 0 && event.results[event.results.length - 1].isFinal;
                 setText(joinWithPrefix((finalText + interimText).trim()));
+                restarts = 0;
                 if (gotFinal) {
                     scheduleAutoSend();
                 } else {
-                    // Still talking: hold the countdown back.
                     clearTimers();
                     showStatus(recordingText(), 'is-recording');
                 }
@@ -217,25 +210,22 @@ define([], function () {
                     stop();
                     return;
                 }
-                // Anything else (network hiccup, no speech for a while) is recoverable: hands-free
-                // starts a fresh session, a single session just ends.
                 if (handsFree && listening && !countdownTimer) {
                     recognition = null;
-                    start();
+                    restart();
                     return;
                 }
                 stop();
             };
 
-            // The browser ends a continuous session on its own after a stretch of silence. The
-            // countdown, if one is running, keeps going so the message still goes out.
+            // Chrome ends a continuous session on its own after a stretch of silence; in hands-free
+            // that is not the administrator's decision, so listen again. A running countdown is
+            // left alone so the message still goes out.
             recognition.onend = function () {
                 if (rec !== recognition) return;
                 recognition = null;
-                // Chrome ends a continuous session on its own after a stretch of silence; in
-                // hands-free that is not the administrator's decision, so listen again.
                 if (handsFree && listening && !countdownTimer) {
-                    start();
+                    restart();
                     return;
                 }
                 if (listening) {
@@ -258,6 +248,18 @@ define([], function () {
             }
         }
 
+        // Hands-free restarts are capped so a browser that keeps failing to open the recogniser
+        // (no network, no device) cannot loop; a result resets the count.
+        function restart() {
+            if (++restarts > MAX_RESTARTS) {
+                stop();
+                return;
+            }
+            setTimeout(function () {
+                if (handsFree && listening && !recognition) start();
+            }, 250);
+        }
+
         function stopRecogniser() {
             if (recognition) {
                 try { recognition.stop(); } catch (e) { /* already stopped */ }
@@ -270,6 +272,7 @@ define([], function () {
             clearTimers();
             handsFree = false;
             waitingForTurn = false;
+            restarts = 0;
             stopRecogniser();
             setListening(false);
             showNotice(false);
@@ -281,10 +284,8 @@ define([], function () {
             }
         }
 
-        // The panel calls this when a turn ends; only a hands-free session that sent something
-        // and is waiting for the reply takes it as the cue to listen again.
-        // The panel's send path calls this: a manual Send ends the session, an auto-send in
-        // hands-free has already parked the recogniser and must keep its state.
+        // A manual Send ends the session; an auto-send in hands-free has already parked the
+        // recogniser and must keep its state.
         function sending() {
             if (waitingForTurn) return;
             stop(true);
@@ -305,8 +306,6 @@ define([], function () {
             if (listening || waitingForTurn || countdownTimer) {
                 stop();
             } else if (options.requireConsent) {
-                // The audio leaves the browser for its vendor's speech service, which Mago does
-                // not control; the administrator confirms they know that before the first session.
                 options.requireConsent(beginSession);
             } else {
                 beginSession();

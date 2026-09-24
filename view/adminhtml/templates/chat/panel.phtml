@@ -179,6 +179,7 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
 <script>
 window.MAGO_CONFIG = <?= /* @noEscape */ $block->getJsConfig() ?>;
 window.MAGO_CONFIG.adminUser = '<?= $escaper->escapeJs($adminName) ?>';
+window.MAGO_CONFIG.adminLogin = '<?= $escaper->escapeJs($block->getAdminUserName()) ?>';
 window.MAGO_CONFIG.assistantName = '<?= $escaper->escapeJs($assistantName) ?>';
 window.MAGO_CONFIG.formKey = '<?= $escaper->escapeJs($block->getFormKey()) ?>';
 window.MAGO_CONFIG.skills = <?= /* @noEscape */ $block->getSkillsJson() ?>;

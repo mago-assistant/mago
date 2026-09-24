@@ -305,7 +305,6 @@ define([
         chat.classList.toggle('is-busy', state);
         loading.style.display = state ? '' : 'none';
         sendBtn.disabled = state;
-        // Hands-free voice input waits for the turn to end before listening again.
         if (!state && voiceInput) voiceInput.turnEnded();
     }
 
@@ -595,9 +594,8 @@ define([
 
     // Voice input (#141): browser speech recognition fills the textarea; the module hides itself
     // when the browser has no recogniser, and the setting removes the button altogether.
-    // Voice consent (#141): once per admin user per browser. Stored client-side because the
-    // acknowledgement concerns this browser's speech service; a server-side record is a follow-up.
-    var voiceConsentKey = 'mago-voice-consent:' + String(config.adminUser || '');
+    // Voice consent (#141): once per admin user per browser; a server-side record is a follow-up.
+    var voiceConsentKey = 'mago-voice-consent:' + String(config.adminLogin || config.adminUser || '');
 
     function hasVoiceConsent() {
         try { return window.localStorage.getItem(voiceConsentKey) === '1'; } catch (e) { return false; }
@@ -621,7 +619,10 @@ define([
                 holder.remove();
                 proceed();
             },
-            onLater: function () { holder.remove(); }
+            onLater: function () {
+                holder.remove();
+                if (!msgs.querySelector('.mago-message')) chat.classList.add('is-empty');
+            }
         });
         card.classList.add('mago-voice-consent');
         holder.querySelector('.mago-message-content').appendChild(card);

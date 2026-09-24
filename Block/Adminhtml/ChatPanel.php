@@ -243,6 +243,13 @@ class ChatPanel extends Template
         return $user && $user->getId() ? (int)$user->getId() : null;
     }
 
+    public function getAdminUserName(): string
+    {
+        $user = $this->adminSession->getUser();
+
+        return $user ? (string)$user->getUserName() : '';
+    }
+
     public function getAdminFirstName(): string
     {
         $user = $this->adminSession->getUser();

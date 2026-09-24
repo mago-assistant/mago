@@ -170,9 +170,9 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
 
     public function getVoiceSendDelay(): int
     {
-        $value = (int)$this->getStoreValue(self::XML_PATH_VOICE_SEND_DELAY);
+        $value = $this->getStoreValue(self::XML_PATH_VOICE_SEND_DELAY);
 
-        return $value > 0 ? $value : 1400;
+        return $value === '' ? 1400 : max(0, (int)$value);
     }
 
     public function getInternalUrl(): string
