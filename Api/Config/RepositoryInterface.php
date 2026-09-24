@@ -115,8 +115,6 @@ interface RepositoryInterface
     public function getMaxResponseTokens(): int;
 
     /**
-     * Whether the assistant may queue reindexes
-     *
      * @return bool
      */
     public function isReindexAllowed(): bool;
