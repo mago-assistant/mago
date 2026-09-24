@@ -149,6 +149,12 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
             <span><?= $escaper->escapeHtml(__('Thinking…')) ?></span>
         </div>
     </div>
+    <?php /* Voice input (#141): shown while the microphone is on. The audio leaves the browser for
+           its vendor's speech service, which is worth saying every time, not once in a setting. */ ?>
+    <div id="mago-voice-notice" class="mago-voice-notice" hidden role="status">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span><?= $escaper->escapeHtml(__('Voice input is on. Your speech is converted to text by your browser\'s speech service (for example Google for Chrome), not by %1 or the AI provider. Only the resulting text is sent to the assistant. Avoid speaking customer details aloud.', $assistantName)) ?></span>
+    </div>
     <div id="mago-input-area" class="mago-input-wrapper">
         <div id="mago-slash-menu" class="mago-slash-menu"></div>
         <textarea id="mago-input" class="mago-input" placeholder="<?= $escaper->escapeHtmlAttr(__('Ask anything…')) ?>" rows="1"></textarea>

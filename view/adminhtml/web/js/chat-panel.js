@@ -305,6 +305,8 @@ define([
         chat.classList.toggle('is-busy', state);
         loading.style.display = state ? '' : 'none';
         sendBtn.disabled = state;
+        // Hands-free voice input waits for the turn to end before listening again.
+        if (!state && voiceInput) voiceInput.turnEnded();
     }
 
     // The header icon is the only way in or out of the panel, so its tooltip,
@@ -597,8 +599,10 @@ define([
         input: input,
         button: qs('#mago-mic'),
         status: qs('#mago-voice-status'),
+        notice: qs('#mago-voice-notice'),
         lang: config.locale,
         autoSend: !!config.voiceAutoSend,
+        handsFree: !!config.voiceAutoSend && !!config.voiceHandsFree,
         t: t,
         onSend: function () { if (input.value.trim()) send(); },
         onError: function (sentence) { addMsg('assistant', esc(sentence)); }
@@ -1089,7 +1093,7 @@ define([
     }
 
     function send() {
-        if (voiceInput) voiceInput.stop();
+        if (voiceInput) voiceInput.sending();
         var text = input.value.trim();
         if (text && answerPendingConfirm(text)) return;
         if (!text || busy) return;

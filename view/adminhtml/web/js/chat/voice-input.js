@@ -7,7 +7,8 @@
  * Speech API). Recognised words land in the textarea while the administrator speaks and stay
  * editable. With auto-send on, a pause in speech starts a short visible countdown and then sends;
  * typing or pressing the microphone during the countdown cancels it, so a misheard sentence can
- * always be corrected first.
+ * always be corrected first. Hands-free keeps the session alive across turns: after an auto-send
+ * it waits for the panel to report the turn over, then listens again.
  *
  * The audio never passes through Mago or the AI provider: the browser vendor handles it. The
  * resulting text is indistinguishable from typed text to the rest of the panel, which is why this
@@ -17,8 +18,9 @@ define([], function () {
     'use strict';
 
     // Silence after the last final result before the countdown starts, and the countdown itself.
-    var PAUSE_MS = 1200;
-    var COUNTDOWN_SECONDS = 2;
+    // The recogniser already waits for a pause before it finalises, so both stay short.
+    var PAUSE_MS = 400;
+    var COUNTDOWN_SECONDS = 1;
 
     function recognitionClass() {
         return window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -29,27 +31,34 @@ define([], function () {
      * @param {HTMLTextAreaElement} options.input
      * @param {HTMLButtonElement} options.button
      * @param {HTMLElement} [options.status] status line under the input
+     * @param {HTMLElement} [options.notice] banner shown while a session is active
      * @param {string} options.lang BCP-47 tag for the recogniser
      * @param {boolean} options.autoSend
+     * @param {boolean} [options.handsFree] keep listening after an auto-send once the turn ended
      * @param {Function} options.t translator
      * @param {Function} [options.onSend] called when the countdown finishes
      * @param {Function} [options.onError] receives a sentence to show the administrator
-     * @returns {{isSupported: boolean, stop: Function}}
+     * @returns {{isSupported: boolean, stop: Function, sending: Function, turnEnded: Function}}
      */
     return function createVoiceInput(options) {
         var input = options.input;
         var button = options.button;
         var status = options.status || null;
         var statusText = status ? status.querySelector('.mago-voice-text') : null;
+        var notice = options.notice || null;
         var t = options.t;
         var Recognition = recognitionClass();
 
         if (!Recognition || !input || !button) {
-            return {isSupported: false, stop: function () {}};
+            return {isSupported: false, stop: function () {}, sending: function () {}, turnEnded: function () {}};
         }
 
         var recognition = null;
         var listening = false;
+        // Hands-free: set when the administrator starts a session and cleared by anything they do
+        // to end it. waitingForTurn bridges the gap between an auto-send and the reply.
+        var handsFree = false;
+        var waitingForTurn = false;
         var pauseTimer = null;
         var countdownTimer = null;
         var statusTimer = null;
@@ -89,8 +98,13 @@ define([], function () {
             }
         }
 
+        function showNotice(visible) {
+            if (notice) notice.hidden = !visible;
+        }
+
         function setListening(active) {
             listening = active;
+            if (active) showNotice(true);
             button.classList.toggle('is-listening', active);
             input.classList.toggle('is-listening', active);
             button.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -98,11 +112,15 @@ define([], function () {
             if (active) {
                 input.dataset.placeholder = input.placeholder;
                 input.placeholder = t('Listening…');
-                showStatus(t('Recording — speak now'), 'is-recording');
+                showStatus(recordingText(), 'is-recording');
             } else if (typeof input.dataset.placeholder !== 'undefined') {
                 input.placeholder = input.dataset.placeholder;
                 delete input.dataset.placeholder;
             }
+        }
+
+        function recordingText() {
+            return handsFree ? t('Hands-free — speak, a pause sends') : t('Recording — speak now');
         }
 
         function clearTimers() {
@@ -131,7 +149,15 @@ define([], function () {
                     return;
                 }
                 clearTimers();
-                stop(true);
+                if (handsFree) {
+                    // Keep the session flagged so the panel's turn-end resumes it.
+                    waitingForTurn = true;
+                    stopRecogniser();
+                    setListening(false);
+                    showStatus(t('Waiting for the reply…'));
+                } else {
+                    stop(true);
+                }
                 if (options.onSend) options.onSend();
             }, 1000);
         }
@@ -140,7 +166,7 @@ define([], function () {
         function cancelAutoSend() {
             if (!pauseTimer && !countdownTimer) return;
             clearTimers();
-            if (listening) showStatus(t('Recording — speak now'), 'is-recording');
+            if (listening) showStatus(recordingText(), 'is-recording');
         }
 
         function start() {
@@ -174,7 +200,7 @@ define([], function () {
                 } else {
                     // Still talking: hold the countdown back.
                     clearTimers();
-                    showStatus(t('Recording — speak now'), 'is-recording');
+                    showStatus(recordingText(), 'is-recording');
                 }
             };
 
@@ -186,6 +212,15 @@ define([], function () {
                     if (options.onError) {
                         options.onError(t('Microphone access was denied. Allow it in the browser to use voice input.'));
                     }
+                    stop();
+                    return;
+                }
+                // Anything else (network hiccup, no speech for a while) is recoverable: hands-free
+                // starts a fresh session, a single session just ends.
+                if (handsFree && listening && !countdownTimer) {
+                    recognition = null;
+                    start();
+                    return;
                 }
                 stop();
             };
@@ -195,6 +230,12 @@ define([], function () {
             recognition.onend = function () {
                 if (rec !== recognition) return;
                 recognition = null;
+                // Chrome ends a continuous session on its own after a stretch of silence; in
+                // hands-free that is not the administrator's decision, so listen again.
+                if (handsFree && listening && !countdownTimer && !pauseTimer) {
+                    start();
+                    return;
+                }
                 if (listening) {
                     setListening(false);
                     if (!countdownTimer && !pauseTimer) {
@@ -215,14 +256,21 @@ define([], function () {
             }
         }
 
-        function stop(silent) {
-            var wasActive = listening || !!pauseTimer || !!countdownTimer;
-            clearTimers();
+        function stopRecogniser() {
             if (recognition) {
                 try { recognition.stop(); } catch (e) { /* already stopped */ }
                 recognition = null;
             }
+        }
+
+        function stop(silent) {
+            var wasActive = listening || waitingForTurn || !!pauseTimer || !!countdownTimer;
+            clearTimers();
+            handsFree = false;
+            waitingForTurn = false;
+            stopRecogniser();
             setListening(false);
+            showNotice(false);
             if (silent || !wasActive) {
                 hideStatus();
             } else {
@@ -231,18 +279,38 @@ define([], function () {
             }
         }
 
+        // The panel calls this when a turn ends; only a hands-free session that sent something
+        // and is waiting for the reply takes it as the cue to listen again.
+        // The panel's send path calls this: a manual Send ends the session, an auto-send in
+        // hands-free has already parked the recogniser and must keep its state.
+        function sending() {
+            if (waitingForTurn) return;
+            stop(true);
+        }
+
+        function turnEnded() {
+            if (!handsFree || !waitingForTurn) return;
+            waitingForTurn = false;
+            start();
+        }
+
         button.addEventListener('click', function () {
-            if (listening || pauseTimer || countdownTimer) stop(); else start();
+            if (listening || waitingForTurn || pauseTimer || countdownTimer) {
+                stop();
+            } else {
+                handsFree = !!options.handsFree && !!options.autoSend;
+                start();
+            }
         });
 
         // Typing means the administrator is correcting the text: drop the countdown and stop the
         // recogniser so it cannot overwrite the edit. Enter hands the text to the normal send path.
         input.addEventListener('keydown', function (e) {
-            if (!listening && !pauseTimer && !countdownTimer) return;
+            if (!listening && !waitingForTurn && !pauseTimer && !countdownTimer) return;
             if (e.keyCode === 13 && !e.shiftKey) { stop(true); return; }
             if (e.key && e.key.length === 1 || e.keyCode === 8 || e.keyCode === 46) stop(true);
         });
 
-        return {isSupported: true, stop: stop};
+        return {isSupported: true, stop: stop, sending: sending, turnEnded: turnEnded};
     };
 });

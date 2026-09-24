@@ -167,6 +167,10 @@ happening. After a short pause in speech a countdown appears and the message is 
 typing, or pressing the microphone again, cancels it and leaves the text in the box for you to
 edit and send yourself. Set *Send Voice Input Automatically* to No to always review first.
 
+With *Hands-free Conversation* on (the default) the microphone stays on after a spoken message
+is sent: the panel waits for the assistant's reply and then listens again, so a whole exchange
+runs without touching the button. Press the microphone, or start typing, to stop.
+
 When the assistant is waiting for you to allow or reject an action, a short spoken or typed
 answer presses the button for you: "allow", "yes", "ok", "toestaan", "ja" allow it, "reject",
 "no", "cancel", "weiger", "nee", "niet nu" reject it. An action that cannot be undone still
@@ -180,7 +184,7 @@ Language* (`mago/chat/voice_language`) to the language administrators actually s
 The audio is processed by the browser vendor's speech service, not by Mago or the AI provider.
 The resulting text is treated exactly like typed text, including privacy mode. Turn the button
 off under `Stores > Configuration > Mago Assistant > Chat Settings > Voice Input`
-(`mago/chat/voice_input`, default Yes); auto-send is `mago/chat/voice_auto_send` (default Yes).
+(`mago/chat/voice_input`, default Yes); auto-send is `mago/chat/voice_auto_send` and hands-free `mago/chat/voice_hands_free` (both default Yes).
 
 ## Documentation grounding
 

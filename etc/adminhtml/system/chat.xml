@@ -34,7 +34,13 @@
             <comment>Send the spoken message on its own after a short pause in speech. A countdown is shown first; typing or pressing the microphone cancels it. Set to No to always review and press Send yourself.</comment>
             <depends><field id="voice_input">1</field></depends>
         </field>
-        <field id="max_tool_iterations" translate="label comment" type="text" sortOrder="20" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
+        <field id="voice_hands_free" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Hands-free Conversation</label>
+            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+            <comment>Keep the microphone on after a spoken message is sent: once the assistant has answered it listens again for the next message, so a whole conversation can be held without touching the button. Press the microphone or start typing to stop.</comment>
+            <depends><field id="voice_input">1</field><field id="voice_auto_send">1</field></depends>
+        </field>
+        <field id="max_tool_iterations" translate="label comment" type="text" sortOrder="22" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
             <label>Max Tool Iterations</label>
             <comment>Maximum number of tool call loops per message (default: 10)</comment>
             <validate>validate-digits</validate>

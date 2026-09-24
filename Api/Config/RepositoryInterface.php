@@ -34,6 +34,7 @@ interface RepositoryInterface
     public const XML_PATH_VOICE_INPUT = 'mago/chat/voice_input';
     public const XML_PATH_VOICE_AUTO_SEND = 'mago/chat/voice_auto_send';
     public const XML_PATH_VOICE_LANGUAGE = 'mago/chat/voice_language';
+    public const XML_PATH_VOICE_HANDS_FREE = 'mago/chat/voice_hands_free';
     public const XML_PATH_DOCS_ENABLED = 'mago/docs/enabled';
     public const XML_PATH_DOCS_SOURCE_REPO = 'mago/docs/source_repo';
     public const XML_PATH_DOCS_REF = 'mago/docs/ref';
@@ -163,6 +164,13 @@ interface RepositoryInterface
      * @return string
      */
     public function getVoiceLanguage(): string;
+
+    /**
+     * Whether the microphone keeps listening after a spoken message was sent and the reply arrived
+     *
+     * @return bool
+     */
+    public function isVoiceHandsFreeEnabled(): bool;
 
     /**
      * @return string

@@ -16,6 +16,7 @@
                 <voice_input>1</voice_input>
                 <voice_auto_send>1</voice_auto_send>
                 <voice_language>auto</voice_language>
+                <voice_hands_free>1</voice_hands_free>
                 <max_tool_iterations>10</max_tool_iterations>
                 <assistant_name>Mago</assistant_name>
                 <accent_color>#F26322</accent_color>

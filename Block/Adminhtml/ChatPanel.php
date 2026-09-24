@@ -85,6 +85,7 @@ class ChatPanel extends Template
             'isStreamingEnabled' => $this->configRepository->isStreamingEnabled(),
             'voiceInput' => $this->configRepository->isVoiceInputEnabled(),
             'voiceAutoSend' => $this->configRepository->isVoiceAutoSendEnabled(),
+            'voiceHandsFree' => $this->configRepository->isVoiceHandsFreeEnabled(),
             'locale' => $this->getSpeechLocale(),
             'formFieldCap' => self::FORM_FIELD_CAP,
             'formValueLengthCap' => self::FORM_VALUE_LENGTH_CAP,
@@ -159,6 +160,8 @@ class ChatPanel extends Template
             'Recording — speak now',
             'Sending in %1…',
             'Recording stopped',
+            'Hands-free — speak, a pause sends',
+            'Waiting for the reply…',
             // Comma-separated words a translation pack may add for answering a confirmation card by
             // voice; chat-panel.js ignores the value when it is left untranslated.
             'voice words: allow',

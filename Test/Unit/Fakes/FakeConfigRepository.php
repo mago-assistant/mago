@@ -18,6 +18,7 @@ class FakeConfigRepository implements RepositoryInterface
     private bool $voiceInput = true;
     private bool $voiceAutoSend = true;
     private string $voiceLanguage = 'auto';
+    private bool $voiceHandsFree = true;
     private int $maxResponseTokens = 0;
 
     public function withMaxToolIterations(int $maxToolIterations): self
@@ -80,6 +81,18 @@ class FakeConfigRepository implements RepositoryInterface
     public function getVoiceLanguage(): string
     {
         return $this->voiceLanguage;
+    }
+
+    public function withVoiceHandsFree(bool $enabled): self
+    {
+        $this->voiceHandsFree = $enabled;
+
+        return $this;
+    }
+
+    public function isVoiceHandsFreeEnabled(): bool
+    {
+        return $this->voiceHandsFree;
     }
 
     public function withInternalSslVerifyEnabled(bool $isEnabled): self

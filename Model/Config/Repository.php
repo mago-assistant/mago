@@ -163,6 +163,11 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return trim((string)$this->getStoreValue(self::XML_PATH_VOICE_LANGUAGE)) ?: 'auto';
     }
 
+    public function isVoiceHandsFreeEnabled(): bool
+    {
+        return $this->isSetFlag(self::XML_PATH_VOICE_HANDS_FREE);
+    }
+
     public function getInternalUrl(): string
     {
         return trim((string)$this->getStoreValue(self::XML_PATH_INTERNAL_URL));
