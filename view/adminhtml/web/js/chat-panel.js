@@ -1019,6 +1019,125 @@ define([
     function showGreeting() {
         chat.classList.add('is-empty');
         setSubtitle('');
+        loadAddons();
+    }
+
+    var addonsAsked = false;
+
+    // The newest add-ons, asked for once the welcome state is on screen.
+    //
+    // This is the whole reason there is an endpoint for it: the panel is on every admin page, so
+    // fetching while a page renders would put someone else's server in the path of all of them, and
+    // firing on load would cost a request on every page view for a section most of them never show.
+    function loadAddons() {
+        var host = document.getElementById('mago-addons');
+        if (addonsAsked || !host || !config.addonsUrl || !chat.classList.contains('is-open')) {
+            return;
+        }
+        addonsAsked = true;
+
+        fetch(config.addonsUrl, {credentials: 'same-origin'})
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var addons = (d && d.addons) || [];
+                if (!addons.length) {
+                    return;
+                }
+
+                var label = document.createElement('div');
+                label.className = 'mago-welcome-label';
+                label.textContent = t('New available add-ons');
+
+                // Heading and link share one row, so the link reads as part of the
+                // section rather than as a footer under the last card.
+                var head = document.createElement('div');
+                head.className = 'mago-addons-head';
+                head.appendChild(label);
+
+                if (d.more_url) {
+                    var more = document.createElement('a');
+                    more.className = 'mago-addons-more';
+                    more.href = d.more_url;
+                    more.target = '_blank';
+                    more.rel = 'noopener noreferrer';
+                    more.textContent = t('All add-ons');
+                    head.appendChild(more);
+                }
+
+                var list = document.createElement('div');
+                list.className = 'mago-addons';
+                addons.forEach(function (addon) {
+                    list.appendChild(addonCard(addon));
+                });
+
+                host.appendChild(head);
+                host.appendChild(list);
+                host.hidden = false;
+            })
+            .catch(function () {
+                // No add-ons is a normal answer; it is never worth telling the admin about.
+            });
+    }
+
+    // Built node by node with textContent: every value here came off the network.
+    function addonCard(addon) {
+        var card = document.createElement(addon.url ? 'a' : 'div');
+        card.className = 'mago-addon';
+        if (addon.url) {
+            card.href = addon.url;
+            card.target = '_blank';
+            card.rel = 'noopener noreferrer';
+        }
+
+        var icon = document.createElement('span');
+        icon.className = 'mago-addon-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = addon.icon || '\u25C6';
+
+        var name = document.createElement('span');
+        name.className = 'mago-addon-name';
+        name.textContent = addon.name || '';
+
+        var title = document.createElement('span');
+        title.className = 'mago-addon-title';
+        title.appendChild(name);
+
+        var released = releaseDate(addon.released_at);
+        if (released) {
+            var date = document.createElement('span');
+            date.className = 'mago-addon-date';
+            date.textContent = released;
+            title.appendChild(date);
+        }
+
+        var body = document.createElement('span');
+        body.className = 'mago-addon-body';
+        body.appendChild(title);
+
+        if (addon.description) {
+            var text = document.createElement('span');
+            text.className = 'mago-addon-text';
+            text.textContent = addon.description;
+            body.appendChild(text);
+        }
+
+        card.appendChild(icon);
+        card.appendChild(body);
+        return card;
+    }
+
+    // The feed dates a release as a plain day (2026-09-24); the card shows it short,
+    // in the browser's own locale. A date it cannot read is left out rather than
+    // printed as "Invalid Date".
+    function releaseDate(value) {
+        if (!value) {
+            return '';
+        }
+        var d = new Date(value + 'T00:00:00Z');
+        if (isNaN(d.getTime())) {
+            return '';
+        }
+        return d.toLocaleDateString([], {month: 'short', day: 'numeric', timeZone: 'UTC'});
     }
 
     // Welcome starters drop the skill into the input so the slash menu takes over.
