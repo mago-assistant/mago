@@ -28,7 +28,7 @@ final class AddonFeedTest extends TestCase
 
     private function cache(): CacheInterface
     {
-        $cache = $this->createMock(CacheInterface::class);
+        $cache = $this->createStub(CacheInterface::class);
         $cache->method('load')->willReturnCallback(fn (string $key) => $this->store[$key] ?? false);
         $cache->method('save')->willReturnCallback(function (string $data, string $key): bool {
             $this->store[$key] = $data;
@@ -50,12 +50,12 @@ final class AddonFeedTest extends TestCase
         ?FakeInstalledPackages $installed = null,
         ?FakeConfigRepository $config = null
     ): AddonFeed {
-        $curl = $this->createMock(Curl::class);
+        $curl = $this->createStub(Curl::class);
         $curl->method('getBody')->willReturn($body);
         $curl->method('getStatus')->willReturn($status);
 
         $config ??= new FakeConfigRepository();
-        $client = new FeedClient($curl, new Json(), $this->createMock(ErrorLogger::class));
+        $client = new FeedClient($curl, new Json(), $this->createStub(ErrorLogger::class));
 
         return new AddonFeed(
             $this->cache(),
@@ -164,14 +164,14 @@ final class AddonFeedTest extends TestCase
     #[Test]
     public function itReleasesTheLockWhenTheFetchBlowsUp(): void
     {
-        $curl = $this->createMock(Curl::class);
+        $curl = $this->createStub(Curl::class);
         $curl->method('get')->willThrowException(new \RuntimeException('connection reset'));
 
         $config = new FakeConfigRepository();
         $feed = new AddonFeed(
             $this->cache(),
             new Json(),
-            new FeedClient($curl, new Json(), $this->createMock(ErrorLogger::class)),
+            new FeedClient($curl, new Json(), $this->createStub(ErrorLogger::class)),
             $config,
             new FakeInstalledPackages()
         );
