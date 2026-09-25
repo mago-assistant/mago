@@ -75,6 +75,18 @@
                 <item name="module_version" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\ModuleVersion</item>
                 <item name="page_form" xsi:type="object">MagoAssistant\Mago\Service\Skills\Form\PageForm</item>
             </argument>
+            <argument name="toolProviders" xsi:type="array">
+                <item name="mcp" xsi:type="object">MagoAssistant\Mago\Service\Mcp\ToolProvider</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!-- MCP servers: add a ServerInterface item (e.g. a ConfiguredServer virtualType) to expose its tools -->
+    <type name="MagoAssistant\Mago\Service\Mcp\ToolProvider">
+        <arguments>
+            <argument name="servers" xsi:type="array">
+                <item name="custom" xsi:type="object">MagoAssistant\Mago\Service\Mcp\ConfiguredServer</item>
+            </argument>
         </arguments>
     </type>
 
@@ -199,6 +211,7 @@
         <arguments>
             <argument name="commands" xsi:type="array">
                 <item name="mago_docs_index" xsi:type="object">MagoAssistant\Mago\Console\Command\IndexDocs</item>
+                <item name="mago_mcp_tools" xsi:type="object">MagoAssistant\Mago\Console\Command\McpTools</item>
             </argument>
         </arguments>
     </type>

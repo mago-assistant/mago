@@ -688,7 +688,7 @@ Example conversation:
 
 ### Current State
 
-The module implements its own tool protocol via `ToolInterface`. This is conceptually similar to the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) but is not MCP-compliant.
+The module implements its own tool protocol via `ToolInterface`. This is conceptually similar to the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) but is not MCP-compliant. Mago can consume remote MCP servers as a client (see [MCP Client](#mcp-client)); it does not expose its own tools over MCP yet.
 
 ### Mapping to MCP
 
@@ -702,6 +702,47 @@ The architecture was designed to be adaptable to MCP:
 | `execute()` | MCP tool handler |
 | `getDescription()` | MCP tool description |
 | `isReadOnly()` | MCP `readOnlyHint` annotation |
+
+### MCP Client
+
+Mago can call tools on remote MCP servers (Streamable HTTP, spec 2025-06-18). `Service\Mcp\ToolProvider` is registered as
+a `toolProviders` item on the `ToolRegistry` and turns every enabled `Api\Mcp\ServerInterface` into one tool named
+`mcp_<code>`:
+
+- Each remote tool from `tools/list` becomes an `action`; parameter schemas are merged like `AbstractSkill` does.
+- An action is read-only only when the remote tool declares `annotations.readOnlyHint: true`. Anything else is a write and
+  goes through the confirmation flow and the Skills page write grant.
+- The tool description carries the first sentence per action; the server's `instructions` and full descriptions are sent
+  just-in-time through `getInstructions()`.
+- Output is classified by `ServerInterface::getFieldClassification()`. The configured server returns
+  `[PiiClass::ANY => [PiiClass::PUBLIC]]` only when the admin set "Output Contains No Personal Data"; otherwise every
+  field is stripped.
+- Tool lists are cached for an hour (5 minutes after a failure, so a down server does not stall every admin page) under the
+  config cache tag. `bin/magento mago:mcp:tools --refresh` fetches them again and shows errors.
+
+The server configured in the admin is `Service\Mcp\ConfiguredServer` (code `custom`, config group `mago/mcp`). Add another
+server as a virtualType with its own code and config path, plus a system.xml group with the same field ids:
+
+```xml
+<virtualType name="Vendor\Module\Mcp\AnalyticsServer" type="MagoAssistant\Mago\Service\Mcp\ConfiguredServer">
+    <arguments>
+        <argument name="code" xsi:type="string">analytics</argument>
+        <argument name="configPath" xsi:type="string">vendor_module/mcp_analytics</argument>
+    </arguments>
+</virtualType>
+<type name="MagoAssistant\Mago\Service\Mcp\ToolProvider">
+    <arguments>
+        <argument name="servers" xsi:type="array">
+            <item name="analytics" xsi:type="object">Vendor\Module\Mcp\AnalyticsServer</item>
+        </argument>
+    </arguments>
+</type>
+```
+
+Authentication is pluggable through `Api\Mcp\AuthenticatorInterface`: `getHeaders()` receives the admin user id (null
+during tool discovery), and `onUnauthorized()` may refresh credentials so the request is retried once. The bundled
+`BearerTokenAuthenticator` sends a static token; a per-user OAuth authenticator can implement the same interface in a custom
+`ServerInterface`.
 
 ### Future: MCP Server Mode
 

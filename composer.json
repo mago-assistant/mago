@@ -16,7 +16,8 @@
         "magento/module-cms": "*",
         "magento/module-config": "*",
         "magento/module-store": "*",
-        "magento/module-cron": "*"
+        "magento/module-cron": "*",
+        "symfony/http-client": "^6.4 || ^7.0 || ^8.0"
     },
     "suggest": {
         "mago-assistant/magento2-issue-tracker": "Add-on for reporting issues to GitHub, Jira, and other project trackers",

@@ -204,6 +204,14 @@ See [docs/skills-architecture.md](docs/skills-architecture.md) for the full arch
 - Data & privacy details
 - MCP compatibility roadmap
 
+## MCP servers
+
+Mago can use the tools of a remote [MCP](https://modelcontextprotocol.io/) server (Streamable HTTP). Configure one under
+**Stores > Configuration > Mago Assistant > General > MCP Server** (URL, optional bearer token, allowed tools), then check
+the connection with `bin/magento mago:mcp:tools --refresh`. All tools of the server appear as one skill, `mcp_custom`,
+with each remote tool as an action. More servers, or servers with their own authentication, are added in `di.xml`; see
+[docs/skills-architecture.md](docs/skills-architecture.md#mcp-client).
+
 ## Testing
 
 End-to-end tests run with Playwright against Chromium. No test calls a real provider: the

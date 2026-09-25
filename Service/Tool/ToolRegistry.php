@@ -8,12 +8,19 @@ namespace MagoAssistant\Mago\Service\Tool;
 
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Api\Tool\ToolProviderInterface;
 use MagoAssistant\Mago\Service\Skills\PermissionChecker;
 
 class ToolRegistry
 {
     /** @var ToolInterface[] */
     private array $tools;
+
+    /** @var ToolProviderInterface[] */
+    private array $toolProviders;
+
+    /** @var ToolInterface[]|null Static tools plus provider tools, resolved on first use */
+    private ?array $resolvedTools = null;
 
     /** @var array<string, array<string, mixed>> Unfiltered parameter schema per tool name */
     private array $schemaCache = [];
@@ -24,12 +31,15 @@ class ToolRegistry
     /**
      * @param PermissionChecker|null $permissionChecker
      * @param ToolInterface[] $tools
+     * @param ToolProviderInterface[] $toolProviders
      */
     public function __construct(
         private readonly ?PermissionChecker $permissionChecker = null,
-        array $tools = []
+        array $tools = [],
+        array $toolProviders = []
     ) {
         $this->tools = $tools;
+        $this->toolProviders = $toolProviders;
     }
 
     /**
@@ -39,7 +49,18 @@ class ToolRegistry
      */
     public function getAllTools(): array
     {
-        return $this->tools;
+        if ($this->resolvedTools === null) {
+            // Lazy: providers may reach out to remote servers, which a request without tools should not pay for.
+            $resolved = $this->tools;
+            foreach ($this->toolProviders as $provider) {
+                foreach ($provider->getTools() as $tool) {
+                    // A provided tool never replaces a built-in one of the same name.
+                    $resolved[$tool->getName()] ??= $tool;
+                }
+            }
+            $this->resolvedTools = $resolved;
+        }
+        return $this->resolvedTools;
     }
 
     /**
@@ -47,7 +68,7 @@ class ToolRegistry
      */
     public function getToolByName(string $name): ?ToolInterface
     {
-        foreach ($this->tools as $tool) {
+        foreach ($this->getAllTools() as $tool) {
             if ($tool->getName() === $name) {
                 return $tool;
             }
@@ -63,7 +84,7 @@ class ToolRegistry
     public function getEnabledTools(?int $adminUserId = null): array
     {
         $enabled = [];
-        foreach ($this->tools as $tool) {
+        foreach ($this->getAllTools() as $tool) {
             if (!$this->isToolAvailable($tool, $adminUserId)) {
                 continue;
             }

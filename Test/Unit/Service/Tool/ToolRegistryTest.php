@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Tool;
 
 use Magento\Framework\AuthorizationInterface;
+use MagoAssistant\Mago\Api\Tool\ToolProviderInterface;
 use MagoAssistant\Mago\Service\Skills\PermissionChecker;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAction;
@@ -319,5 +320,35 @@ final class ToolRegistryTest extends TestCase
 
         $definitions = $registry->getToolDefinitions(self::ADMIN_USER_ID);
         self::assertSame(['view', 'do'], $definitions[0]['parameters']['properties']['action']['enum']);
+    }
+
+    #[Test]
+    public function addsProvidedToolsLazilyWithoutReplacingBuiltInOnes(): void
+    {
+        $shadow = new FakeTool('cache_manager', ['status'], ['status']);
+        $remote = new FakeTool('mcp_test', ['query'], ['query']);
+        $provider = new class ([$shadow, $remote]) implements ToolProviderInterface {
+            public int $calls = 0;
+
+            public function __construct(private readonly array $tools)
+            {
+            }
+
+            public function getTools(): array
+            {
+                $this->calls++;
+                return $this->tools;
+            }
+        };
+        $registry = new ToolRegistry(null, ['cache_manager' => $this->cacheManager], [$provider]);
+
+        self::assertSame(0, $provider->calls, 'providers are not asked before tools are needed');
+        $enabled = $registry->getEnabledTools(self::ADMIN_ID);
+        $registry->getToolByName('mcp_test');
+
+        self::assertSame(1, $provider->calls);
+        self::assertSame(['cache_manager', 'mcp_test'], array_keys($enabled));
+        self::assertSame($this->cacheManager, $enabled['cache_manager']);
+        self::assertSame($remote, $registry->getTool('mcp_test', self::ADMIN_ID));
     }
 }
