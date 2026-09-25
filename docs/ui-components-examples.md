@@ -78,7 +78,7 @@ MagoUI.table({
 
 ## Action & state (W16–W21)
 
-`confirmWrite`, `toolTrace`, `callout`, `suggestions`, `answerFooter`, `empty`, `skeleton`
+`confirmWrite`, `toolTrace`, `callout`, `suggestions`, `choices`, `answerFooter`, `empty`, `skeleton`
 
 ![Action and state](examples/actions.png)
 
@@ -88,6 +88,12 @@ MagoUI.callout({tone: 'warn', text: 'Cache has not been refreshed for 6 days. Nu
 MagoUI.suggestions({
     cards: [{label: 'Revenue versus last week', icon: 'barChart', onClick: ask}],
     chips: [{label: 'Split per country', onClick: ask}, {label: 'Export CSV', onClick: ask}]
+});
+
+MagoUI.choices({
+    options: [{label: 'Low stock', onClick: ask}, {label: 'Disabled products with stock', onClick: ask}],
+    other: 'Something else…',
+    onOther: focusInput
 });
 ```
 

@@ -48,6 +48,16 @@ final class SystemPromptBuilderTest extends TestCase
     }
 
     #[Test]
+    public function itAsksForMoreInformationWithOptionsWhenARequestIsTooVague(): void
+    {
+        $prompt = $this->builder->build('auto', '2026-09-01');
+
+        self::assertStringContainsString('When a request is too vague to answer well', $prompt);
+        self::assertStringContainsString('offer 3 or 4 concrete readings to choose from', $prompt);
+        self::assertStringContainsString('When one reading is clearly the most likely, use it', $prompt);
+    }
+
+    #[Test]
     public function itIncludesTodaysDate(): void
     {
         $prompt = $this->builder->build('auto', '2026-09-01');

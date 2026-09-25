@@ -899,8 +899,9 @@ define([
     }
 
     // Answer widgets arrive as static HTML from the markdown renderer, so their
-    // interactions are wired here once: a chip or suggestion card asks its label,
-    // a value prompt (S10) sends the value the admin typed or picked.
+    // interactions are wired here once: a chip, suggestion card or clarifying choice asks its
+    // label, the "something else" choice hands the admin the input to type their own, and a
+    // value prompt (S10) sends the value the admin typed or picked.
     function askFromWidget(text) {
         if (!text || busy) return;
         input.value = text;
@@ -911,6 +912,11 @@ define([
     msgs.addEventListener('click', function(e) {
         var scope = e.target.closest('.mago-message-content');
         if (!scope) return;
+        if (e.target.closest('.mago-choice.is-other')) {
+            e.preventDefault();
+            input.focus();
+            return;
+        }
         var chip = e.target.closest('.mago-chip, .mago-suggestion:not([href])');
         if (chip) {
             e.preventDefault();

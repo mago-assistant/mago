@@ -19,9 +19,9 @@ final class AnswerWidgetsTest extends TestCase
     private const PANEL_TYPES = [
         'stat', 'stats', 'sparkline', 'meter', 'ring', 'composition', 'rankedBars', 'columns', 'lines',
         'stackedColumns', 'heatmap', 'funnel', 'entityList', 'table', 'record', 'confirmWrite', 'toolTrace',
-        'callout', 'suggestions', 'answerFooter', 'empty', 'skeleton', 'skillAsk', 'skillRunning', 'skillLine',
-        'skillFailed', 'readLine', 'skillIrreversible', 'skillBulk', 'skillPlan', 'paramPrompt', 'undoCallout',
-        'sessionLog', 'skillMenu',
+        'callout', 'suggestions', 'choices', 'answerFooter', 'empty', 'skeleton', 'skillAsk', 'skillRunning',
+        'skillLine', 'skillFailed', 'readLine', 'skillIrreversible', 'skillBulk', 'skillPlan', 'paramPrompt',
+        'undoCallout', 'sessionLog', 'skillMenu',
     ];
 
     #[Test]
@@ -70,6 +70,18 @@ final class AnswerWidgetsTest extends TestCase
             $shape = str_replace('<stat>', '{"type":"stat"}', $shape);
             self::assertIsArray(json_decode($shape, true), "Shape is not valid JSON: {$shape}");
         }
+    }
+
+    #[Test]
+    public function itTeachesChoicesForAQuestionTooVagueToAnswer(): void
+    {
+        $section = (new AnswerWidgets())->toPromptSection();
+
+        self::assertContains('choices', (new AnswerWidgets())->getTypes());
+        self::assertStringContainsString('question too vague to answer', $section);
+        self::assertStringContainsString('"other":"<something else>"', $section);
+        self::assertStringContainsString('in the language of your answer', $section);
+        self::assertStringContainsString('always offer the readings as a "choices" widget', $section);
     }
 
     #[Test]

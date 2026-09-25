@@ -90,8 +90,13 @@ renderer but stops the model from being told about it.
 | W17 | `toolTrace` | `steps: [{label, state: done\|active\|pending\|failed, tool}]` |
 | W18 | `callout` | `tone: warn\|danger\|ok\|info`, `text`, `action: {label, href, onClick}` |
 | W19 | `suggestions` | `cards: [{label, icon, href, onClick}]`, `chips: [{label, onClick}]` |
+| W19b | `choices` | `options: [{label, onClick}]`, `other` (label, default "Something else…"; `false` hides it), `onOther` |
 | W20 | `answerFooter` | `primary: {label, href, onClick, external}`, `onCopy`, `onFeedback(vote)` |
 | W21 | `empty`, `skeleton` | `title`, `text`, `icon` / `widths` |
+
+`choices` is what Mago answers with when a question is too vague to act on: the
+options are buttons, and inside an answer the chat panel sends a picked option's
+label as the next message and focuses the input for "other" (`.mago-choice.is-other`).
 
 Chart colours follow the ramp: the first (highest) item is the accent, the next
 ones peach, and from four items on the last one is grey ("the remainder").

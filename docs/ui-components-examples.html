@@ -322,6 +322,14 @@ body.is-capture details { display: none; }
         });
     });
 
+    ex('actions', 'W19b', 'Clarifying choices', function () {
+        return U.choices({
+            options: [{label: 'Low stock', onClick: log}, {label: 'Disabled products with stock', onClick: log}, {label: 'Visible products without an image', onClick: log}],
+            other: 'Something else…',
+            onOther: log
+        });
+    });
+
     ex('actions', 'W20', 'Answer footer', function () {
         return U.answerFooter({
             primary: {label: 'Open all 128 in a grid', href: '#', external: true},

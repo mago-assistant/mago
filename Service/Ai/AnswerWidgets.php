@@ -68,6 +68,14 @@ class AnswerWidgets
             . 'days."} — a heads-up, an error or a success next to the answer.',
         'suggestions' => '{"type":"suggestions","chips":[{"label":"Split per country"},{"label":"Export CSV"}]} — '
             . 'follow-up questions the user can click; a click sends the label as their next message.',
+        // Placeholders rather than sample labels: with real ones the model copied them verbatim, in
+        // English, into answers about a different question.
+        'choices' => '{"type":"choices","options":[{"label":"<reading 1>"},{"label":"<reading 2>"},'
+            . '{"label":"<reading 3>"}],"other":"<something else>"} — the options for a question too vague to '
+            . 'answer: put the question in the sentence before it and do not list the readings there as well. '
+            . 'Give 3–4 readings that fit this request and this store, phrased so each works as the user\'s next '
+            . 'message (a click sends the label). Write every label, and "other" (a click lets the user type '
+            . 'their own, e.g. "Something else…"), in the language of your answer.',
         'paramPrompt' => '{"type":"paramPrompt","text":"Which price should it become?","prefix":"€",'
             . '"placeholder":"69.00","chips":[{"label":"−10%","value":"71.10"},{"label":"Back to 79.00",'
             . '"value":"79.00"}]} — use this, instead of a plain question, when exactly one value is missing '
@@ -110,6 +118,8 @@ class AnswerWidgets
         foreach (self::CHOICES as $choice) {
             $lines[] = '- ' . $choice;
         }
+        $lines[] = 'When a request is too vague to answer and you ask the user what they mean, always offer '
+            . 'the readings as a "choices" widget after your question, never as a markdown or text list.';
         $lines[] = 'Rules: only use data that a tool returned, never invent or extrapolate values; format numbers '
             . 'and currency as display strings in the user\'s locale ("€38,410", "12.4%") except where a shape asks '
             . 'for plain numbers (value, max, points, values); keep labels short and never put HTML in any field. '
