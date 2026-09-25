@@ -111,6 +111,18 @@ Then, under `Stores > Configuration > Mago Assistant`:
 2. **Pick the AI Service** the assistant runs on (API Settings). Leave it on *Automatic* to use
    the first usable one, which is what a single-provider store wants.
 
+### New add-ons in the chat panel (off by default)
+
+`Stores > Configuration > Mago Assistant > Add-ons > Show new add-ons` puts the newest Mago
+add-ons in the panel's welcome state. It is **off by default**, because switching it on lets the
+store reach out to a host that is not yours: `https://askmago.com/addons.json`, a public JSON
+document, fetched the first time an administrator opens the panel and then cached for a week.
+
+The request carries nothing about the store beyond what any HTTP request carries — its server
+address and the user agent `MagoAssistant-Mago`. There is no query string, no store identifier and
+no account behind it, which is why the feed is a static file rather than an endpoint that answers
+per installation. With the setting off, nothing is fetched and the panel asks for nothing.
+
 ### Internal API URL (Docker / reverse proxy setups)
 
 If the module's internal REST API calls fail (e.g. in Docker environments where PHP can't reach itself via the public hostname), configure `Stores > Configuration > Mago Assistant > API Settings > Internal API URL`.
@@ -231,7 +243,9 @@ and how to add scenarios.
 
 Mago stores nothing outside your Magento installation. Every request goes directly from your
 store to the AI provider you configured, using your own API key; what that provider does with
-the request is governed by its API terms. Mago only reads what the current admin's role allows
+the request is governed by its API terms. The only other outbound call the module can make is the
+add-on feed, which is off unless you switch it on — see
+[New add-ons in the chat panel](#new-add-ons-in-the-chat-panel-off-by-default). Mago only reads what the current admin's role allows
 and never writes without an explicit confirmation. Details in
 [docs/skills-architecture.md](docs/skills-architecture.md#data--privacy).
 

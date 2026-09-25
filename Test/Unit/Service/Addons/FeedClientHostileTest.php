@@ -22,11 +22,11 @@ final class FeedClientHostileTest extends TestCase
 {
     private function fetch(array $entries): array
     {
-        $curl = $this->createMock(Curl::class);
+        $curl = $this->createStub(Curl::class);
         $curl->method('getBody')->willReturn((string)json_encode(['addons' => $entries]));
         $curl->method('getStatus')->willReturn(200);
 
-        return (new FeedClient($curl, new Json(), $this->createMock(ErrorLogger::class)))->fetch() ?? [];
+        return (new FeedClient($curl, new Json(), $this->createStub(ErrorLogger::class)))->fetch() ?? [];
     }
 
     #[Test]
@@ -112,25 +112,25 @@ final class FeedClientHostileTest extends TestCase
     public function itCannotBeMadeToRenderAThousandCards(): void
     {
         $entries = [];
-        for ($i = 0; $i < 5000; $i++) {
+        for ($i = 0; $i < 200; $i++) {
             $entries[] = ['name' => 'Flood ' . $i, 'package' => 'v/p' . $i];
         }
 
-        self::assertCount(50, $this->fetch($entries));
+        self::assertCount(10, $this->fetch($entries));
     }
 
     #[Test]
     public function itSurvivesAFeedThatIsNotTheShapeItExpects(): void
     {
-        $curl = $this->createMock(Curl::class);
+        $curl = $this->createStub(Curl::class);
         $curl->method('getStatus')->willReturn(200);
-        $client = new FeedClient($curl, new Json(), $this->createMock(ErrorLogger::class));
+        $client = new FeedClient($curl, new Json(), $this->createStub(ErrorLogger::class));
 
         foreach (['{"addons": "not an array"}', '{"addons": null}', '[]', 'null', '{}'] as $body) {
-            $curl = $this->createMock(Curl::class);
+            $curl = $this->createStub(Curl::class);
             $curl->method('getStatus')->willReturn(200);
             $curl->method('getBody')->willReturn($body);
-            $client = new FeedClient($curl, new Json(), $this->createMock(ErrorLogger::class));
+            $client = new FeedClient($curl, new Json(), $this->createStub(ErrorLogger::class));
 
             self::assertNull($client->fetch(), 'Should have refused: ' . $body);
         }

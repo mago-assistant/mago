@@ -17,11 +17,11 @@ final class FeedClientTest extends TestCase
 {
     private function client(string $body, int $status = 200): FeedClient
     {
-        $curl = $this->createMock(Curl::class);
+        $curl = $this->createStub(Curl::class);
         $curl->method('getBody')->willReturn($body);
         $curl->method('getStatus')->willReturn($status);
 
-        return new FeedClient($curl, new Json(), $this->createMock(ErrorLogger::class));
+        return new FeedClient($curl, new Json(), $this->createStub(ErrorLogger::class));
     }
 
     #[Test]
@@ -115,11 +115,11 @@ final class FeedClientTest extends TestCase
     public function itCapsAVeryLongFeed(): void
     {
         $entries = [];
-        for ($i = 0; $i < 80; $i++) {
+        for ($i = 0; $i < 30; $i++) {
             $entries[] = ['name' => 'Add-on ' . $i, 'package' => 'v/p' . $i];
         }
 
-        self::assertCount(50, $this->client((string)json_encode(['addons' => $entries]))->fetch());
+        self::assertCount(10, $this->client((string)json_encode(['addons' => $entries]))->fetch());
     }
 
     /**
@@ -137,5 +137,21 @@ final class FeedClientTest extends TestCase
     public function itAnswersAnEmptyListWhenTheFeedIsEmpty(): void
     {
         self::assertSame([], $this->client('{"addons":[]}')->fetch());
+    }
+
+    /**
+     * A server that announces no length gets past CURLOPT_MAXFILESIZE, so the body is measured here.
+     */
+    #[Test]
+    public function itRefusesAFeedLargerThanTheCap(): void
+    {
+        $padding = str_repeat('x', 16384);
+        $body = (string)json_encode(['addons' => [[
+            'name' => 'Huge',
+            'package' => 'v/huge',
+            'description' => $padding,
+        ]]]);
+
+        self::assertNull($this->client($body)->fetch());
     }
 }

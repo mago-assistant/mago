@@ -1010,18 +1010,22 @@ define([
     function showGreeting() {
         chat.classList.add('is-empty');
         setSubtitle('');
+        loadAddons();
     }
 
-    // The newest add-ons, asked for once the screen is already up.
+    var addonsAsked = false;
+
+    // The newest add-ons, asked for once the welcome state is on screen.
     //
-    // This is the whole reason there is an endpoint for it: fetching the feed while a page renders
-    // would put someone else's server in the path of every admin page, because the panel is on all
-    // of them. Here a slow feed means the section arrives late or not at all, and nothing waits.
+    // This is the whole reason there is an endpoint for it: the panel is on every admin page, so
+    // fetching while a page renders would put someone else's server in the path of all of them, and
+    // firing on load would cost a request on every page view for a section most of them never show.
     function loadAddons() {
         var host = document.getElementById('mago-addons');
-        if (!host || !config.addonsUrl) {
+        if (addonsAsked || !host || !config.addonsUrl || !chat.classList.contains('is-open')) {
             return;
         }
+        addonsAsked = true;
 
         fetch(config.addonsUrl, {credentials: 'same-origin'})
             .then(function (r) { return r.json(); })
@@ -1126,8 +1130,6 @@ define([
         }
         return d.toLocaleDateString([], {month: 'short', day: 'numeric', timeZone: 'UTC'});
     }
-
-    loadAddons();
 
     // Welcome starters drop the skill into the input so the slash menu takes over.
     var starters = chat.querySelectorAll('.mago-starter');

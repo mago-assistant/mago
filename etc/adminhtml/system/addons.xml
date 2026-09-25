@@ -2,11 +2,11 @@
 <include xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_include.xsd">
     <group id="addons" translate="label comment" sortOrder="38" showInDefault="1" showInWebsite="0" showInStore="0">
         <label>Add-ons</label>
-        <comment><![CDATA[Show the newest Mago Assistant add-ons on the dashboard. The feed is a public JSON document, fetched once when the dashboard first needs it and then cached for a week; the store sends nothing about itself.]]></comment>
+        <comment><![CDATA[Show the newest Mago Assistant add-ons in the chat panel. The feed is a public JSON document at askmago.com, fetched once when an administrator first opens the panel and then cached for a week. The request carries nothing about the store beyond what any HTTP request carries: its server address and the user agent <em>MagoAssistant-Mago</em>. Off by default.]]></comment>
         <field id="enabled" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
             <label>Show new add-ons</label>
             <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-            <comment><![CDATA[Switching this off stops the fetch as well as the panel.]]></comment>
+            <comment><![CDATA[Switching this off stops the section as well as the request to askmago.com; nothing is fetched until it is on.]]></comment>
         </field>
     </group>
 </include>

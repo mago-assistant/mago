@@ -24,17 +24,20 @@ class FeedClient
     /** Where the panel sends someone who wants more than the two it has room for */
     public const OVERVIEW_URL = 'https://askmago.com/add-ons';
     private const USER_AGENT = 'MagoAssistant-Mago';
-    /** Short on purpose: a cold cache means an administrator is waiting on this */
+
+    /** Short on purpose: this runs inside an admin request, and no screen is worth holding for a feed */
     private const TIMEOUT = 3;
 
-    /** A feed longer than this is a mistake on the other end, not something to render */
-    private const MAX_ENTRIES = 50;
+    /** A feed is a couple of kilobytes of JSON; anything past this is not one */
+    private const MAX_BODY_BYTES = 16384;
+
+    /** The panel has room for a handful; a feed longer than this is a mistake on the other end */
+    private const MAX_ENTRIES = 10;
 
     /** An icon is one emoji; anything longer is not an icon */
     private const MAX_ICON_LENGTH = 4;
 
     public function __construct(
-        // One call per cron run, so the client itself is enough; no factory needed.
         private readonly Curl $curl,
         private readonly Json $json,
         private readonly ErrorLogger $errorLogger
@@ -132,8 +135,12 @@ class FeedClient
         try {
             $this->curl->setOptions([
                 CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
+                CURLOPT_MAXREDIRS => 3,
                 CURLOPT_TIMEOUT => self::TIMEOUT,
                 CURLOPT_CONNECTTIMEOUT => 2,
+                CURLOPT_MAXFILESIZE => self::MAX_BODY_BYTES,
             ]);
             $this->curl->addHeader('User-Agent', self::USER_AGENT);
             $this->curl->addHeader('Accept', 'application/json');
@@ -145,7 +152,15 @@ class FeedClient
                 return null;
             }
 
-            return $this->curl->getBody();
+            // MAXFILESIZE is only honoured when the other end announces a length, so measure as well.
+            $body = (string)$this->curl->getBody();
+            if (strlen($body) > self::MAX_BODY_BYTES) {
+                $this->errorLogger->addLog('AddonFeed', 'Feed is larger than ' . self::MAX_BODY_BYTES . ' bytes');
+
+                return null;
+            }
+
+            return $body;
         } catch (\Throwable $e) {
             $this->errorLogger->addLog('AddonFeed', 'Could not reach the feed: ' . $e->getMessage());
 
