@@ -89,6 +89,7 @@ class ChatPanel extends Template
             'deleteUrl' => $this->getUrl('mago/chat/delete'),
             'confirmUrl' => $this->getUrl('mago/chat/confirm'),
             'rejectUrl' => $this->getUrl('mago/chat/reject'),
+            'flagUrl' => $this->getUrl('mago/chat/flag'),
             'statusUrl' => $this->getUrl('mago/chat/status'),
             'apiBaseUrl' => $this->getUrl('rest/V1/assistant'),
             'isStreamingEnabled' => $this->configRepository->isStreamingEnabled(),
@@ -144,6 +145,17 @@ class ChatPanel extends Template
             'Action rejected. No changes were made.',
             'CMS page',
             'CMS block',
+            'Flag this answer',
+            'Remove flag',
+            'What is wrong with this answer?',
+            'It said the order was shipped, but it was not',
+            'Flag',
+            'Wrong information',
+            'Did not do what I asked',
+            'Missing something',
+            'Flagged. Review it under Flagged Answers.',
+            'Flag removed.',
+            'Could not flag this answer.',
         ];
 
         return array_combine($sentences, array_map(static fn (string $sentence): string => (string)__($sentence), $sentences));

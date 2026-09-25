@@ -4,6 +4,7 @@
         <add id="MagoAssistant_Mago::assistant_menu" title="Admin Assistant" module="MagoAssistant_Mago" parent="Magento_Backend::stores" resource="MagoAssistant_Mago::config" sortOrder="100"/>
         <add id="MagoAssistant_Mago::statistics" title="Statistics" module="MagoAssistant_Mago" parent="MagoAssistant_Mago::assistant_menu" action="mago/statistics/index" resource="MagoAssistant_Mago::config" sortOrder="10"/>
         <add id="MagoAssistant_Mago::conversations" title="Conversations" module="MagoAssistant_Mago" parent="MagoAssistant_Mago::assistant_menu" action="mago/conversations/index" resource="MagoAssistant_Mago::config" sortOrder="15"/>
+        <add id="MagoAssistant_Mago::flags" title="Flagged Answers" module="MagoAssistant_Mago" parent="MagoAssistant_Mago::assistant_menu" action="mago/flags/index" resource="MagoAssistant_Mago::flags" sortOrder="18"/>
         <add id="MagoAssistant_Mago::skills" title="Skills &amp; Permissions" module="MagoAssistant_Mago" parent="MagoAssistant_Mago::assistant_menu" action="mago/skills/index" resource="MagoAssistant_Mago::config" sortOrder="20"/>
         <add id="MagoAssistant_Mago::configuration" title="Configuration" module="MagoAssistant_Mago" parent="MagoAssistant_Mago::assistant_menu" action="adminhtml/system_config/edit/section/mago" resource="MagoAssistant_Mago::config" sortOrder="30"/>
     </menu>

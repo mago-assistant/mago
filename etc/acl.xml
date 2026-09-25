@@ -16,6 +16,10 @@
                     <resource id="MagoAssistant_Mago::conversations" title="Manage Conversations" sortOrder="30">
                         <resource id="MagoAssistant_Mago::conversations_delete" title="Delete Conversations" sortOrder="10"/>
                     </resource>
+                    <resource id="MagoAssistant_Mago::flags" title="Flagged Answers" sortOrder="40">
+                        <resource id="MagoAssistant_Mago::flags_export" title="Export Flagged Answers" sortOrder="10"/>
+                        <resource id="MagoAssistant_Mago::flags_delete" title="Delete Flagged Answers" sortOrder="20"/>
+                    </resource>
                 </resource>
             </resource>
         </resources>

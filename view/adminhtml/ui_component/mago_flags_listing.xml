@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<listing xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Ui:etc/ui_configuration.xsd">
+
+    <argument name="data" xsi:type="array">
+        <item name="js_config" xsi:type="array">
+            <item name="provider" xsi:type="string">mago_flags_listing.mago_flags_listing_data_source</item>
+        </item>
+    </argument>
+
+    <settings>
+        <spinner>mago_flags_columns</spinner>
+        <deps>
+            <dep>mago_flags_listing.mago_flags_listing_data_source</dep>
+        </deps>
+    </settings>
+
+    <dataSource name="mago_flags_listing_data_source" component="Magento_Ui/js/grid/provider">
+        <settings>
+            <updateUrl path="mui/index/render"/>
+        </settings>
+        <dataProvider class="Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider"
+                      name="mago_flags_listing_data_source">
+            <settings>
+                <requestFieldName>id</requestFieldName>
+                <primaryFieldName>entity_id</primaryFieldName>
+            </settings>
+        </dataProvider>
+    </dataSource>
+
+    <listingToolbar name="listing_top">
+        <bookmark name="bookmarks"/>
+        <columnsControls name="columns_controls"/>
+        <filterSearch name="fulltext"/>
+        <filters name="listing_filters"/>
+        <massaction name="listing_massaction">
+            <action name="delete">
+                <settings>
+                    <url path="mago/flags/massDelete"/>
+                    <type>delete</type>
+                    <label translate="true">Delete</label>
+                    <confirm>
+                        <message translate="true">Delete the selected flags? The conversations they came from are untouched.</message>
+                        <title translate="true">Delete Flags</title>
+                    </confirm>
+                </settings>
+            </action>
+        </massaction>
+        <paging name="listing_paging"/>
+    </listingToolbar>
+
+    <columns name="mago_flags_columns">
+        <selectionsColumn name="ids" sortOrder="0">
+            <settings>
+                <indexField>entity_id</indexField>
+            </settings>
+        </selectionsColumn>
+        <column name="entity_id" sortOrder="10">
+            <settings>
+                <label translate="true">ID</label>
+                <filter>textRange</filter>
+                <sorting>desc</sorting>
+            </settings>
+        </column>
+        <column name="status" component="Magento_Ui/js/grid/columns/select" sortOrder="20">
+            <settings>
+                <options class="MagoAssistant\Mago\Model\Config\Source\FlagStatus"/>
+                <filter>select</filter>
+                <dataType>select</dataType>
+                <label translate="true">Status</label>
+            </settings>
+        </column>
+        <column name="answer_preview" sortOrder="30">
+            <settings>
+                <label translate="true">Answer</label>
+                <filter>text</filter>
+                <sortable>false</sortable>
+            </settings>
+        </column>
+        <column name="note" sortOrder="40">
+            <settings>
+                <label translate="true">Note</label>
+                <filter>text</filter>
+                <sortable>false</sortable>
+            </settings>
+        </column>
+        <column name="flagged_by" sortOrder="50">
+            <settings>
+                <label translate="true">Flagged By</label>
+                <filter>text</filter>
+            </settings>
+        </column>
+        <column name="model" sortOrder="60">
+            <settings>
+                <label translate="true">Model</label>
+                <filter>text</filter>
+            </settings>
+        </column>
+        <column name="skills" sortOrder="70">
+            <settings>
+                <label translate="true">Skills</label>
+                <filter>text</filter>
+                <sortable>false</sortable>
+                <visible>false</visible>
+            </settings>
+        </column>
+        <column name="conversation_title" sortOrder="80">
+            <settings>
+                <label translate="true">Conversation</label>
+                <filter>text</filter>
+                <visible>false</visible>
+            </settings>
+        </column>
+        <column name="created_at" class="Magento\Ui\Component\Listing\Columns\Date" component="Magento_Ui/js/grid/columns/date" sortOrder="90">
+            <settings>
+                <label translate="true">Flagged At</label>
+                <filter>dateRange</filter>
+                <dataType>date</dataType>
+            </settings>
+        </column>
+        <actionsColumn name="actions" class="MagoAssistant\Mago\Ui\Component\Listing\Column\FlagActions" sortOrder="100">
+            <settings>
+                <label translate="true">Actions</label>
+                <indexField>entity_id</indexField>
+            </settings>
+        </actionsColumn>
+    </columns>
+</listing>

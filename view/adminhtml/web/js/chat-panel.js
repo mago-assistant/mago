@@ -706,6 +706,9 @@ define([
                     // No timestamp: a live bubble never carries one, and a reloaded conversation
                     // that grows them is not the same conversation the admin was just looking at.
                     var msgEl = addMsg(m.role, renderMd(m.content));
+                    if (m.role === 'assistant') {
+                        attachFlag(msgEl, m.entity_id, !!m.flagged);
+                    }
                     if (m.role === 'assistant' && pendingTools.length) {
                         replayTools(msgEl, pendingTools);
                         pendingTools = [];
@@ -856,6 +859,128 @@ define([
         msgs.insertBefore(div, loading);
         msgs.scrollTop = msgs.scrollHeight;
         return div;
+    }
+
+    // A flag marks an answer as worth looking at later: it copies the turn, with
+    // its tool calls and whatever the provider was sent and sent back, into a row
+    // the Flagged Answers screen reads. Nothing about the conversation changes,
+    // and the copy is what makes the flag survive the payload purge.
+    //
+    // Clicking does not flag straight away. A flag without a reason is a row
+    // nobody can act on later, so the button opens the S10 prompt and asks what
+    // was wrong; the answer becomes the note on the flag.
+    function attachFlag(msgEl, messageId, flagged) {
+        if (!msgEl || !messageId || msgEl.querySelector('.mago-msg-flag')) {
+            return;
+        }
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'mago-msg-flag' + (flagged ? ' is-flagged' : '');
+        btn.innerHTML = UI.icon('flag', 14).outerHTML;
+        setFlagState(btn, flagged);
+
+        btn.addEventListener('click', function () {
+            var open = msgEl.querySelector('.mago-flag-ask');
+            if (open) {
+                open.remove();
+                return;
+            }
+            if (btn.classList.contains('is-flagged')) {
+                sendFlag(msgEl, btn, messageId, {remove: true});
+                return;
+            }
+            askWhy(msgEl, btn, messageId);
+        });
+
+        msgEl.appendChild(btn);
+    }
+
+    function setFlagState(btn, flagged) {
+        btn.classList.toggle('is-flagged', !!flagged);
+        btn.setAttribute('aria-pressed', flagged ? 'true' : 'false');
+        btn.title = flagged ? t('Remove flag') : t('Flag this answer');
+    }
+
+    // S10: one value is missing before anything is written, which is exactly what
+    // this card is for. The chips are the reasons that come up most.
+    function askWhy(msgEl, btn, messageId) {
+        var card = UI.paramPrompt({
+            text: t('What is wrong with this answer?'),
+            placeholder: t('It said the order was shipped, but it was not'),
+            submitLabel: t('Flag'),
+            chips: [
+                {label: t('Wrong information'), value: t('Wrong information')},
+                {label: t('Did not do what I asked'), value: t('Did not do what I asked')},
+                {label: t('Missing something'), value: t('Missing something')}
+            ],
+            onSubmit: function (note) {
+                sendFlag(msgEl, btn, messageId, {note: note});
+            }
+        });
+        card.classList.add('mago-flag-ask');
+        msgEl.appendChild(card);
+        msgs.scrollTop = msgs.scrollHeight;
+        if (card.magoFocus) {
+            card.magoFocus();
+        }
+    }
+
+    // The result replaces the card with one quiet line, so the answer is not left
+    // looking as though nothing happened.
+    function sendFlag(msgEl, btn, messageId, options) {
+        var card = msgEl.querySelector('.mago-flag-ask');
+        var removing = !!options.remove;
+        btn.disabled = true;
+
+        fetch(config.flagUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message_id: messageId,
+                remove: removing,
+                note: options.note || '',
+                form_key: formKey
+            })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                btn.disabled = false;
+                if (card) {
+                    card.remove();
+                }
+                if (d.error) {
+                    showFlagLine(msgEl, t('Could not flag this answer.'), 'failed');
+                    return;
+                }
+                setFlagState(btn, d.flagged);
+                showFlagLine(
+                    msgEl,
+                    d.flagged ? t('Flagged. Review it under Flagged Answers.') : t('Flag removed.'),
+                    'done'
+                );
+            })
+            .catch(function () {
+                btn.disabled = false;
+                if (card) {
+                    card.remove();
+                }
+                showFlagLine(msgEl, t('Could not flag this answer.'), 'failed');
+            });
+    }
+
+    function showFlagLine(msgEl, text, state) {
+        var existing = msgEl.querySelector('.mago-flag-line');
+        if (existing) {
+            existing.remove();
+        }
+        var line = UI.readLine({text: text, state: state === 'failed' ? 'active' : 'done'});
+        line.classList.add('mago-flag-line');
+        if (state === 'failed') {
+            line.classList.add('is-failed');
+        }
+        msgEl.appendChild(line);
+        msgs.scrollTop = msgs.scrollHeight;
     }
 
     // S06: a read-only call is one quiet line above the answer — spinner while
@@ -1135,6 +1260,9 @@ define([
                         gotDone = true;
                         if(d.conversation_id) conversationId=d.conversation_id;
                         saveState(); releaseInput();
+                        if (d.message_id && msg && !d.pending_confirmation) {
+                            attachFlag(msg, d.message_id, false);
+                        }
                         if (d.pending_confirmation && msg && !writeToolDetected) {
                             showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, []);
                         }
@@ -1443,6 +1571,9 @@ define([
                         if (!applyPending) {
                             reportApplyOutcome(applyResult);
                             applyResult = null;
+                        }
+                        if (d.message_id && msg && !d.pending_confirmation) {
+                            attachFlag(msg, d.message_id, false);
                         }
                         if (d.pending_confirmation && msg) {
                             showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, []);
