@@ -206,15 +206,28 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
             <span><?= $escaper->escapeHtml(__('Thinking…')) ?></span>
         </div>
     </div>
+    <?php /* Voice input (#141): shown while the microphone is on. The audio leaves the browser for
+           its vendor's speech service, which is worth saying every time, not once in a setting. */ ?>
+    <div id="mago-voice-notice" class="mago-voice-notice" hidden role="status">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span><?= $escaper->escapeHtml(__('Voice input is on. Your speech is converted to text by your browser\'s speech service (for example Google for Chrome), not by %1 or the AI provider. Only the resulting text is sent to the assistant. Avoid speaking customer details aloud.', $assistantName)) ?></span>
+    </div>
     <div id="mago-input-area" class="mago-input-wrapper">
         <div id="mago-slash-menu" class="mago-slash-menu"></div>
         <textarea id="mago-input" class="mago-input" placeholder="<?= $escaper->escapeHtmlAttr(__('Ask anything…')) ?>" rows="1"></textarea>
+        <button type="button" id="mago-mic" class="mago-mic-btn" hidden title="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>" aria-label="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>" aria-pressed="false">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
+        </button>
         <button type="button" id="mago-send" class="mago-send-btn is-idle" title="<?= $escaper->escapeHtmlAttr(__('Send')) ?>">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="13 5 20 12 13 19"/></svg>
         </button>
     </div>
     <?php /* Privacy mode (#97 decision 3): non-blocking hint for FP-prone patterns the silent scrub
            does not cover; certain classes (email, IBAN, BSN, VAT, phone) are tokenised server-side. */ ?>
+    <div id="mago-voice-status" class="mago-voice-status" hidden aria-live="polite">
+        <span class="mago-voice-dot"></span>
+        <span class="mago-voice-text"></span>
+    </div>
     <div id="mago-privacy-hint" class="mago-privacy-hint" hidden>
         <?= $escaper->escapeHtml(__('This looks like personal data. It is filtered best-effort before reaching the AI provider; avoid pasting customer details.')) ?>
     </div>
@@ -223,6 +236,7 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
 <script>
 window.MAGO_CONFIG = <?= /* @noEscape */ $block->getJsConfig() ?>;
 window.MAGO_CONFIG.adminUser = '<?= $escaper->escapeJs($adminName) ?>';
+window.MAGO_CONFIG.adminLogin = '<?= $escaper->escapeJs($block->getAdminUserName()) ?>';
 window.MAGO_CONFIG.assistantName = '<?= $escaper->escapeJs($assistantName) ?>';
 window.MAGO_CONFIG.formKey = '<?= $escaper->escapeJs($block->getFormKey()) ?>';
 window.MAGO_CONFIG.skills = <?= /* @noEscape */ $block->getSkillsJson() ?>;

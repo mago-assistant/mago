@@ -3,8 +3,9 @@ define([
     'MagoAssistant_Mago/js/chat/i18n',
     'MagoAssistant_Mago/js/chat/navigate-intent',
     'MagoAssistant_Mago/js/chat/session-log',
-    'MagoAssistant_Mago/js/chat/confirm-text'
-], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText) {
+    'MagoAssistant_Mago/js/chat/confirm-text',
+    'MagoAssistant_Mago/js/chat/voice-input'
+], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, createVoiceInput) {
     'use strict';
 
     var isPlainObject = text.isPlainObject;
@@ -304,6 +305,7 @@ define([
         chat.classList.toggle('is-busy', state);
         loading.style.display = state ? '' : 'none';
         sendBtn.disabled = state;
+        if (!state && voiceInput) voiceInput.turnEnded();
     }
 
     // The header icon is the only way in or out of the panel, so its tooltip,
@@ -589,6 +591,58 @@ define([
         if (e.keyCode === 13 && !e.shiftKey) { e.preventDefault(); send(); }
     };
     sendBtn.onclick = send;
+
+    // Voice input (#141): browser speech recognition fills the textarea; the module hides itself
+    // when the browser has no recogniser, and the setting removes the button altogether.
+    // Voice consent (#141): once per admin user per browser; a server-side record is a follow-up.
+    var voiceConsentKey = 'mago-voice-consent:' + String(config.adminLogin || config.adminUser || '');
+
+    function hasVoiceConsent() {
+        try { return window.localStorage.getItem(voiceConsentKey) === '1'; } catch (e) { return false; }
+    }
+
+    function requireVoiceConsent(proceed) {
+        if (hasVoiceConsent()) { proceed(); return; }
+        if (msgs.querySelector('.mago-voice-consent')) return;
+        var holder = addMsg('assistant', '');
+        var card = UI.skillAsk({
+            title: t('Voice input'),
+            text: {html: renderMd(
+                t('Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.', config.assistantName || 'Mago')
+                + '\n\n' + t('Avoid speaking customer details aloud. You can turn voice input off at any time under Stores > Configuration > Mago Assistant > Voice Input.')
+            )},
+            params: [],
+            allowLabel: t('I understand, turn on the microphone'),
+            laterLabel: t('Not now'),
+            onAllow: function () {
+                try { window.localStorage.setItem(voiceConsentKey, '1'); } catch (e) { /* private mode */ }
+                holder.remove();
+                proceed();
+            },
+            onLater: function () {
+                holder.remove();
+                if (!msgs.querySelector('.mago-message')) chat.classList.add('is-empty');
+            }
+        });
+        card.classList.add('mago-voice-consent');
+        holder.querySelector('.mago-message-content').appendChild(card);
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    var voiceInput = config.voiceInput ? createVoiceInput({
+        input: input,
+        button: qs('#mago-mic'),
+        status: qs('#mago-voice-status'),
+        notice: qs('#mago-voice-notice'),
+        lang: config.locale,
+        autoSend: !!config.voiceAutoSend,
+        handsFree: !!config.voiceAutoSend && !!config.voiceHandsFree,
+        sendDelay: config.voiceSendDelay,
+        requireConsent: requireVoiceConsent,
+        t: t,
+        onSend: function () { if (input.value.trim()) send(); },
+        onError: function (sentence) { addMsg('assistant', esc(sentence)); }
+    }) : null;
 
 
 
@@ -1033,8 +1087,71 @@ define([
         };
     }
 
+    // Spoken (or typed) answers to a pending confirmation card (#141). A one- or two-word reply
+    // that only means "allow" or "reject" presses the matching button instead of going to the
+    // model, in English plus whatever the translation pack adds. The irreversible card keeps its
+    // acknowledgement checkbox: while it is unticked the button is disabled and the word is sent
+    // as an ordinary message, so speech never skips that step.
+    var CONFIRM_WORDS = {
+        allow: ['allow', 'yes', 'ok', 'okay', 'confirm', 'go ahead', 'do it', 'run', 'approve',
+            'toestaan', 'sta toe', 'ja', 'oke', 'oké', 'akkoord', 'bevestig', 'bevestigen', 'doe maar', 'ga door', 'uitvoeren', 'goedkeuren'],
+        reject: ['reject', 'no', 'nope', 'cancel', 'deny', 'not now', 'stop', 'skip', 'later',
+            'weiger', 'weigeren', 'nee', 'annuleer', 'annuleren', 'niet nu', 'afwijzen', 'wijs af', 'overslaan', 'niet doen']
+    };
+
+    function confirmWordList(kind) {
+        var extra = t(kind === 'allow' ? 'voice words: allow' : 'voice words: reject');
+        var list = CONFIRM_WORDS[kind].slice();
+        if (extra.indexOf('voice words:') !== 0) {
+            list = list.concat(extra.split(',').map(function (w) { return w.trim(); }).filter(Boolean));
+        }
+        return list;
+    }
+
+    function normalizeReply(text) {
+        return String(text || '').toLowerCase().replace(/[.!?,;:…]+$/g, '').replace(/\s+/g, ' ').trim();
+    }
+
+    function pendingConfirmButton(kind) {
+        var cards = msgs.querySelectorAll('.mago-confirm-actions');
+        if (!cards.length) return null;
+        var actions = cards[cards.length - 1];
+        var btn = actions.querySelector(kind === 'allow' ? '.mago-btn--confirm' : '.mago-btn--reject');
+        return btn && !btn.disabled ? btn : null;
+    }
+
+    // Speech recognisers pad a one-word answer ("Ja, toestaan.", "toe staan"), so a short reply
+    // counts when it contains a word from exactly one of the two lists, compared with spaces and
+    // punctuation removed. Anything longer than five words is a real message for the model.
+    function mentionsAny(reply, words) {
+        var compact = reply.replace(/[^a-z0-9\u00C0-\u024F]/g, '');
+        return words.some(function (w) {
+            var cw = w.replace(/[^a-z0-9\u00C0-\u024F]/g, '');
+            return cw && (compact === cw || new RegExp('(^|\\s)' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)').test(reply) || (compact.length <= cw.length + 4 && compact.indexOf(cw) !== -1));
+        });
+    }
+
+    function answerPendingConfirm(text) {
+        var reply = normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!reply || reply.split(' ').length > 5) return false;
+        var allow = mentionsAny(reply, confirmWordList('allow'));
+        var reject = mentionsAny(reply, confirmWordList('reject'));
+        if (allow === reject) return false;
+        var kind = allow ? 'allow' : 'reject';
+        var btn = pendingConfirmButton(kind);
+        if (!btn) return false;
+        input.value = '';
+        sendBtn.classList.add('is-idle');
+        autoGrow();
+        updatePrivacyHint('');
+        btn.click();
+        return true;
+    }
+
     function send() {
+        if (voiceInput) voiceInput.sending();
         var text = input.value.trim();
+        if (text && answerPendingConfirm(text)) return;
         if (!text || busy) return;
         hideSlashMenu();
         input.value = '';

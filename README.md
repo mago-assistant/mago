@@ -158,6 +158,37 @@ the administrator would type into, so their own Save button is what persists any
 [docs/form-access.md](docs/form-access.md) for what it can see, which forms are excluded, and the
 directive contract it uses to reach the browser.
 
+### Voice input
+
+The chat panel shows a microphone button next to Send in browsers with built-in speech
+recognition (Chrome, Edge, Safari). The first time an administrator presses it, a card explains
+that the audio is handled by the browser vendor's speech service, outside Mago's control, and
+asks them to acknowledge that before the microphone turns on. The acknowledgement is remembered
+per admin user in that browser. After that, press it, speak, and the words appear in the input field as
+you talk. While recording, the button turns red and a status line under the input shows what is
+happening. After a short pause in speech a countdown appears and the message is sent on its own;
+typing, or pressing the microphone again, cancels it and leaves the text in the box for you to
+edit and send yourself. *Send Delay* sets how long that pause is (default 1400 ms). Set *Send
+Automatically* to No to always review first.
+
+With *Hands-free Conversation* on (the default) the microphone stays on after a spoken message
+is sent: the panel waits for the assistant's reply and then listens again, so a whole exchange
+runs without touching the button. Press the microphone, or start typing, to stop.
+
+When the assistant is waiting for you to allow or reject an action, a short spoken or typed
+answer presses the button for you: "allow", "yes", "ok", "toestaan", "ja" allow it, "reject",
+"no", "cancel", "weiger", "nee", "niet nu" reject it. An action that cannot be undone still
+needs its acknowledgement box ticked first; until then the word is sent as a normal message.
+
+The browser listens in one language at a time. By default that is the admin user's interface
+locale, which is usually English even for administrators who speak Dutch, and speaking a
+different language than the one being listened for produces garbled text. Set *Language* under Voice Input (`mago/voice/language`) to the language administrators actually speak.
+
+The audio is processed by the browser vendor's speech service, not by Mago or the AI provider.
+The resulting text is treated exactly like typed text, including privacy mode. Turn the button
+off under `Stores > Configuration > Mago Assistant > Voice Input` (`mago/voice/enabled`, default
+Yes); auto-send is `mago/voice/auto_send`, its delay `mago/voice/send_delay`, hands-free `mago/voice/hands_free`.
+
 ## Documentation grounding
 
 When enabled, the assistant can answer "how do I…" questions from the official Magento admin documentation instead of guessing. The `docs_search` skill runs a MySQL FULLTEXT search over an indexed copy of the docs and cites the source page it used.

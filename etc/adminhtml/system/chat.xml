@@ -17,7 +17,7 @@
             <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
             <comment>Let the assistant answer with stat cards, charts, tables and record lists instead of plain text where the data allows it. Adds a short instruction block to every request.</comment>
         </field>
-        <field id="max_tool_iterations" translate="label comment" type="text" sortOrder="20" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
+        <field id="max_tool_iterations" translate="label comment" type="text" sortOrder="22" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
             <label>Max Tool Iterations</label>
             <comment>Maximum number of tool call loops per message (default: 10)</comment>
             <validate>validate-digits</validate>
