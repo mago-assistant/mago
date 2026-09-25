@@ -116,6 +116,19 @@ List all CMS blocks
 Update the "about us" page content
 ```
 
+### product_media (requires confirmation for generation and attach)
+Generate product images and videos from the main product image with Higgsfield (Nano Banana 2 for
+images, Seedance 2.0 or Kling 3.0 for video). Needs a connected Higgsfield account under Mago Assistant >
+General > Higgsfield Media Generation. Generation spends credits.
+
+```
+Generate a lifestyle image of SKU ABC-123 on a kitchen table, square
+Make a 5 second video of SKU JACKET-BLK slowly rotating
+Is request 3f2a... ready yet?
+Add image 1 of that request to the gallery of SKU ABC-123, hidden
+Add it as thumbnail and make it visible
+```
+
 ---
 
 ## Navigation
