@@ -52,8 +52,8 @@
     --mago-track: #F5F5F7;
 
     --mago-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --mago-radius: 16px;
-    --mago-radius-sm: 12px;
+    --mago-radius: @mago-size__16;
+    --mago-radius-sm: @mago-size__12;
 }
 
 @keyframes mago-spin {
@@ -72,12 +72,12 @@
 .mago-widget {
     box-sizing: border-box;
     background: var(--mago-panel, #FFFFFF);
-    border: 1px solid var(--mago-hairline, #E9E5E1);
-    border-radius: var(--mago-radius, 16px);
-    padding: 18px;
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    border-radius: var(--mago-radius, @mago-size__16);
+    padding: @mago-size__18;
     color: var(--mago-ink, #373330);
     font-family: var(--mago-font, inherit);
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     line-height: 1.5;
     letter-spacing: var(--mago-tracking, -0.01em);
 
@@ -114,8 +114,8 @@
 .mago-answer {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin: 12px 0;
+    gap: @mago-size__10;
+    margin: @mago-size__12 0;
 
     &:first-child {
         margin-top: 0;
@@ -127,7 +127,7 @@
 }
 
 .mago-caption {
-    font-size: 11px;
+    font-size: @font-size__tiny;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -142,8 +142,8 @@
 .mago-widget-head {
     display: flex;
     align-items: baseline;
-    gap: 12px;
-    margin-bottom: 14px;
+    gap: @mago-size__12;
+    margin-bottom: @mago-size__14;
 }
 
 .mago-num {
@@ -151,33 +151,33 @@
 }
 
 .mago-note {
-    font-size: 12px;
+    font-size: @font-size__s;
     color: var(--mago-ink-muted, #736B65);
-    margin-top: 10px;
+    margin-top: @mago-size__10;
 }
 
 .mago-mono {
     font-family: var(--mago-mono);
-    font-size: 11.5px;
+    font-size: @mago-font-size__11-5;
     letter-spacing: 0;
 
     &.is-chip {
         display: inline-block;
-        font-size: 12px;
+        font-size: @font-size__s;
         background: var(--mago-track);
-        border-radius: 6px;
-        padding: 2px 7px;
+        border-radius: @mago-size__6;
+        padding: @mago-size__2 @mago-size__7;
         color: var(--mago-ink, #373330);
     }
 }
 
 .mago-badge {
     display: inline-block;
-    font-size: 11px;
+    font-size: @font-size__tiny;
     font-weight: 600;
     letter-spacing: 0;
-    border-radius: 999px;
-    padding: 3px 9px;
+    border-radius: @mago-radius__pill;
+    padding: @mago-size__3 @mago-size__9;
     background: var(--mago-surface, #F7F5F3);
     color: var(--mago-ink-soft, #6B645F);
     white-space: nowrap;
@@ -206,9 +206,9 @@
 // Spinner ring used by running cards and active trace steps
 .mago-spin {
     display: inline-block;
-    width: 14px;
-    height: 14px;
-    border: 2px solid var(--mago-ramp-3);
+    width: @mago-size__14;
+    height: @mago-size__14;
+    border: @mago-size__2 solid var(--mago-ramp-3);
     border-top-color: var(--mago-deep, #E65000);
     border-radius: 50%;
     animation: mago-spin .8s linear infinite;
@@ -219,15 +219,15 @@
 .mago-btn {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: @mago-size__8;
     font-family: var(--mago-font, inherit);
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     font-weight: 600;
     letter-spacing: 0;
     line-height: 1.2;
-    border-radius: 11px;
-    padding: 10px 15px;
-    border: 1px solid transparent;
+    border-radius: @mago-size__11;
+    padding: @mago-size__10 @mago-size__15;
+    border: @mago-size__1 solid transparent;
     background: transparent;
     color: var(--mago-ink, #373330);
     cursor: pointer;
@@ -241,7 +241,7 @@
     &.is-primary {
         background: var(--mago-accent, #FF7A33);
         color: var(--mago-accent-text, #FFFFFF);
-        box-shadow: 0 6px 16px -8px rgba(230, 80, 0, .8);
+        box-shadow: 0 @mago-size__6 @mago-size__16 -@mago-size__8 rgba(230, 80, 0, .8);
 
         &:hover:not(:disabled) {
             background: var(--mago-accent-hover, #E65000);
@@ -269,8 +269,8 @@
     &.is-ghost {
         color: var(--mago-ink-muted, #736B65);
         font-weight: 500;
-        padding-left: 12px;
-        padding-right: 12px;
+        padding-left: @mago-size__12;
+        padding-right: @mago-size__12;
 
         &:hover {
             color: var(--mago-ink, #373330);
@@ -283,8 +283,8 @@
 
     &.is-link {
         padding: 0;
-        border-radius: 4px;
-        font-size: 12.5px;
+        border-radius: @mago-size__4;
+        font-size: @mago-font-size__12-5;
         color: var(--mago-accent-ink, #B84000);
 
         &:hover {
@@ -329,8 +329,8 @@
     &.is-link-danger {
         color: var(--mago-danger-soft);
         font-weight: 500;
-        padding-left: 12px;
-        padding-right: 12px;
+        padding-left: @mago-size__12;
+        padding-right: @mago-size__12;
 
         &:hover {
             color: var(--mago-danger-ink);
@@ -341,25 +341,25 @@
 .mago-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 16px;
+    gap: @mago-size__8;
+    margin-top: @mago-size__16;
 
     &.is-tight {
-        margin-top: 14px;
+        margin-top: @mago-size__14;
     }
 
     &.is-divided {
-        margin-top: 14px;
-        padding-top: 14px;
-        border-top: 1px solid var(--mago-track);
+        margin-top: @mago-size__14;
+        padding-top: @mago-size__14;
+        border-top: @mago-size__1 solid var(--mago-track);
     }
 }
 
 .mago-icon-btn {
-    width: 30px;
-    height: 30px;
+    width: @mago-size__30;
+    height: @mago-size__30;
     border: none;
-    border-radius: 9px;
+    border-radius: @mago-size__9;
     background: transparent;
     color: var(--mago-ink-muted, #736B65);
     display: inline-flex;
@@ -383,29 +383,29 @@
 // Legends and swatches
 .mago-legend {
     display: flex;
-    gap: 8px 16px;
+    gap: @mago-size__8 @mago-size__16;
 
     &.is-stacked {
         flex-direction: column;
-        gap: 9px;
+        gap: @mago-size__9;
     }
 
     &.is-wrap {
         flex-wrap: wrap;
-        margin-top: 14px;
+        margin-top: @mago-size__14;
     }
 
     &.is-inline {
-        gap: 12px;
-        font-size: 12px;
+        gap: @mago-size__12;
+        font-size: @font-size__s;
     }
 }
 
 .mago-legend-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12.5px;
+    gap: @mago-size__8;
+    font-size: @mago-font-size__12-5;
     color: var(--mago-ink-soft, #6B645F);
     white-space: nowrap;
 }
@@ -415,25 +415,25 @@
 }
 
 .mago-swatch {
-    width: 9px;
-    height: 9px;
-    border-radius: 3px;
+    width: @mago-size__9;
+    height: @mago-size__9;
+    border-radius: @mago-size__3;
     flex: none;
 
     &.is-line {
-        width: 14px;
-        height: 3px;
-        border-radius: 2px;
+        width: @mago-size__14;
+        height: @mago-size__3;
+        border-radius: @mago-size__2;
     }
 }
 
 .mago-delta {
     display: flex;
     align-items: center;
-    gap: 5px;
-    font-size: 13px;
+    gap: @mago-size__5;
+    font-size: @mago-font-size__13;
     font-weight: 500;
-    margin-top: 6px;
+    margin-top: @mago-size__6;
     color: var(--mago-ink-muted, #736B65);
 
     &.is-up {
@@ -455,21 +455,21 @@
 // ---------------------------------------------------------------------------
 
 .mago-stat-value {
-    font-size: 32px;
+    font-size: @mago-font-size__32;
     font-weight: 600;
     letter-spacing: -0.03em;
     line-height: 1.1;
-    margin-top: 8px;
+    margin-top: @mago-size__8;
 
     .is-compact &,
     &.is-compact {
-        font-size: 28px;
+        font-size: @mago-font-size__28;
     }
 }
 
 .mago-stats {
     display: flex;
-    gap: 12px;
+    gap: @mago-size__12;
 
     .mago-widget {
         flex: 1;
@@ -478,13 +478,13 @@
 }
 
 .mago-sparkstat {
-    padding-bottom: 12px;
+    padding-bottom: @mago-size__12;
 }
 
 .mago-sparkstat-row {
     display: flex;
     align-items: flex-start;
-    gap: 16px;
+    gap: @mago-size__16;
 }
 
 .mago-sparkstat-text {
@@ -494,7 +494,7 @@
 
 .mago-sparkline {
     flex: none;
-    margin-top: 6px;
+    margin-top: @mago-size__6;
     max-width: 45%;
     height: auto;
 
@@ -516,14 +516,14 @@
 }
 
 .mago-meter-value {
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     font-weight: 600;
 }
 
 .mago-meter-track,
 .mago-bar-track {
-    height: 10px;
-    border-radius: 999px;
+    height: @mago-size__10;
+    border-radius: @mago-radius__pill;
     background: var(--mago-track);
     overflow: hidden;
 }
@@ -531,7 +531,7 @@
 .mago-meter-fill,
 .mago-bar-fill {
     height: 100%;
-    border-radius: 999px;
+    border-radius: @mago-radius__pill;
     background: var(--mago-ramp-1);
     transition: width .3s ease;
 }
@@ -541,16 +541,16 @@
 }
 
 .mago-meter .mago-meter-track {
-    margin-top: 14px;
+    margin-top: @mago-size__14;
 }
 
 .mago-ring-row {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: @mago-size__20;
 
     .mago-caption + & {
-        margin-top: 14px;
+        margin-top: @mago-size__14;
     }
 }
 
@@ -572,7 +572,7 @@
 
     .mago-ring-text {
         font-family: var(--mago-font, inherit);
-        font-size: 19px;
+        font-size: @mago-font-size__19;
         font-weight: 600;
         fill: var(--mago-ink, #373330);
     }
@@ -580,19 +580,19 @@
 
 .mago-composition-bar {
     display: flex;
-    gap: 3px;
-    height: 14px;
-    margin-top: 14px;
+    gap: @mago-size__3;
+    height: @mago-size__14;
+    margin-top: @mago-size__14;
 
     .mago-composition-seg {
-        min-width: 3px;
+        min-width: @mago-size__3;
 
         &:first-child {
-            border-radius: 999px 3px 3px 999px;
+            border-radius: @mago-radius__pill @mago-size__3 @mago-size__3 @mago-radius__pill;
         }
 
         &:last-child {
-            border-radius: 3px 999px 999px 3px;
+            border-radius: @mago-size__3 @mago-radius__pill @mago-radius__pill @mago-size__3;
         }
     }
 }
@@ -604,18 +604,18 @@
 .mago-ranked-rows {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: @mago-size__12;
 
     .mago-caption + & {
-        margin-top: 16px;
+        margin-top: @mago-size__16;
     }
 }
 
 .mago-ranked-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    border-radius: 6px;
+    gap: @mago-size__12;
+    border-radius: @mago-size__6;
 
     &.is-clickable:hover .mago-ranked-label {
         color: var(--mago-accent-ink, #B84000);
@@ -623,9 +623,9 @@
 }
 
 .mago-ranked-label {
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     color: var(--mago-ink-soft, #6B645F);
-    width: 88px;
+    width: @mago-size__88;
     flex: none;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -637,33 +637,33 @@
 }
 
 .mago-ranked-value {
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     font-weight: 600;
-    min-width: 28px;
+    min-width: @mago-size__28;
     text-align: right;
 }
 
 .mago-columns-plot {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
-    height: 96px;
+    gap: @mago-size__8;
+    height: @mago-size__96;
 
     .mago-caption + & {
-        margin-top: 16px;
+        margin-top: @mago-size__16;
     }
 
     &.is-stacked {
-        gap: 10px;
-        height: 100px;
+        gap: @mago-size__10;
+        height: @mago-size__100;
     }
 }
 
 .mago-column {
     flex: 1;
-    min-height: 3px;
+    min-height: @mago-size__3;
     background: var(--mago-ramp-4);
-    border-radius: 6px 6px 3px 3px;
+    border-radius: @mago-size__6 @mago-size__6 @mago-size__3 @mago-size__3;
     transition: height .3s ease;
 
     &.is-peak {
@@ -676,42 +676,42 @@
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    gap: 2px;
-    min-height: 3px;
+    gap: @mago-size__2;
+    min-height: @mago-size__3;
 
     .mago-stack-seg {
-        border-radius: 2px;
-        min-height: 2px;
+        border-radius: @mago-size__2;
+        min-height: @mago-size__2;
 
         &:first-child {
-            border-radius: 6px 6px 2px 2px;
+            border-radius: @mago-size__6 @mago-size__6 @mago-size__2 @mago-size__2;
         }
 
         &:last-child {
-            border-radius: 2px 2px 3px 3px;
+            border-radius: @mago-size__2 @mago-size__2 @mago-size__3 @mago-size__3;
         }
     }
 }
 
 .mago-axis {
     display: flex;
-    gap: 8px;
-    margin-top: 10px;
+    gap: @mago-size__8;
+    margin-top: @mago-size__10;
 
     &.is-spread {
         justify-content: space-between;
-        margin-top: 8px;
+        margin-top: @mago-size__8;
     }
 
     .mago-columns-plot.is-stacked + & {
-        gap: 10px;
+        gap: @mago-size__10;
     }
 }
 
 .mago-axis-label {
     flex: 1;
     text-align: center;
-    font-size: 11.5px;
+    font-size: @mago-font-size__11-5;
     color: var(--mago-ink-muted, #736B65);
     font-variant-numeric: tabular-nums;
 
@@ -732,7 +732,7 @@
 .mago-lines-svg {
     display: block;
     width: 100%;
-    height: 118px;
+    height: @mago-size__118;
 
     .mago-grid {
         stroke: var(--mago-track);
@@ -766,82 +766,82 @@
 
 .mago-heat-row {
     display: flex;
-    gap: 8px;
+    gap: @mago-size__8;
 
     .mago-caption + & {
-        margin-top: 16px;
+        margin-top: @mago-size__16;
     }
 }
 
 .mago-heat-rows {
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    width: 24px;
+    gap: @mago-size__5;
+    width: @mago-size__24;
     flex: none;
     text-align: right;
 }
 
 .mago-heat-rowlabel {
-    height: 22px;
-    line-height: 22px;
-    font-size: 11.5px;
+    height: @mago-size__22;
+    line-height: @mago-size__22;
+    font-size: @mago-font-size__11-5;
     color: var(--mago-ink-muted, #736B65);
 }
 
 .mago-heat-grid {
     flex: 1;
     display: grid;
-    grid-auto-rows: 22px;
-    gap: 5px;
+    grid-auto-rows: @mago-size__22;
+    gap: @mago-size__5;
 }
 
 .mago-heat-cell {
-    border-radius: 5px;
+    border-radius: @mago-size__5;
 }
 
 .mago-heat-scale {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 14px;
-    font-size: 11.5px;
+    gap: @mago-size__8;
+    margin-top: @mago-size__14;
+    font-size: @mago-font-size__11-5;
     color: var(--mago-ink-muted, #736B65);
 }
 
 .mago-heat-gradient {
     flex: 1;
-    height: 6px;
-    border-radius: 999px;
+    height: @mago-size__6;
+    border-radius: @mago-radius__pill;
     background: linear-gradient(90deg, var(--mago-ramp-5), var(--mago-ramp-1));
 }
 
 .mago-funnel-steps {
     display: flex;
     flex-direction: column;
-    gap: 9px;
+    gap: @mago-size__9;
 
     .mago-caption + & {
-        margin-top: 16px;
+        margin-top: @mago-size__16;
     }
 }
 
 .mago-funnel-step {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: @mago-size__12;
 }
 
 .mago-funnel-bar {
-    height: 34px;
+    height: @mago-size__34;
     min-width: 30%;
-    border-radius: 10px;
+    border-radius: @mago-size__10;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 0 12px;
+    gap: @mago-size__8;
+    padding: 0 @mago-size__12;
     color: #FFFFFF;
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -856,7 +856,7 @@
 }
 
 .mago-funnel-drop {
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     color: var(--mago-ink-muted, #736B65);
     flex: none;
 }
@@ -868,18 +868,18 @@
 .mago-entities {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: @mago-size__10;
 }
 
 .mago-entity,
 .mago-entity-more {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: @mago-size__14;
     background: var(--mago-panel, #FFFFFF);
-    border: 1px solid var(--mago-hairline, #E9E5E1);
-    border-radius: 14px;
-    padding: 12px;
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    border-radius: @mago-size__14;
+    padding: @mago-size__12;
     color: var(--mago-ink, #373330);
     text-decoration: none;
     transition: border-color .15s, background .15s, color .15s;
@@ -893,15 +893,15 @@
 }
 
 .mago-entity-thumb {
-    width: 44px;
-    height: 44px;
-    border-radius: 11px;
+    width: @mago-size__44;
+    height: @mago-size__44;
+    border-radius: @mago-size__11;
     object-fit: cover;
     flex: none;
     background: var(--mago-track);
 
     &.is-empty {
-        border: 1px dashed var(--mago-line-secondary);
+        border: @mago-size__1 dashed var(--mago-line-secondary);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -915,7 +915,7 @@
 }
 
 .mago-entity-title {
-    font-size: 14px;
+    font-size: @font-size__base;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -923,16 +923,16 @@
 }
 
 .mago-entity-meta {
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     color: var(--mago-ink-muted, #736B65);
-    margin-top: 3px;
+    margin-top: @mago-size__3;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .mago-entity-action {
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     font-weight: 600;
     color: var(--mago-accent-ink, #B84000);
     flex: none;
@@ -940,9 +940,9 @@
 
 .mago-entity-more {
     justify-content: center;
-    gap: 7px;
-    padding: 11px;
-    font-size: 13px;
+    gap: @mago-size__7;
+    padding: @mago-size__11;
+    font-size: @mago-font-size__13;
     font-weight: 500;
     color: var(--mago-ink-soft, #6B645F);
 
@@ -955,10 +955,10 @@
 
 .mago-table-row {
     display: grid;
-    gap: 12px;
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--mago-track);
-    font-size: 13.5px;
+    gap: @mago-size__12;
+    padding: @mago-size__13 @mago-size__16;
+    border-bottom: @mago-size__1 solid var(--mago-track);
+    font-size: @mago-font-size__13-5;
     align-items: center;
 
     &:last-child {
@@ -966,10 +966,10 @@
     }
 
     &.is-head {
-        padding: 11px 16px;
+        padding: @mago-size__11 @mago-size__16;
         background: #FAFAFA;
-        border-bottom: 1px solid var(--mago-hairline, #E9E5E1);
-        font-size: 11px;
+        border-bottom: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+        font-size: @font-size__tiny;
         font-weight: 600;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -997,15 +997,15 @@
 }
 
 .mago-record-head {
-    padding: 16px 18px;
-    border-bottom: 1px solid var(--mago-hairline, #E9E5E1);
+    padding: @mago-size__16 @mago-size__18;
+    border-bottom: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: @mago-size__12;
 }
 
 .mago-record-title {
-    font-size: 15px;
+    font-size: @mago-font-size__15;
     font-weight: 600;
     letter-spacing: -0.01em;
     flex: 1;
@@ -1013,15 +1013,15 @@
 }
 
 .mago-record-rows {
-    padding: 6px 18px 14px;
+    padding: @mago-size__6 @mago-size__18 @mago-size__14;
 }
 
 .mago-kv {
     display: flex;
-    gap: 12px;
-    padding: 9px 0;
-    font-size: 13.5px;
-    border-top: 1px solid var(--mago-track);
+    gap: @mago-size__12;
+    padding: @mago-size__9 0;
+    font-size: @mago-font-size__13-5;
+    border-top: @mago-size__1 solid var(--mago-track);
 
     &:first-child {
         border-top: none;
@@ -1030,7 +1030,7 @@
 
 .mago-kv-label {
     color: var(--mago-ink-muted, #736B65);
-    width: 104px;
+    width: @mago-size__104;
     flex: none;
 }
 
@@ -1051,17 +1051,17 @@
 .mago-ask-eyebrow {
     display: flex;
     align-items: center;
-    gap: 9px;
-    font-size: 11px;
+    gap: @mago-size__9;
+    font-size: @font-size__tiny;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--mago-accent-ink, #B84000);
-    margin-bottom: 12px;
+    margin-bottom: @mago-size__12;
 }
 
 .mago-ask-text {
-    font-size: 14px;
+    font-size: @font-size__base;
     line-height: 1.55;
     color: #3D3D44;
     text-wrap: pretty;
@@ -1079,29 +1079,29 @@
 .mago-diff {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-top: 14px;
+    gap: @mago-size__10;
+    margin-top: @mago-size__14;
     background: var(--mago-panel, #FFFFFF);
-    border: 1px solid var(--mago-accent-line);
-    border-radius: var(--mago-radius-sm, 12px);
-    padding: 12px 14px;
+    border: @mago-size__1 solid var(--mago-accent-line);
+    border-radius: var(--mago-radius-sm, @mago-size__12);
+    padding: @mago-size__12 @mago-size__14;
     color: var(--mago-ink-muted, #736B65);
 
     .mago-diff-from {
-        font-size: 15px;
+        font-size: @mago-font-size__15;
         color: var(--mago-ink-muted, #736B65);
         text-decoration: line-through;
     }
 
     .mago-diff-to {
-        font-size: 15px;
+        font-size: @mago-font-size__15;
         font-weight: 600;
         color: var(--mago-ink, #373330);
     }
 
     .mago-diff-delta {
         margin-left: auto;
-        font-size: 12px;
+        font-size: @font-size__s;
         font-weight: 600;
         color: var(--mago-accent-ink, #B84000);
     }
@@ -1110,19 +1110,19 @@
 .mago-trace {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: @mago-size__12;
 
     &.is-tight {
-        gap: 9px;
-        margin-top: 14px;
+        gap: @mago-size__9;
+        margin-top: @mago-size__14;
     }
 }
 
 .mago-trace-step {
     display: flex;
     align-items: center;
-    gap: 11px;
-    font-size: 13px;
+    gap: @mago-size__11;
+    font-size: @mago-font-size__13;
     color: var(--mago-ink-muted, #8A8A92);
     min-width: 0;
 
@@ -1165,9 +1165,9 @@
 }
 
 .mago-trace-dot {
-    width: 14px;
-    height: 14px;
-    border: 2px solid var(--mago-hairline, #E9E5E1);
+    width: @mago-size__14;
+    height: @mago-size__14;
+    border: @mago-size__2 solid var(--mago-hairline, #E9E5E1);
     border-radius: 50%;
     display: block;
     flex: none;
@@ -1179,16 +1179,16 @@
 }
 
 .mago-readline {
-    font-size: 13.5px;
+    font-size: @mago-font-size__13-5;
 }
 
 .mago-callout {
     display: flex;
-    gap: 12px;
-    border: 1px solid var(--mago-hairline, #E9E5E1);
-    border-radius: 14px;
-    padding: 14px;
-    font-size: 13.5px;
+    gap: @mago-size__12;
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    border-radius: @mago-size__14;
+    padding: @mago-size__14;
+    font-size: @mago-font-size__13-5;
     line-height: 1.55;
     color: var(--mago-ink-soft, #6B645F);
     background: var(--mago-surface, #F7F5F3);
@@ -1196,7 +1196,7 @@
     .mago-callout-icon {
         display: inline-flex;
         flex: none;
-        margin-top: 1px;
+        margin-top: @mago-size__1;
     }
 
     .mago-callout-text {
@@ -1258,13 +1258,13 @@
 .mago-suggestions {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: @mago-size__10;
 }
 
 .mago-suggestion-cards {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: @mago-size__10;
 
     &:empty {
         display: none;
@@ -1274,11 +1274,11 @@
 .mago-suggestion {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: @mago-size__14;
     background: var(--mago-panel, #FFFFFF);
-    border: 1px solid var(--mago-hairline, #E9E5E1);
-    border-radius: 14px;
-    padding: 16px;
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    border-radius: @mago-size__14;
+    padding: @mago-size__16;
     color: var(--mago-ink, #373330);
     text-decoration: none;
     transition: border-color .15s, background .15s;
@@ -1304,7 +1304,7 @@
 .mago-suggestion-label {
     flex: 1;
     min-width: 0;
-    font-size: 14px;
+    font-size: @font-size__base;
     font-weight: 500;
     letter-spacing: -0.01em;
 }
@@ -1312,23 +1312,23 @@
 .mago-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: @mago-size__8;
 
     .mago-suggestion-cards:not(:empty) + & {
-        margin-top: 4px;
+        margin-top: @mago-size__4;
     }
 }
 
 .mago-chip {
     font-family: var(--mago-font, inherit);
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     font-weight: 500;
     letter-spacing: 0;
     color: var(--mago-ink-soft, #6B645F);
     background: var(--mago-panel, #FFFFFF);
-    border: 1px solid var(--mago-hairline, #E9E5E1);
-    border-radius: 999px;
-    padding: 7px 13px;
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    border-radius: @mago-radius__pill;
+    padding: @mago-size__7 @mago-size__13;
     cursor: pointer;
     transition: border-color .15s, color .15s;
 
@@ -1345,54 +1345,54 @@
 .mago-footer {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: @mago-size__10;
 
     .mago-btn.is-ink {
-        font-size: 13px;
-        padding: 10px 14px;
+        font-size: @mago-font-size__13;
+        padding: @mago-size__10 @mago-size__14;
     }
 }
 
 .mago-footer-tools {
     display: flex;
-    gap: 2px;
+    gap: @mago-size__2;
     margin-left: auto;
 }
 
 .mago-empty {
-    border: 1px dashed var(--mago-line-secondary);
-    border-radius: var(--mago-radius, 16px);
-    padding: 26px 18px;
+    border: @mago-size__1 dashed var(--mago-line-secondary);
+    border-radius: var(--mago-radius, @mago-size__16);
+    padding: @mago-size__26 @mago-size__18;
     text-align: center;
     color: var(--mago-ink, #373330);
 
     .mago-empty-icon {
         display: inline-flex;
         color: var(--mago-ink-muted, #736B65);
-        margin-bottom: 10px;
+        margin-bottom: @mago-size__10;
     }
 
     .mago-empty-title {
-        font-size: 14px;
+        font-size: @font-size__base;
         font-weight: 500;
     }
 
     .mago-empty-text {
-        font-size: 13px;
+        font-size: @mago-font-size__13;
         line-height: 1.5;
         color: var(--mago-ink-muted, #736B65);
-        margin-top: 5px;
+        margin-top: @mago-size__5;
     }
 }
 
 .mago-skeleton {
     display: flex;
     flex-direction: column;
-    gap: 11px;
+    gap: @mago-size__11;
 
     .mago-skeleton-line {
-        height: 11px;
-        border-radius: 999px;
+        height: @mago-size__11;
+        border-radius: @mago-radius__pill;
         background: var(--mago-track);
         animation: mago-pulse 1.4s ease-in-out infinite;
     }
@@ -1405,9 +1405,9 @@
 .mago-skill-head {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--mago-hairline, #E9E5E1);
+    gap: @mago-size__10;
+    padding: @mago-size__14 @mago-size__16;
+    border-bottom: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
 
     .is-accent & {
         border-bottom-color: var(--mago-accent-hairline);
@@ -1431,7 +1431,7 @@
 .mago-skill-title {
     flex: 1;
     min-width: 0;
-    font-size: 14px;
+    font-size: @font-size__base;
     font-weight: 600;
     letter-spacing: -0.01em;
     overflow: hidden;
@@ -1447,8 +1447,8 @@
     flex: none;
     color: #A9825F;
     background: var(--mago-accent-chip);
-    border-radius: 6px;
-    padding: 3px 7px;
+    border-radius: @mago-size__6;
+    padding: @mago-size__3 @mago-size__7;
 
     .is-danger & {
         color: var(--mago-danger-soft);
@@ -1462,53 +1462,53 @@
 }
 
 .mago-skill-meta {
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     color: var(--mago-ink-muted, #736B65);
     flex: none;
 }
 
 .mago-skill-count {
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     font-weight: 600;
     color: var(--mago-accent-ink, #B84000);
     flex: none;
 }
 
 .mago-skill-body {
-    padding: 16px;
+    padding: @mago-size__16;
 
     &.is-list {
-        padding-top: 8px;
+        padding-top: @mago-size__8;
 
         .mago-ask-text.is-lead {
-            padding-top: 8px;
+            padding-top: @mago-size__8;
         }
 
         .mago-callout {
-            margin-top: 12px;
+            margin-top: @mago-size__12;
         }
     }
 
     .mago-skill.is-running & {
-        padding: 14px 16px;
+        padding: @mago-size__14 @mago-size__16;
     }
 }
 
 .mago-params {
-    margin-top: 14px;
-    border: 1px solid var(--mago-accent-hairline);
+    margin-top: @mago-size__14;
+    border: @mago-size__1 solid var(--mago-accent-hairline);
     background: var(--mago-panel, #FFFFFF);
-    border-radius: var(--mago-radius-sm, 12px);
+    border-radius: var(--mago-radius-sm, @mago-size__12);
     overflow: hidden;
 }
 
 .mago-param {
     display: flex;
-    gap: 12px;
-    padding: 10px 13px;
-    font-size: 13px;
+    gap: @mago-size__12;
+    padding: @mago-size__10 @mago-size__13;
+    font-size: @mago-font-size__13;
     align-items: center;
-    border-top: 1px solid var(--mago-accent-chip);
+    border-top: @mago-size__1 solid var(--mago-accent-chip);
 
     &:first-child {
         border-top: none;
@@ -1517,10 +1517,10 @@
 
 .mago-param-key {
     color: var(--mago-ink-muted, #736B65);
-    width: 104px;
+    width: @mago-size__104;
     flex: none;
     font-family: var(--mago-mono);
-    font-size: 12px;
+    font-size: @font-size__s;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1537,15 +1537,15 @@
 }
 
 .mago-progress {
-    height: 6px;
-    border-radius: 999px;
+    height: @mago-size__6;
+    border-radius: @mago-radius__pill;
     background: var(--mago-track);
     overflow: hidden;
 }
 
 .mago-progress-fill {
     height: 100%;
-    border-radius: 999px;
+    border-radius: @mago-radius__pill;
     background: var(--mago-ramp-1);
     transition: width .3s ease;
 
@@ -1555,25 +1555,25 @@
 }
 
 .mago-skill-details {
-    margin: 12px 0 0;
-    padding: 10px 12px;
+    margin: @mago-size__12 0 0;
+    padding: @mago-size__10 @mago-size__12;
     background: var(--mago-panel, #FFFFFF);
-    border: 1px solid var(--mago-danger-line);
-    border-radius: 10px;
+    border: @mago-size__1 solid var(--mago-danger-line);
+    border-radius: @mago-size__10;
     font-family: var(--mago-mono);
-    font-size: 11.5px;
+    font-size: @mago-font-size__11-5;
     line-height: 1.5;
     color: var(--mago-ink-soft, #6B645F);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    max-height: 220px;
+    max-height: @mago-size__220;
     overflow: auto;
 }
 
 // Collapsed result line (S03 / S05)
 .mago-line {
-    border: 1px solid var(--mago-hairline, #E9E5E1);
-    border-radius: var(--mago-radius-sm, 12px);
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    border-radius: var(--mago-radius-sm, @mago-size__12);
     overflow: hidden;
     background: var(--mago-panel, #FFFFFF);
 }
@@ -1581,8 +1581,8 @@
 .mago-line-head {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 13px;
+    gap: @mago-size__10;
+    padding: @mago-size__10 @mago-size__13;
     transition: background .15s, border-color .15s;
 
     .mago-line.is-expandable & {
@@ -1595,14 +1595,14 @@
     }
 
     .mago-line.is-expanded & {
-        border-bottom: 1px solid var(--mago-hairline, #E9E5E1);
+        border-bottom: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
     }
 }
 
 .mago-line-text {
     flex: 1;
     min-width: 0;
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     color: var(--mago-ink-soft, #6B645F);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1614,12 +1614,12 @@
 }
 
 .mago-line-action {
-    font-size: 12px;
+    font-size: @font-size__s;
     color: var(--mago-ink-muted, #736B65);
 }
 
 .mago-line-meta {
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     color: var(--mago-ink-muted, #736B65);
     flex: none;
 }
@@ -1632,11 +1632,11 @@
 
 .mago-line-details {
     display: none;
-    padding: 13px;
+    padding: @mago-size__13;
     flex-direction: column;
-    gap: 9px;
+    gap: @mago-size__9;
     font-family: var(--mago-mono);
-    font-size: 12px;
+    font-size: @font-size__s;
     line-height: 1.6;
     color: var(--mago-ink-soft, #6B645F);
 
@@ -1650,8 +1650,8 @@
     white-space: pre-wrap;
 
     & + & {
-        border-top: 1px solid var(--mago-track);
-        padding-top: 9px;
+        border-top: @mago-size__1 solid var(--mago-track);
+        padding-top: @mago-size__9;
     }
 }
 
@@ -1661,21 +1661,21 @@
 
 // Irreversible (S07)
 .mago-impacts {
-    margin-top: 14px;
+    margin-top: @mago-size__14;
     background: var(--mago-panel, #FFFFFF);
-    border: 1px solid var(--mago-danger-line);
-    border-radius: var(--mago-radius-sm, 12px);
-    padding: 13px;
+    border: @mago-size__1 solid var(--mago-danger-line);
+    border-radius: var(--mago-radius-sm, @mago-size__12);
+    padding: @mago-size__13;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    font-size: 13px;
+    gap: @mago-size__8;
+    font-size: @mago-font-size__13;
     color: var(--mago-ink-soft, #6B645F);
 }
 
 .mago-impact {
     display: flex;
-    gap: 9px;
+    gap: @mago-size__9;
 }
 
 .mago-impact-mark {
@@ -1686,9 +1686,9 @@
 .mago-check {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-top: 14px;
-    font-size: 13.5px;
+    gap: @mago-size__10;
+    margin-top: @mago-size__14;
+    font-size: @mago-font-size__13-5;
     color: var(--mago-danger-ink);
     cursor: pointer;
     user-select: none;
@@ -1697,17 +1697,17 @@
 .mago-check-input {
     position: absolute;
     opacity: 0;
-    width: 1px;
-    height: 1px;
+    width: @mago-size__1;
+    height: @mago-size__1;
     margin: 0;
     pointer-events: none;
 }
 
 .mago-check-box {
-    width: 18px;
-    height: 18px;
-    border: 1.5px solid #D8AEA4;
-    border-radius: 5px;
+    width: @mago-size__18;
+    height: @mago-size__18;
+    border: @mago-size__1-5 solid #D8AEA4;
+    border-radius: @mago-size__5;
     background: var(--mago-panel, #FFFFFF);
     flex: none;
     display: inline-flex;
@@ -1723,7 +1723,7 @@
     }
 
     .mago-check-input:focus-visible + & {
-        box-shadow: 0 0 0 3px rgba(184, 64, 42, .2);
+        box-shadow: 0 0 0 @mago-size__3 rgba(184, 64, 42, .2);
     }
 }
 
@@ -1736,10 +1736,10 @@
 .mago-bulk-row {
     display: flex;
     align-items: center;
-    gap: 11px;
-    padding: 11px 0;
-    font-size: 13.5px;
-    border-bottom: 1px solid var(--mago-accent-chip);
+    gap: @mago-size__11;
+    padding: @mago-size__11 0;
+    font-size: @mago-font-size__13-5;
+    border-bottom: @mago-size__1 solid var(--mago-accent-chip);
     color: var(--mago-ink-muted, #736B65);
 
     &:last-child {
@@ -1768,7 +1768,7 @@
         outline: none;
 
         .mago-check-box {
-            box-shadow: 0 0 0 3px rgba(255, 122, 51, .2);
+            box-shadow: 0 0 0 @mago-size__3 rgba(255, 122, 51, .2);
         }
     }
 }
@@ -1790,7 +1790,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
 }
 
 // Plan timeline (S09)
@@ -1801,7 +1801,7 @@
 
 .mago-plan-step {
     display: flex;
-    gap: 12px;
+    gap: @mago-size__12;
 
     &:last-child .mago-plan-text {
         padding-bottom: 0;
@@ -1813,12 +1813,12 @@
     flex-direction: column;
     align-items: center;
     flex: none;
-    width: 20px;
+    width: @mago-size__20;
 }
 
 .mago-plan-marker {
-    width: 20px;
-    height: 20px;
+    width: @mago-size__20;
+    height: @mago-size__20;
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
@@ -1831,29 +1831,29 @@
     }
 
     &.is-ask {
-        border: 1.5px dashed var(--mago-accent-hover);
+        border: @mago-size__1-5 dashed var(--mago-accent-hover);
     }
 
     &.is-pending {
-        border: 1.5px solid var(--mago-hairline, #E9E5E1);
+        border: @mago-size__1-5 solid var(--mago-hairline, #E9E5E1);
     }
 }
 
 .mago-plan-line {
     flex: 1;
-    width: 1.5px;
+    width: @mago-size__1-5;
     background: var(--mago-hairline, #E9E5E1);
-    margin: 4px 0;
-    min-height: 8px;
+    margin: @mago-size__4 0;
+    min-height: @mago-size__8;
 }
 
 .mago-plan-text {
-    padding-bottom: 16px;
+    padding-bottom: @mago-size__16;
     min-width: 0;
 }
 
 .mago-plan-title {
-    font-size: 13.5px;
+    font-size: @mago-font-size__13-5;
     font-weight: 500;
 
     .is-active & {
@@ -1870,9 +1870,9 @@
 }
 
 .mago-plan-meta {
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     color: var(--mago-ink-muted, #736B65);
-    margin-top: 2px;
+    margin-top: @mago-size__2;
 
     &.is-accent {
         color: var(--mago-accent-ink, #B84000);
@@ -1883,11 +1883,11 @@
 // Missing parameter (S10)
 .mago-field-row {
     display: flex;
-    gap: 8px;
-    margin-top: 14px;
+    gap: @mago-size__8;
+    margin-top: @mago-size__14;
 
     + .mago-chips {
-        margin-top: 12px;
+        margin-top: @mago-size__12;
     }
 }
 
@@ -1895,22 +1895,22 @@
     flex: 1;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: @mago-size__8;
     background: var(--mago-panel, #FFFFFF);
-    border: 1px solid var(--mago-accent-line);
-    border-radius: 11px;
-    padding: 0 14px;
+    border: @mago-size__1 solid var(--mago-accent-line);
+    border-radius: @mago-size__11;
+    padding: 0 @mago-size__14;
     min-width: 0;
     transition: border-color .15s, box-shadow .15s;
 
     &:focus-within {
         border-color: var(--mago-accent, #FF7A33);
-        box-shadow: 0 0 0 3px rgba(255, 122, 51, .14);
+        box-shadow: 0 0 0 @mago-size__3 rgba(255, 122, 51, .14);
     }
 }
 
 .mago-field-prefix {
-    font-size: 14.5px;
+    font-size: @mago-font-size__14-5;
     color: var(--mago-ink-muted, #736B65);
     flex: none;
 }
@@ -1920,9 +1920,9 @@
     min-width: 0;
     border: none;
     background: transparent;
-    padding: 11px 0;
+    padding: @mago-size__11 0;
     font-family: var(--mago-font, inherit);
-    font-size: 14.5px;
+    font-size: @mago-font-size__14-5;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
     color: var(--mago-ink, #373330);
@@ -1936,18 +1936,18 @@
 .mago-undo-row {
     display: flex;
     align-items: center;
-    gap: 14px;
-    margin-top: 10px;
+    gap: @mago-size__14;
+    margin-top: @mago-size__10;
 }
 
 .mago-undo-link {
     background: transparent;
     border: none;
-    border-bottom: 1px solid #C9D8B8;
+    border-bottom: @mago-size__1 solid #C9D8B8;
     border-radius: 0;
     padding: 0;
     font-family: var(--mago-font, inherit);
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     font-weight: 600;
     color: var(--mago-ok-ink);
     cursor: pointer;
@@ -1958,7 +1958,7 @@
 }
 
 .mago-undo-expires {
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     color: var(--mago-ok-muted);
 }
 
@@ -1966,10 +1966,10 @@
 .mago-log-head {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
+    gap: @mago-size__10;
+    padding: @mago-size__12 @mago-size__16;
     background: #FAFAFA;
-    border-bottom: 1px solid var(--mago-hairline, #E9E5E1);
+    border-bottom: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
 
     .mago-caption {
         letter-spacing: 0.08em;
@@ -1978,11 +1978,11 @@
 
 .mago-log-row {
     display: flex;
-    gap: 12px;
-    padding: 12px 16px;
-    font-size: 13px;
+    gap: @mago-size__12;
+    padding: @mago-size__12 @mago-size__16;
+    font-size: @mago-font-size__13;
     align-items: center;
-    border-bottom: 1px solid var(--mago-track);
+    border-bottom: @mago-size__1 solid var(--mago-track);
 
     &:last-child {
         border-bottom: none;
@@ -1990,9 +1990,9 @@
 }
 
 .mago-log-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 3px;
+    width: @mago-size__8;
+    height: @mago-size__8;
+    border-radius: @mago-size__3;
     background: var(--mago-accent, #FF7A33);
     flex: none;
 
@@ -2026,21 +2026,21 @@
 // Skill menu (S14)
 .mago-menu {
     background: var(--mago-panel, #FFFFFF);
-    border: 1px solid var(--mago-hairline, #E9E5E1);
-    border-radius: var(--mago-radius, 16px);
-    box-shadow: 0 18px 40px -22px rgba(26, 26, 29, .4);
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    border-radius: var(--mago-radius, @mago-size__16);
+    box-shadow: 0 @mago-size__18 @mago-size__40 -@mago-size__22 rgba(26, 26, 29, .4);
     overflow: hidden;
     font-family: var(--mago-font, inherit);
     letter-spacing: var(--mago-tracking, -0.01em);
 }
 
 .mago-menu-head {
-    padding: 11px 16px;
+    padding: @mago-size__11 @mago-size__16;
     background: #FAFAFA;
-    border-bottom: 1px solid var(--mago-hairline, #E9E5E1);
+    border-bottom: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: @mago-size__10;
 
     .mago-caption {
         letter-spacing: 0.08em;
@@ -2048,19 +2048,19 @@
 }
 
 .mago-menu-hint {
-    font-size: 11.5px;
+    font-size: @mago-font-size__11-5;
     color: var(--mago-ink-muted, #736B65);
     white-space: nowrap;
 }
 
 .mago-menu-items {
-    max-height: 280px;
+    max-height: @mago-size__280;
     overflow-y: auto;
 }
 
 .mago-menu-group {
-    padding: 10px 16px 4px;
-    font-size: 10px;
+    padding: @mago-size__10 @mago-size__16 @mago-size__4;
+    font-size: @font-size__xs;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -2070,10 +2070,10 @@
 .mago-menu-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-top: 1px solid var(--mago-track);
-    border-left: 2px solid transparent;
+    gap: @mago-size__12;
+    padding: @mago-size__12 @mago-size__16;
+    border-top: @mago-size__1 solid var(--mago-track);
+    border-left: @mago-size__2 solid transparent;
     cursor: pointer;
     transition: background .1s;
 
@@ -2092,9 +2092,9 @@
 }
 
 .mago-risk {
-    width: 8px;
-    height: 8px;
-    border-radius: 3px;
+    width: @mago-size__8;
+    height: @mago-size__8;
+    border-radius: @mago-size__3;
     flex: none;
     background: var(--mago-ok-soft);
 
@@ -2113,7 +2113,7 @@
 }
 
 .mago-menu-title {
-    font-size: 13.5px;
+    font-size: @mago-font-size__13-5;
     font-weight: 500;
     letter-spacing: -0.01em;
     color: var(--mago-ink, #373330);
@@ -2123,9 +2123,9 @@
 }
 
 .mago-menu-desc {
-    font-size: 12.5px;
+    font-size: @mago-font-size__12-5;
     color: var(--mago-ink-muted, #736B65);
-    margin-top: 2px;
+    margin-top: @mago-size__2;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

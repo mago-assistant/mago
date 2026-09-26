@@ -45,7 +45,6 @@ $starterIcons = [
     --mago-accent-light: <?= /* @noEscape */ $accentColorLight ?>;
     --mago-accent-rgb: <?= /* @noEscape */ $accentRgb ?>;
     --mago-accent-text: <?= /* @noEscape */ $accentText ?>;
-    --mago-panel-width: 440px;
 
     /* Mago brand palette — see brand-guidelines.md */
     --mago-sunset: #FF7A33;
@@ -145,7 +144,6 @@ $starterIcons = [
                     <span class="mago-title"><?= $escaper->escapeHtml($assistantName) ?></span>
                     <?php /* EU AI Act art. 50: make clear the administrator is interacting with AI. */ ?>
                     <span class="mago-ai-badge"
-                          style="font-size:11px;line-height:1;padding:2px 7px;border-radius:9px;background:rgba(0,0,0,.07);opacity:.75;white-space:nowrap;"
                           title="<?= $escaper->escapeHtmlAttr(__('You are interacting with an AI assistant, not a human.')) ?>">
                         <?= $escaper->escapeHtml(__('AI assistant')) ?>
                     </span>
