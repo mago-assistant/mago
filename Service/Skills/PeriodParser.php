@@ -74,6 +74,11 @@ class PeriodParser
             return [$matches[1] . ' 00:00:00', $matches[2] . ' 23:59:59'];
         }
 
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $period) === 1) {
+            $this->assertValidDate($period, $period);
+            return [$period . ' 00:00:00', $period . ' 23:59:59'];
+        }
+
         if (preg_match('/^(\d{4})$/', $period, $matches) === 1) {
             $yearStart = $this->assertValidDate($matches[1] . '-01-01', $period);
 
@@ -93,7 +98,8 @@ class PeriodParser
 
         throw new \InvalidArgumentException(sprintf(
             'Unrecognized period "%s". Use "today", "yesterday", "7days", "30days", "this_month", "last_month", '
-            . '"this_year", "last_year", "all" for no lower bound, "YYYY" for a whole year, "YYYY-MM" for a month, or '
+            . '"this_year", "last_year", "all" for no lower bound, "YYYY" for a whole year, "YYYY-MM" for a month, '
+            . '"YYYY-MM-DD" for a single day, or '
             . '"YYYY-MM-DD:YYYY-MM-DD" for a custom range.',
             $period
         ));

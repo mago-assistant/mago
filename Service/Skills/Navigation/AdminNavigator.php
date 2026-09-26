@@ -30,7 +30,7 @@ class AdminNavigator implements ToolInterface
         return 'Find direct clickable links to Magento admin pages. Two modes: '
             . '(1) Search: pass "query" to find admin pages by keyword. '
             . '(2) Direct link: pass "entity_type" + "entity_id" to get a link to a specific record '
-            . '(use after fetching entity data from sales_data, customer_data, or product_data). '
+            . '(use after fetching entity data from order_manager, customer_data, or product_data). '
             . 'ALWAYS use this tool when the user asks where to find something in the admin. '
             . 'Link only to a url this tool returned, copied exactly as it came back. Never build '
             . 'one from a pattern: an admin url carries a secret key, so a url you assembled '

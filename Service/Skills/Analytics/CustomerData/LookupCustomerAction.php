@@ -28,7 +28,7 @@ class LookupCustomerAction implements ActionInterface
     {
         return 'Search the customer accounts for a name or email. Registered accounts only: '
             . 'someone who ordered as a guest has no account and will not be found here, so a '
-            . 'question about a named person\'s orders goes to sales_data customer_orders instead';
+            . 'question about a named person\'s orders goes to order_manager list_documents with customer instead';
     }
 
     public function getParameterSchema(): array

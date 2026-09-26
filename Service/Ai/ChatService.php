@@ -881,9 +881,6 @@ class ChatService implements ChatServiceInterface
 
         $messages = [
             'sales_data.revenue_summary' => 'Calculating revenue...',
-            'sales_data.recent_orders' => 'Fetching recent orders...',
-            'sales_data.lookup_order' => 'Looking up order...',
-            'sales_data.get_order_details' => 'Fetching order details...',
             'product_data.search' => 'Searching products...',
             'product_data.low_stock' => 'Checking low stock...',
             'product_data.get_by_sku' => 'Fetching product...',
@@ -905,6 +902,8 @@ class ChatService implements ChatServiceInterface
             'indexer_manager.reindex' => 'Reindexing...',
             'indexer_manager.reindex_all' => 'Reindexing all indexers...',
             'indexer_manager.status' => 'Checking indexer status...',
+            'order_manager.get_document' => 'Looking up the document...',
+            'order_manager.list_documents' => 'Listing documents...',
             'order_manager.create_shipment' => 'Creating shipment...',
             'order_manager.create_invoice' => 'Creating invoice...',
             'order_manager.create_creditmemo' => 'Creating credit memo...',
@@ -925,8 +924,11 @@ class ChatService implements ChatServiceInterface
             $msg = $messages[$key];
 
             // Add context from input
-            if ($action === 'lookup_order' && !empty($input['order_number'])) {
-                return 'Looking up order #' . $input['order_number'] . '...';
+            if ($action === 'get_document' && !empty($input['reference'])) {
+                $documentType = $input['document_type'] ?? 'order';
+                $documentLabel = str_replace('_', ' ', $documentType);
+                $reference = $input['reference'];
+                return 'Looking up ' . $documentLabel . ' ' . $reference . '...';
             }
             if ($action === 'get_by_sku' && !empty($input['query'])) {
                 return 'Fetching product ' . $input['query'] . '...';

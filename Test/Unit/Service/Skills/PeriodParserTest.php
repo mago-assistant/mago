@@ -68,6 +68,15 @@ class PeriodParserTest extends TestCase
     }
 
     #[Test]
+    public function itParsesASingleDay(): void
+    {
+        [$from, $to] = $this->periodParser->parse('2026-05-10');
+
+        self::assertSame('2026-05-10 00:00:00', $from);
+        self::assertSame('2026-05-10 23:59:59', $to);
+    }
+
+    #[Test]
     public function itParsesAWholeYearWrittenAsFourDigits(): void
     {
         [$from, $to] = $this->periodParser->parse('2026');

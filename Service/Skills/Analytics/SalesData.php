@@ -17,7 +17,8 @@ class SalesData extends AbstractSkill
 
     protected function getBaseDescription(): string
     {
-        return 'Query sales/order data: revenue, orders, top products, customer orders.';
+        return 'Sales reports over a period: revenue, order counts, top products and top refunded products. '
+            . 'For specific orders, invoices, shipments or credit memos use order_manager.';
     }
 
     protected function getBaseInstructions(): string
