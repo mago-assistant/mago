@@ -54,6 +54,16 @@ class PiiHeuristicTest extends TestCase
     }
 
     #[Test]
+    public function itLeavesAMobileNumberEmbeddedInALongerNumberAlone(): void
+    {
+        self::assertSame(
+            'Mago E2E Product mago-e2e-1790616477769-7119',
+            $this->scrub('Mago E2E Product mago-e2e-1790616477769-7119')
+        );
+        self::assertSame('sku ABC0612345678', $this->scrub('sku ABC0612345678'));
+    }
+
+    #[Test]
     public function itTokenisesInternationalAndGroupedFormats(): void
     {
         self::assertSame('call mago://phone_1', $this->scrub('call +31 6 12345678'));
