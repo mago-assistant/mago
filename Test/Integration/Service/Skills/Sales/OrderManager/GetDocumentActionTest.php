@@ -25,7 +25,7 @@ class GetDocumentActionTest extends TestCase
     {
         $objectManager = MagentoObjectManager::get();
         $authorization = new FakeAuthorization([
-            'Magento_Sales::sales_order' => true,
+            'Magento_Sales::actions_view' => true,
             'Magento_Sales::sales_invoice' => true,
             'Magento_Sales::shipment' => true,
             'Magento_Sales::sales_creditmemo' => true,

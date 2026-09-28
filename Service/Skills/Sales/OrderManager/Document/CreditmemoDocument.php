@@ -47,9 +47,15 @@ class CreditmemoDocument extends AbstractDocument
     private function filterStatus(CreditmemoCollection $creditmemos, array $filters): void
     {
         $status = $filters['document_status'] ?? '';
+        if ($status === '') {
+            return;
+        }
+
         $state = self::STATES[$status] ?? null;
         if ($state === null) {
-            return;
+            throw new \InvalidArgumentException(
+                'Unknown credit memo status "' . $status . '". Use one of: ' . implode(', ', array_keys(self::STATES))
+            );
         }
 
         $creditmemos->addFieldToFilter('main_table.state', ['eq' => $state]);

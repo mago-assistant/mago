@@ -27,6 +27,12 @@ class ListDocumentsAction implements ActionInterface
         'payment_method' => ['order', 'payment_method'],
     ];
 
+    private const TOTAL_FILTERS = ['min_total', 'max_total'];
+
+    private const TOTAL_OWNERS = [
+        'shipment' => 'order',
+    ];
+
     private const SORT_OWNERS = [
         'shipment' => [
             'highest_total' => 'order',
@@ -63,6 +69,11 @@ class ListDocumentsAction implements ActionInterface
                 'type' => 'string',
                 'description' => 'The document\'s own number (e.g. "000000549")',
             ],
+            'order_number' => [
+                'type' => 'string',
+                'description' => 'Order increment ID (e.g. "000000549"). With list_documents: the order '
+                    . 'the listed documents belong to',
+            ],
             'customer' => [
                 'type' => 'string',
                 'description' => 'Customer name or email address (partial match, e.g. "Vries" or "@gmail.com")',
@@ -89,11 +100,11 @@ class ListDocumentsAction implements ActionInterface
             ],
             'min_total' => [
                 'type' => 'number',
-                'description' => 'Grand total of at least this amount',
+                'description' => 'Grand total of at least this amount (for shipments: of their order)',
             ],
             'max_total' => [
                 'type' => 'number',
-                'description' => 'Grand total of at most this amount',
+                'description' => 'Grand total of at most this amount (for shipments: of their order)',
             ],
             'payment_method' => [
                 'type' => 'string',
@@ -210,7 +221,8 @@ class ListDocumentsAction implements ActionInterface
 
     private function query(array $params): array
     {
-        $params = $this->routeFilters($params);
+        $defaultPeriod = $this->defaultPeriod($params);
+        $params = $this->routeTotals($this->routeFilters($params));
 
         $typeName = $params['document_type'] ?? 'order';
         $documentType = $this->documentType($typeName);
@@ -218,12 +230,16 @@ class ListDocumentsAction implements ActionInterface
             return $documentType;
         }
 
-        $filters = $this->filters($params);
+        $filters = $this->filters($params, $defaultPeriod);
         if (isset($filters['error'])) {
             return $filters;
         }
 
-        $documentList = $documentType->list($filters);
+        try {
+            $documentList = $documentType->list($filters);
+        } catch (\InvalidArgumentException $exception) {
+            return ['error' => $exception->getMessage()];
+        }
         foreach (['with' => false, 'without' => true] as $key => $exclude) {
             foreach ($params[$key] ?? [] as $relatedParams) {
                 $relatedQuery = $this->query($relatedParams + ['period' => 'all']);
@@ -303,7 +319,35 @@ class ListDocumentsAction implements ActionInterface
         return $params;
     }
 
-    private function filters(array $params): array
+    private function routeTotals(array $params): array
+    {
+        $ownerType = self::TOTAL_OWNERS[$params['document_type'] ?? 'order'] ?? null;
+        $totals = array_filter(
+            array_intersect_key($params, array_flip(self::TOTAL_FILTERS)),
+            fn(mixed $total): bool => $total !== '' && $total !== null
+        );
+        if ($ownerType === null || $totals === []) {
+            return $params;
+        }
+
+        $params = array_diff_key($params, $totals);
+        $params['with'][] = ['document_type' => $ownerType] + $totals;
+
+        return $params;
+    }
+
+    private function defaultPeriod(array $params): string
+    {
+        $isSearch = ($params['customer'] ?? '') !== '' || ($params['product'] ?? '') !== '';
+        $isSorted = isset($params['sort']);
+        if (!$isSearch || $isSorted) {
+            return '';
+        }
+
+        return self::SEARCH_DEFAULT_PERIOD;
+    }
+
+    private function filters(array $params, string $defaultPeriod): array
     {
         $filters = [
             'document_number' => $params['document_number'] ?? '',
@@ -318,10 +362,8 @@ class ListDocumentsAction implements ActionInterface
         ];
 
         $period = $params['period'] ?? '';
-        $isSearch = $filters['customer'] !== '' || $filters['product'] !== '';
-        $isSorted = isset($params['sort']);
-        if ($period === '' && $isSearch && !$isSorted) {
-            $period = self::SEARCH_DEFAULT_PERIOD;
+        if ($period === '') {
+            $period = $defaultPeriod;
         }
 
         if ($period === '') {

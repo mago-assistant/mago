@@ -36,7 +36,7 @@ class OrderDocument extends AbstractDocument
 
     public function getAclResource(): string
     {
-        return 'Magento_Sales::sales_order';
+        return 'Magento_Sales::actions_view';
     }
 
     protected function collection(array $filters): OrderCollection
@@ -72,7 +72,7 @@ class OrderDocument extends AbstractDocument
         }
 
         if (str_contains($customer, '@')) {
-            $orders->addFieldToFilter('main_table.customer_email', $customer);
+            $orders->addFieldToFilter('main_table.customer_email', ['like' => '%' . $customer . '%']);
             return;
         }
 

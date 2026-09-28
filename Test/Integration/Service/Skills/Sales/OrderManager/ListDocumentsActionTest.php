@@ -26,7 +26,7 @@ class ListDocumentsActionTest extends TestCase
     {
         $objectManager = MagentoObjectManager::get();
         $authorization = new FakeAuthorization([
-            'Magento_Sales::sales_order' => true,
+            'Magento_Sales::actions_view' => true,
             'Magento_Sales::sales_invoice' => true,
             'Magento_Sales::shipment' => true,
             'Magento_Sales::sales_creditmemo' => true,
@@ -346,6 +346,84 @@ class ListDocumentsActionTest extends TestCase
             self::ADMIN_USER_ID
         );
         self::assertSame('IT-1001', $result['documents'][0]['order_number']);
+    }
+
+    #[Test]
+    public function itFindsOrdersByPartOfAnEmailAddress(): void
+    {
+        $this->fixture->order('IT-1001', ['email' => 'anna.jansen@velora-mail.example']);
+        $this->fixture->order('IT-1002', ['email' => 'piet.bakker@example.com']);
+
+        $result = $this->listDocuments(['document_type' => 'order', 'customer' => '@velora-mail.example']);
+
+        self::assertSame(['IT-1001'], $this->numbers($result));
+    }
+
+    #[Test]
+    public function itRejectsAnInvoiceStatusThatDoesNotExist(): void
+    {
+        $orderId = $this->fixture->order('IT-1001');
+        $this->fixture->invoice($orderId, 'IT-2001');
+
+        $result = $this->listDocuments(['document_type' => 'invoice', 'document_status' => 'pending']);
+
+        self::assertSame('Unknown invoice status "pending". Use one of: open, paid, canceled', $result['error']);
+    }
+
+    #[Test]
+    public function itRejectsACreditMemoStatusThatDoesNotExist(): void
+    {
+        $orderId = $this->fixture->order('IT-1001');
+        $this->fixture->creditmemo($orderId, 'IT-4001');
+
+        $result = $this->listDocuments(['document_type' => 'credit_memo', 'document_status' => 'paid']);
+
+        self::assertSame(
+            'Unknown credit memo status "paid". Use one of: open, refunded, canceled',
+            $result['error']
+        );
+    }
+
+    #[Test]
+    public function itFiltersShipmentsByTheTotalOfTheirOrder(): void
+    {
+        $smallOrderId = $this->fixture->order('IT-1001', ['total' => 50.00]);
+        $bigOrderId = $this->fixture->order('IT-1002', ['total' => 600.00]);
+        $this->fixture->shipment($smallOrderId, 'IT-3001');
+        $this->fixture->shipment($bigOrderId, 'IT-3002');
+
+        $result = $this->listDocuments(['document_type' => 'shipment', 'min_total' => 500]);
+
+        self::assertSame(['IT-3002'], $this->numbers($result));
+    }
+
+    #[Test]
+    public function itSearchesTheInvoicesOfACustomerInTheLastThirtyDaysOnly(): void
+    {
+        $orderId = $this->fixture->order('IT-1001', ['lastname' => 'Zwanenburg']);
+        $this->fixture->invoice($orderId, 'IT-2001');
+
+        $result = $this->action->execute(
+            ['document_type' => 'invoice', 'customer' => 'Zwanenburg'],
+            self::ADMIN_USER_ID
+        );
+
+        self::assertSame('30days', $result['period']);
+        self::assertSame(0, $result['total_count']);
+    }
+
+    #[Test]
+    public function itRefusesOrdersToAnAdminWhoMayNotViewThem(): void
+    {
+        $authorization = new FakeAuthorization(['Magento_Sales::sales_order' => true]);
+        $action = MagentoObjectManager::get()->create(
+            ListDocumentsAction::class,
+            ['authorization' => $authorization]
+        );
+
+        $result = $action->execute(['document_type' => 'order'], self::ADMIN_USER_ID);
+
+        self::assertSame('You do not have permission to access order documents', $result['error']);
     }
 
     private function listDocuments(array $params): array

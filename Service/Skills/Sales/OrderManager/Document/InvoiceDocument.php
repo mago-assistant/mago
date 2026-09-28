@@ -47,9 +47,15 @@ class InvoiceDocument extends AbstractDocument
     private function filterStatus(InvoiceCollection $invoices, array $filters): void
     {
         $status = $filters['document_status'] ?? '';
+        if ($status === '') {
+            return;
+        }
+
         $state = self::STATES[$status] ?? null;
         if ($state === null) {
-            return;
+            throw new \InvalidArgumentException(
+                'Unknown invoice status "' . $status . '". Use one of: ' . implode(', ', array_keys(self::STATES))
+            );
         }
 
         $invoices->addFieldToFilter('main_table.state', ['eq' => $state]);
