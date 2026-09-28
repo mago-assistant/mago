@@ -10,6 +10,7 @@ use Magento\Framework\AuthorizationInterface;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\AbstractDocument;
+use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\DocumentTypeInterface;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 
 class ListDocumentsAction implements ActionInterface
@@ -112,6 +113,15 @@ class ListDocumentsAction implements ActionInterface
                     . 'with. E.g. [{"document_type": "shipment"}] for orders that have not been shipped yet',
                 'items' => ['type' => 'object'],
             ],
+            'include' => [
+                'type' => 'array',
+                'description' => 'Other documents of the same order to add to each listed document, e.g. '
+                    . '["invoice", "shipment"] to see whether an order is invoiced and shipped',
+                'items' => [
+                    'type' => 'string',
+                    'enum' => array_keys($this->documentTypes),
+                ],
+            ],
             'limit' => [
                 'type' => 'integer',
                 'description' => 'Number of documents to return (default: 10, max: 50)',
@@ -155,6 +165,15 @@ class ListDocumentsAction implements ActionInterface
 
         $filters = $query['filters'];
         $documentList = $query['document_list'];
+        foreach ($params['include'] ?? [] as $includedName) {
+            $includedType = $this->documentType($includedName);
+            if (is_array($includedType)) {
+                return $includedType;
+            }
+
+            $documentList = $documentList->include($includedName, $includedType);
+        }
+
         $result = [
             'total_count' => $documentList->size(),
             'documents' => $documentList->documents($limit),
@@ -176,13 +195,9 @@ class ListDocumentsAction implements ActionInterface
         $params = $this->routeFilters($params);
 
         $typeName = $params['document_type'] ?? 'order';
-        $documentType = $this->documentTypes[$typeName] ?? null;
-        if ($documentType === null) {
-            return ['error' => 'Unknown document_type: ' . $typeName];
-        }
-
-        if (!$this->authorization->isAllowed($documentType->getAclResource())) {
-            return ['error' => 'You do not have permission to access ' . $typeName . ' documents'];
+        $documentType = $this->documentType($typeName);
+        if (is_array($documentType)) {
+            return $documentType;
         }
 
         $filters = $this->filters($params);
@@ -206,6 +221,20 @@ class ListDocumentsAction implements ActionInterface
             'document_list' => $documentList,
             'filters' => $filters,
         ];
+    }
+
+    private function documentType(string $typeName): DocumentTypeInterface|array
+    {
+        $documentType = $this->documentTypes[$typeName] ?? null;
+        if ($documentType === null) {
+            return ['error' => 'Unknown document_type: ' . $typeName];
+        }
+
+        if (!$this->authorization->isAllowed($documentType->getAclResource())) {
+            return ['error' => 'You do not have permission to access ' . $typeName . ' documents'];
+        }
+
+        return $documentType;
     }
 
     private function routeFilters(array $params): array

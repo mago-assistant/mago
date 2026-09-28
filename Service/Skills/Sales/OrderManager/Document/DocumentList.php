@@ -11,6 +11,8 @@ use Magento\Framework\DB\Select;
 
 class DocumentList
 {
+    private array $includes = [];
+
     public function __construct(
         private readonly AbstractDb $collection,
         private readonly \Closure $describe,
@@ -31,7 +33,20 @@ class DocumentList
             $collection->setPageSize($limit);
         }
 
-        return ($this->describe)($collection);
+        $documents = ($this->describe)($collection);
+        foreach ($this->includes as $name => $documentType) {
+            $documents = $this->withIncluded($documents, $name, $documentType);
+        }
+
+        return $documents;
+    }
+
+    public function include(string $name, DocumentTypeInterface $documentType): self
+    {
+        $documentList = clone $this;
+        $documentList->includes[$name] = $documentType;
+
+        return $documentList;
     }
 
     public function inOrdersOf(DocumentList $related, bool $exclude = false): self
@@ -41,6 +56,23 @@ class DocumentList
         $collection->addFieldToFilter($this->orderIdField, [$condition => $related->orderIds()]);
 
         return new self($collection, $this->describe, $this->orderIdField);
+    }
+
+    private function withIncluded(array $documents, string $name, DocumentTypeInterface $documentType): array
+    {
+        $orderIds = array_column($documents, 'order_id');
+        $includedList = $documentType->list(['order_ids' => $orderIds]);
+
+        $includedPerOrder = [];
+        foreach ($includedList->documents() as $includedDocument) {
+            $includedPerOrder[$includedDocument['order_id']][] = $includedDocument;
+        }
+
+        foreach ($documents as $index => $document) {
+            $documents[$index][$name] = $includedPerOrder[$document['order_id']] ?? [];
+        }
+
+        return $documents;
     }
 
     private function orderIds(): Select

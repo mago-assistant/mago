@@ -125,6 +125,19 @@ class ListDocumentsActionTest extends TestCase
     }
 
     #[Test]
+    public function itRefusesAnIncludedDocumentTypeTheAdminMayNotAccess(): void
+    {
+        $action = $this->action(['Magento_Sales::sales_order']);
+        $params = [
+            'document_type' => 'order',
+            'include' => ['invoice'],
+        ];
+
+        $result = $action->execute($params, self::ADMIN_USER_ID);
+        self::assertSame('You do not have permission to access invoice documents', $result['error']);
+    }
+
+    #[Test]
     public function itRejectsAnUnrecognisedPeriod(): void
     {
         $params = [

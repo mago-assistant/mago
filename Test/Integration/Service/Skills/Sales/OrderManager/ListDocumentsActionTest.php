@@ -207,6 +207,25 @@ class ListDocumentsActionTest extends TestCase
         self::assertSame('Anna Jansen', $result['documents'][0]['customer']);
     }
 
+    #[Test]
+    public function itIncludesTheInvoicesAndShipmentsOfEachOrder(): void
+    {
+        $shippedOrderId = $this->fixture->order('IT-1001');
+        $this->fixture->order('IT-1002');
+        $this->fixture->invoice($shippedOrderId, 'IT-2001');
+        $this->fixture->shipment($shippedOrderId, 'IT-3001', 'NordFreight', 'NF123');
+
+        $result = $this->listDocuments([
+            'document_type' => 'order',
+            'include' => ['invoice', 'shipment'],
+        ]);
+        $orders = array_column($result['documents'], null, 'order_number');
+        self::assertSame(['IT-2001'], array_column($orders['IT-1001']['invoice'], 'number'));
+        self::assertSame(['NF123'], $orders['IT-1001']['shipment'][0]['tracking']);
+        self::assertSame([], $orders['IT-1002']['invoice']);
+        self::assertSame([], $orders['IT-1002']['shipment']);
+    }
+
     private function listDocuments(array $params): array
     {
         return $this->action->execute($params + ['period' => self::PERIOD], self::ADMIN_USER_ID);
