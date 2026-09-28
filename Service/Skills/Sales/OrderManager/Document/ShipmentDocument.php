@@ -16,6 +16,11 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class ShipmentDocument extends AbstractDocument
 {
+    public const SORTS = [
+        'newest' => ['created_at', 'DESC'],
+        'oldest' => ['created_at', 'ASC'],
+    ];
+
     protected const FIELD_FILTERS = [
         'document_number' => ['increment_id', 'eq'],
         'from' => ['created_at', 'from'],

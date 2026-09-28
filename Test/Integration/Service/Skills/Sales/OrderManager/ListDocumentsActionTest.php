@@ -294,6 +294,60 @@ class ListDocumentsActionTest extends TestCase
         self::assertSame([], $orders['IT-1002']['shipment']);
     }
 
+    #[Test]
+    public function itListsTheBiggestCreditMemoFirst(): void
+    {
+        $orderId = $this->fixture->order('IT-1001');
+        $this->fixture->creditmemo($orderId, 'IT-4001', 2, 50.00);
+        $this->fixture->creditmemo($orderId, 'IT-4002', 2, 250.00);
+        $this->fixture->creditmemo($orderId, 'IT-4003', 2, 100.00);
+
+        $result = $this->listDocuments(['document_type' => 'credit_memo', 'sort' => 'highest_total', 'limit' => 1]);
+        self::assertSame(['IT-4002'], $this->numbers($result));
+    }
+
+    #[Test]
+    public function itSortsTheOrdersThatHaveNotBeenShipped(): void
+    {
+        $shippedOrderId = $this->fixture->order('IT-1001', ['total' => 900.00]);
+        $this->fixture->order('IT-1002', ['total' => 50.00]);
+        $this->fixture->order('IT-1003', ['total' => 250.00]);
+        $this->fixture->shipment($shippedOrderId, 'IT-3001');
+
+        $result = $this->listDocuments([
+            'document_type' => 'order',
+            'without' => [['document_type' => 'shipment']],
+            'sort' => 'highest_total',
+            'limit' => 1,
+        ]);
+        self::assertSame(['IT-1003'], $this->numbers($result));
+    }
+
+    #[Test]
+    public function itSortsShipmentsByTheTotalOfTheirOrder(): void
+    {
+        $smallOrderId = $this->fixture->order('IT-1001', ['total' => 50.00]);
+        $bigOrderId = $this->fixture->order('IT-1002', ['total' => 250.00]);
+        $this->fixture->shipment($smallOrderId, 'IT-3001');
+        $this->fixture->shipment($bigOrderId, 'IT-3002');
+
+        $result = $this->listDocuments(['document_type' => 'shipment', 'sort' => 'highest_total', 'limit' => 1]);
+        self::assertSame(['IT-1002'], $this->numbers($result));
+        self::assertSame(['IT-3002'], array_column($result['documents'][0]['shipment'], 'number'));
+    }
+
+    #[Test]
+    public function itFindsTheLatestOrderWithAProductBeyondTheLastThirtyDays(): void
+    {
+        $this->fixture->order('IT-1001', ['sku' => 'VELO-2', 'product' => 'Velora X2']);
+
+        $result = $this->action->execute(
+            ['document_type' => 'order', 'product' => 'Velora', 'sort' => 'newest', 'limit' => 1],
+            self::ADMIN_USER_ID
+        );
+        self::assertSame('IT-1001', $result['documents'][0]['order_number']);
+    }
+
     private function listDocuments(array $params): array
     {
         return $this->action->execute($params + ['period' => self::PERIOD], self::ADMIN_USER_ID);

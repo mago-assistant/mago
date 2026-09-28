@@ -27,6 +27,13 @@ class ListDocumentsAction implements ActionInterface
         'payment_method' => ['order', 'payment_method'],
     ];
 
+    private const SORT_OWNERS = [
+        'shipment' => [
+            'highest_total' => 'order',
+            'lowest_total' => 'order',
+        ],
+    ];
+
     public function __construct(
         private readonly PeriodParser $periodParser,
         private readonly AuthorizationInterface $authorization,
@@ -96,7 +103,8 @@ class ListDocumentsAction implements ActionInterface
                 'type' => 'string',
                 'description' => 'When the document was created: "today", "yesterday", "7days", "30days", '
                     . '"this_month", "last_month", "this_year", "YYYY-MM", or '
-                    . '"YYYY-MM-DD:YYYY-MM-DD" for a custom range. Leave it out to list all',
+                    . '"YYYY-MM-DD:YYYY-MM-DD" for a custom range, or "all". Leave it out to list all; '
+                    . 'unsorted customer or product searches cover the last 30 days',
             ],
             'with' => [
                 'type' => 'array',
@@ -121,6 +129,12 @@ class ListDocumentsAction implements ActionInterface
                     'type' => 'string',
                     'enum' => array_keys($this->documentTypes),
                 ],
+            ],
+            'sort' => [
+                'type' => 'string',
+                'enum' => array_keys(AbstractDocument::SORTS),
+                'description' => 'Order of the documents (default: newest), e.g. highest_total with limit 1 for '
+                    . 'the biggest one',
             ],
             'limit' => [
                 'type' => 'integer',
@@ -154,6 +168,7 @@ class ListDocumentsAction implements ActionInterface
 
     public function execute(array $params, int $adminUserId): array
     {
+        $params = $this->routeSort($params);
         $limit = (int)($params['limit'] ?? 10);
         $limit = max($limit, 1);
         $limit = min($limit, 50);
@@ -173,6 +188,9 @@ class ListDocumentsAction implements ActionInterface
 
             $documentList = $documentList->include($includedName, $includedType);
         }
+
+        $sort = $params['sort'] ?? 'newest';
+        $documentList = $documentList->sortedBy($sort);
 
         $result = [
             'total_count' => $documentList->size(),
@@ -237,6 +255,27 @@ class ListDocumentsAction implements ActionInterface
         return $documentType;
     }
 
+    private function routeSort(array $params): array
+    {
+        $typeName = $params['document_type'] ?? 'order';
+        $sort = $params['sort'] ?? 'newest';
+        $ownerType = self::SORT_OWNERS[$typeName][$sort] ?? null;
+        if ($ownerType === null) {
+            return $params;
+        }
+
+        $relatedParams = array_diff_key($params, array_flip(['sort', 'limit', 'include']));
+        $includes = $params['include'] ?? [];
+
+        return [
+            'document_type' => $ownerType,
+            'sort' => $sort,
+            'limit' => $params['limit'] ?? 10,
+            'with' => [$relatedParams],
+            'include' => [$typeName, ...$includes],
+        ];
+    }
+
     private function routeFilters(array $params): array
     {
         $typeName = $params['document_type'] ?? 'order';
@@ -280,7 +319,8 @@ class ListDocumentsAction implements ActionInterface
 
         $period = $params['period'] ?? '';
         $isSearch = $filters['customer'] !== '' || $filters['product'] !== '';
-        if ($period === '' && $isSearch) {
+        $isSorted = isset($params['sort']);
+        if ($period === '' && $isSearch && !$isSorted) {
             $period = self::SEARCH_DEFAULT_PERIOD;
         }
 

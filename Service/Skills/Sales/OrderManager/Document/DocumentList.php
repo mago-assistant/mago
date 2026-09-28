@@ -13,10 +13,13 @@ class DocumentList
 {
     private array $includes = [];
 
+    private string $sort = 'newest';
+
     public function __construct(
         private readonly AbstractDb $collection,
         private readonly \Closure $describe,
-        private readonly string $orderIdField = 'main_table.order_id'
+        private readonly string $orderIdField = 'main_table.order_id',
+        private readonly array $sorts = []
     ) {
     }
 
@@ -27,8 +30,9 @@ class DocumentList
 
     public function documents(?int $limit = null): array
     {
+        [$sortColumn, $sortDirection] = $this->sorts[$this->sort] ?? ['created_at', 'DESC'];
         $collection = clone $this->collection;
-        $collection->setOrder('main_table.created_at', 'DESC');
+        $collection->setOrder('main_table.' . $sortColumn, $sortDirection);
         if ($limit !== null) {
             $collection->setPageSize($limit);
         }
@@ -39,6 +43,14 @@ class DocumentList
         }
 
         return $documents;
+    }
+
+    public function sortedBy(string $sort): self
+    {
+        $documentList = clone $this;
+        $documentList->sort = $sort;
+
+        return $documentList;
     }
 
     public function include(string $name, DocumentTypeInterface $documentType): self
@@ -55,7 +67,7 @@ class DocumentList
         $collection = clone $this->collection;
         $collection->addFieldToFilter($this->orderIdField, [$condition => $related->orderIds()]);
 
-        return new self($collection, $this->describe, $this->orderIdField);
+        return new self($collection, $this->describe, $this->orderIdField, $this->sorts);
     }
 
     private function withIncluded(array $documents, string $name, DocumentTypeInterface $documentType): array

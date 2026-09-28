@@ -28,6 +28,13 @@ abstract class AbstractDocument implements DocumentTypeInterface
         'admin_url' => [PiiClass::TOKENISE, 'url'],
     ];
 
+    public const SORTS = [
+        'newest' => ['created_at', 'DESC'],
+        'oldest' => ['created_at', 'ASC'],
+        'highest_total' => ['grand_total', 'DESC'],
+        'lowest_total' => ['grand_total', 'ASC'],
+    ];
+
     protected const FIELD_FILTERS = [
         'document_number' => ['increment_id', 'eq'],
         'from' => ['created_at', 'from'],
@@ -44,7 +51,8 @@ abstract class AbstractDocument implements DocumentTypeInterface
         return new DocumentList(
             $this->collection($filters),
             $this->describe(...),
-            'main_table.' . $orderIdColumn
+            'main_table.' . $orderIdColumn,
+            static::SORTS
         );
     }
 

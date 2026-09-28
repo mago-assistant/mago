@@ -109,13 +109,13 @@ class SalesDocumentFixture
         return $shipmentId;
     }
 
-    public function creditmemo(int $orderId, string $number, int $state = 2): int
+    public function creditmemo(int $orderId, string $number, int $state = 2, float $total = 100.00): int
     {
         $creditmemoId = $this->insert('sales_creditmemo', [
             'order_id' => $orderId,
             'increment_id' => $number,
             'state' => $state,
-            'grand_total' => 100.00,
+            'grand_total' => $total,
             'order_currency_code' => self::CURRENCY,
             'created_at' => $this->createdAt,
         ]);
