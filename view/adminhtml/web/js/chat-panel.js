@@ -43,6 +43,18 @@ define([
     var formatApplyOutcomeMessage = confirmText.formatApplyOutcomeMessage;
     var formKey = config.formKey;
     var skills = config.skills;
+
+    // A tool can name itself (PresentableToolInterface); the rest keep the title derived from the name
+    var toolTitles = {};
+    (skills || []).forEach(function(s) {
+        if (s && s.name && s.title) toolTitles[s.name] = s.title;
+    });
+    skillTitle = function(toolName) {
+        return toolTitles[toolName] || text.skillTitle(toolName);
+    };
+    toolLabel = function(tool) {
+        return skillTitle(tool.name) + (tool.input && tool.input.action ? ' · ' + tool.input.action : '');
+    };
     var commands = config.commands || [];
     // Widget and skill-card builders (js/mago-ui.js); loaded before this file by panel.phtml.
     var UI = window.MagoUI;
@@ -50,6 +62,8 @@ define([
     var busy = false;
     var showingHistory = false;
     var slashActive = false;
+    var slashMenuNode = null;
+    var announcedSlashCount = null;
     var slashIndex = 0;
     var filteredItems = [];
     var SS_KEY_OPEN = 'mago_open';
@@ -223,7 +237,7 @@ define([
         formBridge.whenFormReady(entityType, NAVIGATE_INTENT_FORM_TIMEOUT_MS, function (found) {
             if (!found) {
                 hideNavigateStatus();
-                addMsg('assistant', renderMd(formatNavigateTimeoutMessage(intent.target)));
+                addMsg('assistant', renderPanelMd(formatNavigateTimeoutMessage(intent.target)));
                 return;
             }
 
@@ -252,7 +266,7 @@ define([
         if (!result) return;
         var text = formatApplyOutcomeMessage(result);
         if (!text) return;
-        addMsg('assistant', renderMd(text));
+        addMsg('assistant', renderPanelMd(text));
     }
 
     function saveState() {
@@ -298,8 +312,40 @@ define([
         if (el) el.textContent = text || '';
     }
 
+    /**
+     * Reads a short message out to screen readers through the panel's hidden status region.
+     *
+     * @param {string} message
+     * @returns {void}
+     */
+    function announce(message) {
+        var region = qs('#mago-announcer');
+        if (!region) return;
+        // Cleared first so the same message twice in a row is still announced.
+        region.textContent = '';
+        setTimeout(function() { region.textContent = message; }, 50);
+    }
+
+    /**
+     * Reads a finished reply out to screen readers. Streaming rewrites the message on every
+     * chunk, so the message list itself is not a live region; the reply is announced once, whole.
+     *
+     * @param {HTMLElement|null} msgEl
+     * @returns {void}
+     */
+    function announceReply(msgEl) {
+        if (!msgEl) return;
+        var content = msgEl.querySelector('.mago-message-content');
+        var answer = content ? content.textContent.replace(/\s+/g, ' ').trim() : '';
+        var parts = [];
+        if (answer) parts.push(t('%1 replied: %2', config.assistantName, answer));
+        if (msgEl.querySelector('.mago-confirm-actions')) parts.push(t('Waiting for your confirmation.'));
+        if (parts.length) announce(parts.join(' '));
+    }
+
     // Busy drives the "Working" pill in the header and the send button state.
     function setBusy(state) {
+        if (state && !busy) announce(t('%1 is working…', config.assistantName));
         busy = state;
         chat.classList.toggle('is-busy', state);
         loading.style.display = state ? '' : 'none';
@@ -318,7 +364,41 @@ define([
         toggle.classList.toggle('is-active', open);
     }
 
+    // Full size covers the whole admin, so everything outside the panel is made inert
+    // while it is up: keyboard focus cannot land on a control nobody can see.
+    var inertedByFullsize = [];
+
+    /**
+     * Switches the panel between side panel and full size.
+     *
+     * @param {boolean} isFullsize
+     * @returns {void}
+     */
+    function setFullsize(isFullsize) {
+        chat.classList.toggle('is-fullsize', isFullsize);
+        document.body.classList.toggle('mago-fullsize', isFullsize);
+        var expandBtn = qs('#mago-expand');
+        expandBtn.title = isFullsize ? 'Side panel' : 'Full size';
+        expandBtn.innerHTML = isFullsize
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+
+        inertedByFullsize.forEach(function(el) { el.inert = false; });
+        inertedByFullsize = [];
+        if (!isFullsize) return;
+        for (var node = chat; node && node !== document.body; node = node.parentElement) {
+            var siblings = node.parentElement ? node.parentElement.children : [];
+            for (var i = 0; i < siblings.length; i++) {
+                var sibling = siblings[i];
+                if (sibling === node || sibling.inert || sibling.matches('script, style, .modals-wrapper')) continue;
+                sibling.inert = true;
+                inertedByFullsize.push(sibling);
+            }
+        }
+    }
+
     function openPanel() {
+        chat.inert = false;
         chat.classList.add('is-open');
         document.body.classList.add('mago-active');
         syncToggleLabel();
@@ -330,16 +410,18 @@ define([
     }
 
     function closePanel() {
-        chat.classList.remove('is-open', 'is-fullsize');
-        document.body.classList.remove('mago-active', 'mago-fullsize');
-        var expandBtn = qs('#mago-expand');
-        expandBtn.title = 'Full size';
-        expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+        var hadFocus = chat.contains(document.activeElement);
+        setFullsize(false);
+        chat.classList.remove('is-open');
+        document.body.classList.remove('mago-active');
         syncToggleLabel();
         if (showingHistory) hideHistory();
         if (showingLog) hideLog();
         hideSlashMenu();
         saveState();
+        // Off screen but still in the DOM, the closed panel would otherwise stay in the tab order.
+        chat.inert = true;
+        if (hadFocus) toggle.focus();
     }
 
     toggle.onclick = function() {
@@ -351,18 +433,16 @@ define([
     };
     qs('#mago-close').onclick = closePanel;
     qs('#mago-expand').onclick = function() {
-        var isFullsize = chat.classList.toggle('is-fullsize');
-        document.body.classList.toggle('mago-fullsize', isFullsize);
-        var expandBtn = qs('#mago-expand');
-        if (isFullsize) {
-            expandBtn.title = 'Side panel';
-            expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
-        } else {
-            expandBtn.title = 'Full size';
-            expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
-        }
+        setFullsize(!chat.classList.contains('is-fullsize'));
         saveState();
     };
+    chat.addEventListener('keydown', function(e) {
+        // The input handles Escape itself while the slash menu is open.
+        if (e.key === 'Escape' && !e.defaultPrevented) {
+            e.preventDefault();
+            closePanel();
+        }
+    });
     qs('#mago-new').onclick = function() {
         if (showingHistory) hideHistory();
         if (showingLog) hideLog();
@@ -428,7 +508,7 @@ define([
         // get a group heading inside the one menu when both kinds survive the filter.
         var hasCommands = filteredItems.some(function(i) { return i.type === 'command'; });
         var hasSkills = filteredItems.some(function(i) { return i.type === 'skill'; });
-        slashMenu.appendChild(UI.skillMenu({
+        slashMenuNode = UI.skillMenu({
             itemClass: 'mago-slash-item',
             title: hasCommands ? (hasSkills ? 'Commands and skills' : 'Commands') : 'Skills',
             skills: filteredItems.map(function(item) {
@@ -441,8 +521,17 @@ define([
                 };
             }),
             onSelect: function(entry, i) { selectSlashItem(filteredItems[i]); }
-        }));
+        });
+        slashMenu.appendChild(slashMenuNode);
         slashMenu.classList.add('is-visible');
+        input.setAttribute('aria-controls', slashMenuNode.magoListId);
+        input.setAttribute('aria-activedescendant', slashMenuNode.magoItems[0].id);
+        if (filteredItems.length !== announcedSlashCount) {
+            announcedSlashCount = filteredItems.length;
+            announce(filteredItems.length === 1
+                ? t('1 suggestion. Press Enter to insert.')
+                : t('%1 suggestions. Use up and down to choose, Enter to insert.', filteredItems.length));
+        }
     }
 
 
@@ -468,7 +557,7 @@ define([
         loading.style.display = 'none';
         inputArea.style.display = 'none';
         logView.style.display = '';
-        if (logBtn) logBtn.classList.add('is-active');
+        if (logBtn) logBtn.setAttribute('aria-pressed', 'true');
     }
 
     function hideLog() {
@@ -477,7 +566,7 @@ define([
         logView.style.display = 'none';
         msgs.style.display = '';
         inputArea.style.display = '';
-        if (logBtn) logBtn.classList.remove('is-active');
+        if (logBtn) logBtn.setAttribute('aria-pressed', 'false');
     }
 
     if (logBtn) {
@@ -487,8 +576,12 @@ define([
 
     function hideSlashMenu() {
         slashActive = false;
+        slashMenuNode = null;
+        announcedSlashCount = null;
         slashMenu.classList.remove('is-visible');
         slashMenu.innerHTML = '';
+        input.removeAttribute('aria-controls');
+        input.removeAttribute('aria-activedescendant');
     }
 
     function selectSlashItem(item) {
@@ -509,11 +602,9 @@ define([
     }
 
     function updateSlashHighlight() {
-        var items = slashMenu.querySelectorAll('.mago-slash-item');
-        items.forEach(function(el, i) {
-            el.classList.toggle('is-active', i === slashIndex);
-        });
-        if (items[slashIndex]) items[slashIndex].scrollIntoView({block:'nearest'});
+        if (!slashMenuNode) return;
+        slashMenuNode.magoSetActive(slashIndex);
+        input.setAttribute('aria-activedescendant', slashMenuNode.magoItems[slashIndex].id);
     }
 
     function autoGrow() {
@@ -539,6 +630,7 @@ define([
     function updatePrivacyHint(v) {
         if (!privacyHint) return;
         var hit = v.length > 5 && privacyHintPatterns.some(function(p) { return p.test(v); });
+        if (hit && privacyHint.hidden) announce(privacyHint.textContent.trim());
         privacyHint.hidden = !hit;
     }
 
@@ -595,11 +687,12 @@ define([
     function loadHistory() {
         if (showingLog) hideLog();
         showingHistory = true;
+        qs('#mago-history').setAttribute('aria-pressed', 'true');
         msgs.style.display = 'none';
         loading.style.display = 'none';
         inputArea.style.display = 'none';
         histList.style.display = '';
-        histList.innerHTML = '<div style="padding:16px;color:#999;font-size:13px;">Loading...</div>';
+        histList.innerHTML = '<div style="padding:16px;color:var(--mago-ink-muted, #736B65);font-size:13px;">Loading...</div>';
 
         fetch(config.historyUrl, {
             headers: {'X-Requested-With':'XMLHttpRequest'},
@@ -609,21 +702,24 @@ define([
         .then(function(data) {
             histList.innerHTML = '';
             if (!data.conversations || !data.conversations.length) {
-                histList.innerHTML = '<div style="padding:16px;color:#999;font-size:13px;">No previous chats</div>';
+                histList.innerHTML = '<div style="padding:16px;color:var(--mago-ink-muted, #736B65);font-size:13px;">No previous chats</div>';
                 return;
             }
             data.conversations.forEach(function(conv) {
                 var item = document.createElement('div');
                 item.className = 'mago-history-item';
-                item.innerHTML = '<span class="mago-history-item-title">' + esc(conv.title || 'Untitled') + '</span>'
+                var title = conv.title || 'Untitled';
+                item.innerHTML = '<button type="button" class="mago-history-item-title">' + esc(title) + '</button>'
                     + '<span class="mago-history-item-date">' + formatDate(conv.updated_at) + '</span>'
-                    + '<button type="button" class="mago-history-item-delete" title="Delete">'
-                    + '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
+                    + '<button type="button" class="mago-history-item-delete">'
+                    + '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
                     + '</button>';
 
                 item.querySelector('.mago-history-item-title').onclick = function() {
                     loadConversation(conv.entity_id, conv.title);
+                    input.focus();
                 };
+                item.querySelector('.mago-history-item-delete').title = t('Delete conversation: %1', title);
                 item.querySelector('.mago-history-item-delete').onclick = function(e) {
                     e.stopPropagation();
                     deleteConversation(conv.entity_id, item);
@@ -632,12 +728,13 @@ define([
             });
         })
         .catch(function() {
-            histList.innerHTML = '<div style="padding:16px;color:#e22626;font-size:13px;">Failed to load history</div>';
+            histList.innerHTML = '<div style="padding:16px;color:var(--mago-danger, #B8402A);font-size:13px;">Failed to load history</div>';
         });
     }
 
     function hideHistory() {
         showingHistory = false;
+        qs('#mago-history').setAttribute('aria-pressed', 'false');
         histList.style.display = 'none';
         msgs.style.display = '';
         inputArea.style.display = '';
@@ -665,6 +762,15 @@ define([
         .then(function(r) { return r.json(); })
         .then(function(data) {
             loading.style.display = 'none';
+            // The saved conversation is gone or owned by another admin (e.g. after logging in as a
+            // different user in the same tab); drop the dead id and start fresh, or it fails here on
+            // every page load.
+            if (data && data.error) {
+                conversationId = null;
+                saveState();
+                showGreeting();
+                return;
+            }
             var loaded = data.messages || [];
             if (!loaded.length) {
                 showGreeting();
@@ -724,7 +830,11 @@ define([
             body: fd,
             credentials: 'same-origin'
         }).then(function(r) { return r.json(); }).then(function() {
+            // The deleted row held focus; hand it to the next row, or back to the History button.
+            var next = el.nextElementSibling || el.previousElementSibling;
+            var hadFocus = el.contains(document.activeElement);
             el.remove();
+            if (hadFocus) (next ? next.querySelector('.mago-history-item-title') : qs('#mago-history')).focus();
             if (conversationId === id) {
                 conversationId = null;
                 clearMsgs();
@@ -752,29 +862,54 @@ define([
             return '<a href="' + href + '" target="' + target + '" rel="noopener"' + titleAttr + '>' + text + '</a>';
         };
         markedRenderer.table = function(token) {
-            // Render using the default logic but wrap in a scrollable div
+            // Render using the default logic but wrap in a scrollable div, focusable so the
+            // keyboard can scroll a wide table too
             var html = marked.Renderer.prototype.table.call(this, token);
-            return '<div class="mago-table-wrap">' + html + '</div>';
+            return '<div class="mago-table-wrap" tabindex="0" role="region" aria-label="' + esc(t('Table')) + '">' + html + '</div>';
         };
         // A ```mago fenced block holds a widget spec ({"type": "stat", ...} or a
         // list of them) and renders as the matching widget. While the block is
-        // still streaming in, the JSON is incomplete and a skeleton holds its place.
+        // still streaming in, the JSON is incomplete and a skeleton holds its place;
+        // a block that is still invalid once the answer is complete renders nothing.
         markedRenderer.code = function(token) {
             var lang = typeof token === 'object' ? token.lang : arguments[1];
             if (lang === 'mago' && UI) {
                 var code = typeof token === 'object' ? token.text : token;
-                return UI.renderJson(code) || UI.skeleton().outerHTML;
+                return UI.renderJson(code) || (widgetsStreaming ? UI.skeleton().outerHTML : '');
             }
             return marked.Renderer.prototype.code.apply(this, arguments);
         };
         marked.use({ renderer: markedRenderer, gfm: true, breaks: true });
     }
 
+    var widgetsStreaming = false;
+
+    // Renders an answer that is still coming in: an incomplete widget block shows a skeleton.
+    function renderStreamingMd(t) {
+        widgetsStreaming = true;
+        try {
+            return renderMd(t);
+        } finally {
+            widgetsStreaming = false;
+        }
+    }
+
     function renderMd(t) {
         if (!t) return '';
         // Model output is attacker-influenceable (tool results can carry injected instructions), so
         // raw HTML must never reach innerHTML: escape first, then let marked render markdown only.
-        var safe = esc(t);
+        return renderEscapedMd(esc(t));
+    }
+
+    // For sentences the panel builds itself (chat/confirm-text.js). Every value in them that came
+    // from the store or the model is already escaped with text.escapeForMarkdown and wrapped in a
+    // <code> the panel wrote, so escaping again would show that <code> and every entity as text.
+    function renderPanelMd(t) {
+        if (!t) return '';
+        return renderEscapedMd(t);
+    }
+
+    function renderEscapedMd(safe) {
         if (window.marked) {
             return marked.parse(safe);
         }
@@ -866,8 +1001,9 @@ define([
     }
 
     // Answer widgets arrive as static HTML from the markdown renderer, so their
-    // interactions are wired here once: a chip or suggestion card asks its label,
-    // a value prompt (S10) sends the value the admin typed or picked.
+    // interactions are wired here once, for built-in and registered widgets alike:
+    // data-mago-send sends its value as the next message, data-mago-focus moves the
+    // focus to the input, and a value prompt (S10) sends the value the admin typed.
     function askFromWidget(text) {
         if (!text || busy) return;
         input.value = text;
@@ -878,6 +1014,19 @@ define([
     msgs.addEventListener('click', function(e) {
         var scope = e.target.closest('.mago-message-content');
         if (!scope) return;
+        var focusEl = e.target.closest('[' + UI.focusAttr + ']');
+        if (focusEl && scope.contains(focusEl)) {
+            e.preventDefault();
+            input.focus();
+            return;
+        }
+        var sendEl = e.target.closest('[' + UI.sendAttr + ']');
+        if (sendEl && scope.contains(sendEl)) {
+            e.preventDefault();
+            askFromWidget(sendEl.getAttribute(UI.sendAttr).trim());
+            return;
+        }
+        // Chips a value prompt draws carry no send value; they still ask their label
         var chip = e.target.closest('.mago-chip, .mago-suggestion:not([href])');
         if (chip) {
             e.preventDefault();
@@ -1001,15 +1150,13 @@ define([
         setSubtitle('');
     }
 
-    // Welcome starters drop the skill into the input so the slash menu takes over.
     var starters = chat.querySelectorAll('.mago-starter');
     for (var si = 0; si < starters.length; si++) {
         starters[si].onclick = function() {
-            var name = this.getAttribute('data-skill');
-            if (!name) return;
-            input.value = '/' + name + ' ';
-            input.dispatchEvent(new Event('input'));
-            input.focus();
+            var question = this.getAttribute('data-question');
+            if (!question || busy) return;
+            input.value = question;
+            send();
         };
     }
 
@@ -1088,7 +1235,12 @@ define([
                     try { var d=JSON.parse(ln.substring(6)); } catch(e){return;}
                     if (evt==='text'&&d.text) {
                         if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
-                        full+=d.text; content.innerHTML=renderMd(full); msgs.scrollTop=msgs.scrollHeight;
+                        full+=d.text; content.innerHTML=renderStreamingMd(full); msgs.scrollTop=msgs.scrollHeight;
+                    }
+                    // The server caught a raw JSON/XML dump in the finished reply and is re-presenting it:
+                    // drop what streamed so the corrected answer streams into a clean message.
+                    else if (evt==='replace') {
+                        if (content) { full=''; content.innerHTML=''; }
                     }
                     else if (evt==='conversation') { conversationId=d.conversation_id; saveState(); }
                     else if (evt==='tool_call') {
@@ -1108,11 +1260,13 @@ define([
                     }
                     else if (evt==='done') {
                         gotDone = true;
+                        if (content && full) { content.innerHTML = renderMd(full); }
                         if(d.conversation_id) conversationId=d.conversation_id;
                         saveState(); releaseInput();
                         if (d.pending_confirmation && msg && !writeToolDetected) {
                             showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, []);
                         }
+                        announceReply(msg);
                         if (!d.pending_confirmation && writeToolDetected) {
                             writeToolDetected = false;
                         }
@@ -1175,7 +1329,7 @@ define([
            both the description and the parameter table, which would otherwise show the raw
            directive JSON. Every other tool keeps the generic card. */
         var formWriteMessage = isFormWrite(first)
-            ? {html: renderMd(formatConfirmMessage(tools))}
+            ? {html: renderPanelMd(formatConfirmMessage(tools))}
             : null;
         var hooks = {actions: 'mago-confirm-actions', allow: 'mago-btn--confirm', confirm: 'mago-btn--confirm', later: 'mago-btn--reject', cancel: 'mago-btn--reject'};
         var irreversible = tools.filter(function(t) { return t.irreversible; });
@@ -1223,6 +1377,10 @@ define([
             });
         }
         var actions = card.querySelector('.mago-confirm-actions');
+        // A write carrying a masked personal value (#114) is allowed, but only with that value in plain sight.
+        if (tools.some(function(t) { return t.sensitive; })) {
+            actions.parentNode.insertBefore(UI.callout({tone: 'warn', text: 'This may write personal data (such as an email address or phone number). Check the values before you allow it.'}), actions);
+        }
         msgEl.appendChild(card);
         msgs.scrollTop = msgs.scrollHeight;
 
@@ -1376,7 +1534,7 @@ define([
                     try { var d=JSON.parse(ln.substring(6)); } catch(e){return;}
                     if (evt==='text'&&d.text) {
                         if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
-                        full+=d.text; content.innerHTML=renderMd(full); msgs.scrollTop=msgs.scrollHeight;
+                        full+=d.text; content.innerHTML=renderStreamingMd(full); msgs.scrollTop=msgs.scrollHeight;
                     }
                     else if (evt==='tool_call') {
                         if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
@@ -1407,6 +1565,7 @@ define([
                     }
                     else if (evt==='form_apply') { applyPending = true; applyFormDirective(d, handleApplyOutcome); }
                     else if (evt==='done') {
+                        if (content && full) { content.innerHTML = renderMd(full); }
                         if (d.conversation_id) conversationId=d.conversation_id;
                         saveState(); releaseInput();
                         finishRun(failed ? 'failed' : 'done');
@@ -1418,6 +1577,7 @@ define([
                         if (d.pending_confirmation && msg) {
                             showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, []);
                         }
+                        announceReply(msg);
                         keepNavigateStatusLast();
                     }
                     else if (evt==='error') {
@@ -1479,11 +1639,7 @@ define([
                 }
             }
             if (wasFullsize) {
-                chat.classList.add('is-fullsize');
-                document.body.classList.add('mago-fullsize');
-                var expandBtn = qs('#mago-expand');
-                expandBtn.title = 'Side panel';
-                expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+                setFullsize(true);
             }
             openPanel();
         }

@@ -130,6 +130,7 @@ These calls verify the TLS certificate by default. If the internal URL points at
 | Store Configuration | `config_reader`, `config_writer`, `cache_manager`, `indexer_manager` | Read / Write |
 | Content Management | `cms_data`, `content_generator` | Read / Write |
 | Navigation | `admin_navigator` | Read |
+| Inventory | `stock_level` (without MSI), `stock_level_msi` (with MSI) | Read |
 | Documentation | `docs_search` | Read |
 | Form Access | `page_form` | Read / Stage (never saves) |
 
@@ -151,7 +152,7 @@ Typing `/` in the chat shows the available commands. These run without the AI pr
 
 Write commands need the `MagoAssistant_Mago::assistant_write` ACL resource plus a write grant on the underlying skill. See [docs/skills-architecture.md](docs/skills-architecture.md#slash-commands) for registering your own commands.
 
-The answer widgets and skill cards the chat panel renders are documented in [docs/ui-components.md](docs/ui-components.md); [docs/ui-components-examples.md](docs/ui-components-examples.md) shows every component with sample data and the call behind it.
+The answer widgets and skill cards the chat panel renders are documented in [docs/ui-components.md](docs/ui-components.md); [docs/ui-components-examples.md](docs/ui-components-examples.md) shows every component with sample data and the call behind it. To add a widget of your own from another module, follow [docs/widgets.md](docs/widgets.md).
 `page_form` reads the admin form currently open in the browser and can stage new field values for
 the administrator to confirm — it never writes to the database itself, only into the same fields
 the administrator would type into, so their own Save button is what persists anything. See

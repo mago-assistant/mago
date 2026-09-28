@@ -6,17 +6,18 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Sales\OrderManager;
 
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\ConditionallyIrreversibleActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class AddCommentAction implements ActionInterface
+class AddCommentAction implements ConditionallyIrreversibleActionInterface
 {
     public function __construct(
         private readonly InternalApiClient $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl,
-        private readonly OrderResolver $orderResolver
+        private readonly OrderResolver $orderResolver,
+        private readonly CustomerNotificationGuard $notificationGuard
     ) {
     }
 
@@ -43,7 +44,8 @@ class AddCommentAction implements ActionInterface
             ],
             'notify_customer' => [
                 'type' => 'boolean',
-                'description' => 'Whether to notify the customer (default: false)',
+                'description' => 'Whether to e-mail the comment to the customer (default: false). '
+                    . CustomerNotificationGuard::PARAMETER_RULES,
             ],
             'visible_on_front' => [
                 'type' => 'boolean',
@@ -76,7 +78,20 @@ class AddCommentAction implements ActionInterface
 
     public function getInstructions(): string
     {
-        return '';
+        return 'notify_customer e-mails this comment to the customer. It does not resend the order confirmation '
+            . 'or any other e-mail, so never use it as a substitute for one.';
+    }
+
+    public function isIrreversible(array $params): bool
+    {
+        return !empty($params['notify_customer']);
+    }
+
+    public function getImpacts(array $params, int $adminUserId): array
+    {
+        $orderNumber = (string)($params['order_number'] ?? '');
+
+        return [$this->notificationGuard->describeEmail($orderNumber, 'this comment')];
     }
 
     public function execute(array $params, int $adminUserId): array
@@ -105,6 +120,17 @@ class AddCommentAction implements ActionInterface
         $notifyCustomer = !empty($params['notify_customer']);
         $visibleOnFront = !empty($params['visible_on_front']);
 
+        if ($notifyCustomer) {
+            $refusal = $this->notificationGuard->findRefusal(
+                (int)$entityId,
+                (string)$order['increment_id'],
+                CustomerNotificationGuard::KIND_COMMENT
+            );
+            if ($refusal !== null) {
+                return $refusal;
+            }
+        }
+
         $body = [
             'statusHistory' => [
                 'comment' => $comment,
@@ -117,6 +143,10 @@ class AddCommentAction implements ActionInterface
 
         if (isset($result['error'])) {
             return $result;
+        }
+
+        if ($notifyCustomer) {
+            $this->notificationGuard->recordSent((int)$entityId, CustomerNotificationGuard::KIND_COMMENT);
         }
 
         return [

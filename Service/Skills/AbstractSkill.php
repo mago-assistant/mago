@@ -10,6 +10,7 @@ use Magento\Framework\AuthorizationInterface;
 use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Api\Tool\ValidatingToolInterface;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\ConditionallyIrreversibleActionInterface;
 use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
 use MagoAssistant\Mago\Api\Tool\IrreversibleToolInterface;
@@ -183,8 +184,14 @@ abstract class AbstractSkill implements ActionScopedToolInterface, IrreversibleT
     private function irreversibleAction(array $input): ?IrreversibleActionInterface
     {
         $action = $this->actions[$input['action'] ?? ''] ?? null;
+        if (!$action instanceof IrreversibleActionInterface) {
+            return null;
+        }
+        if ($action instanceof ConditionallyIrreversibleActionInterface && !$action->isIrreversible($input)) {
+            return null;
+        }
 
-        return $action instanceof IrreversibleActionInterface ? $action : null;
+        return $action;
     }
 
     public function getInstructions(): string

@@ -27,9 +27,15 @@ if ($luminance < 0.3) {
 }
 $assistantName = $block->getAssistantName();
 $adminName = $block->getAdminFirstName();
-// The welcome screen offers the first few skills as one-click starters.
-$skills = json_decode($block->getSkillsJson(), true) ?: [];
-$starterSkills = array_slice(array_values($skills), 0, 3);
+$hasAccess = $block->canUseAssistant();
+$exampleQuestions = $block->getExampleQuestions();
+$starterIcons = [
+    'stock' => '<path d="M3 7l6 6 4-4 8 8"/><path d="M21 11v6h-6"/>',
+    'chart' => '<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',
+    'orders' => '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>',
+    'bestseller' => '<circle cx="12" cy="9" r="6"/><path d="M8.5 14L7 22l5-3 5 3-1.5-8"/>',
+    'sparkle' => '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.7 1.8L21.5 19.5l-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z"/>',
+];
 ?>
 
 <style>
@@ -47,6 +53,8 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
     --mago-obsidian: #2A2624;
     --mago-void: #373330;
     --mago-tint: #FFE9DC;
+    /* Orange for text: Deep Orange itself is too light to read on the panel surfaces */
+    --mago-accent-ink: #B84000;
 
     /* Light panel surfaces: white panel, warm hairlines, Void as ink. The
        accent only appears as the mark, the user's bubble, links and the
@@ -54,9 +62,10 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
     --mago-panel: #FFFFFF;
     --mago-surface: #F7F5F3;
     --mago-hairline: #E9E5E1;
+    --mago-control-border: #928983;
     --mago-ink: #373330;
     --mago-ink-soft: #6B645F;
-    --mago-ink-muted: #9A918B;
+    --mago-ink-muted: #736B65;
 
     /* Inter ships self-hosted with the admin theme and Open Sans with stock
        Magento, so this stack loads nothing extra on either. */
@@ -65,7 +74,63 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
 }
 </style>
 
-<div id="mago-chat" class="mago-chat-panel is-empty">
+<?php if (!$hasAccess): ?>
+<style>
+.mago-launcher-locked{position:fixed;right:24px;bottom:24px;z-index:9998;width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;background:var(--mago-accent);color:var(--mago-accent-text);box-shadow:0 6px 20px rgba(0,0,0,.18);display:flex;align-items:center;justify-content:center;font-family:var(--mago-font);}
+.mago-launcher-locked:hover{background:var(--mago-accent-hover);}
+.mago-locked{position:fixed;right:24px;bottom:88px;z-index:9998;width:320px;max-width:calc(100vw - 48px);background:var(--mago-panel);color:var(--mago-ink);border:1px solid var(--mago-hairline);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.18);font-family:var(--mago-font);overflow:hidden;}
+.mago-locked-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--mago-hairline);}
+.mago-locked-title{font-weight:600;font-size:14px;}
+.mago-locked-close{border:none;background:none;font-size:20px;line-height:1;cursor:pointer;color:var(--mago-ink-soft);padding:0 4px;}
+.mago-locked-body{padding:16px 16px 18px;}
+.mago-locked-body h2{margin:0 0 6px;font-size:15px;font-weight:600;color:var(--mago-ink);}
+.mago-locked-body p{margin:0;font-size:13px;line-height:1.5;color:var(--mago-ink-soft);}
+</style>
+<button type="button" id="mago-launcher-locked" class="mago-launcher-locked"
+        aria-label="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
+        aria-expanded="false" aria-controls="mago-locked">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="34 30 188 188" fill="currentColor" aria-hidden="true">
+        <polygon points="128,40 160,72 128,104 96,72" opacity="0.55"/>
+        <polygon points="44,208 96,104 128,136 160,104 212,208 152,208 128,160 104,208"/>
+    </svg>
+</button>
+<div id="mago-locked" class="mago-locked" role="dialog" aria-label="<?= $escaper->escapeHtmlAttr($assistantName) ?>" hidden>
+    <div class="mago-locked-head">
+        <span class="mago-locked-title"><?= $escaper->escapeHtml($assistantName) ?></span>
+        <button type="button" id="mago-locked-close" class="mago-locked-close" aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">&times;</button>
+    </div>
+    <div class="mago-locked-body">
+        <h2><?= $escaper->escapeHtml(__('You do not have access yet')) ?></h2>
+        <p><?= $escaper->escapeHtml(__('Your account is not allowed to use the assistant. Ask your store administrator to grant you access, then reload this page.')) ?></p>
+    </div>
+</div>
+<script>
+(function () {
+    'use strict';
+    var launcher = document.getElementById('mago-launcher-locked');
+    var panel = document.getElementById('mago-locked');
+    var close = document.getElementById('mago-locked-close');
+    if (!launcher || !panel) {
+        return;
+    }
+    function setOpen(open) {
+        panel.hidden = !open;
+        launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    launcher.addEventListener('click', function () {
+        setOpen(panel.hidden);
+    });
+    if (close) {
+        close.addEventListener('click', function () {
+            setOpen(false);
+        });
+    }
+})();
+</script>
+<?php return; ?>
+<?php endif; ?>
+
+<aside id="mago-chat" class="mago-chat-panel is-empty" aria-label="<?= $escaper->escapeHtmlAttr($assistantName) ?>" inert>
     <div class="mago-header">
         <div class="mago-header-left">
             <div class="mago-mascot">
@@ -84,7 +149,7 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
                           title="<?= $escaper->escapeHtmlAttr(__('You are interacting with an AI assistant, not a human.')) ?>">
                         <?= $escaper->escapeHtml(__('AI assistant')) ?>
                     </span>
-                    <span class="mago-working-pill" aria-live="polite">
+                    <span class="mago-working-pill">
                         <span class="mago-spinner"></span><?= $escaper->escapeHtml(__('Working')) ?>
                     </span>
                 </div>
@@ -92,26 +157,26 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
             </div>
         </div>
         <div class="mago-header-actions">
-            <button type="button" id="mago-log" class="mago-btn-icon" title="<?= $escaper->escapeHtmlAttr(__('Changes this session')) ?>">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>
+            <button type="button" id="mago-log" class="mago-btn-icon" title="<?= $escaper->escapeHtmlAttr(__('Changes this session')) ?>" aria-pressed="false">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>
             </button>
-            <button type="button" id="mago-history" class="mago-btn-icon" title="<?= $escaper->escapeHtmlAttr(__('Chat History')) ?>">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>
+            <button type="button" id="mago-history" class="mago-btn-icon" title="<?= $escaper->escapeHtmlAttr(__('Chat History')) ?>" aria-pressed="false">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>
             </button>
             <button type="button" id="mago-new" class="mago-btn-icon" title="<?= $escaper->escapeHtmlAttr(__('New Chat')) ?>">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
             <button type="button" id="mago-expand" class="mago-btn-icon" title="<?= $escaper->escapeHtmlAttr(__('Full size')) ?>">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
             </button>
-            <button type="button" id="mago-close" class="mago-btn-icon" title="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <button type="button" id="mago-close" class="mago-btn-icon" title="<?= $escaper->escapeHtmlAttr(__('Close %1', $assistantName)) ?>">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
     </div>
     <div id="mago-history-list" class="mago-history-list" style="display:none;"></div>
     <div id="mago-log-view" class="mago-log-view" style="display:none;"></div>
-    <div id="mago-messages" class="mago-messages">
+    <div id="mago-messages" class="mago-messages" tabindex="0" role="region" aria-label="<?= $escaper->escapeHtmlAttr(__('Conversation')) ?>">
         <!-- Welcome state: shown while the conversation is empty, hidden via .is-empty as soon as a message lands -->
         <div id="mago-welcome" class="mago-welcome">
             <div class="mago-welcome-mark">
@@ -126,15 +191,15 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
             <p class="mago-welcome-text">
                 <?= $escaper->escapeHtml(__('Ask about your catalog, orders or settings. I read anything, and I ask before I change something.')) ?>
             </p>
-            <?php if ($starterSkills): ?>
-                <div class="mago-welcome-label"><?= $escaper->escapeHtml(__('Try one')) ?></div>
-                <div class="mago-starters">
-                    <?php foreach ($starterSkills as $skill): ?>
-                        <button type="button" class="mago-starter" data-skill="<?= $escaper->escapeHtmlAttr($skill['name'] ?? '') ?>">
+            <?php if ($exampleQuestions): ?>
+                <div class="mago-welcome-label" id="mago-starters-label"><?= $escaper->escapeHtml(__('Try one')) ?></div>
+                <div class="mago-starters" role="group" aria-labelledby="mago-starters-label">
+                    <?php foreach ($exampleQuestions as $example): ?>
+                        <button type="button" class="mago-starter" data-question="<?= $escaper->escapeHtmlAttr($example['question']) ?>">
                             <span class="mago-starter-icon">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.7 1.8L21.5 19.5l-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><?= /* @noEscape */ $starterIcons[$example['icon']] ?? $starterIcons['sparkle'] ?></svg>
                             </span>
-                            <span class="mago-starter-text"><?= $escaper->escapeHtml($skill['description'] ?? $skill['name'] ?? '') ?></span>
+                            <span class="mago-starter-text"><?= $escaper->escapeHtml($example['question']) ?></span>
                             <svg class="mago-starter-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
                         </button>
                     <?php endforeach; ?>
@@ -151,17 +216,19 @@ $starterSkills = array_slice(array_values($skills), 0, 3);
     </div>
     <div id="mago-input-area" class="mago-input-wrapper">
         <div id="mago-slash-menu" class="mago-slash-menu"></div>
-        <textarea id="mago-input" class="mago-input" placeholder="<?= $escaper->escapeHtmlAttr(__('Ask anything…')) ?>" rows="1"></textarea>
+        <label for="mago-input" class="mago-sr-only"><?= $escaper->escapeHtml(__('Message %1', $assistantName)) ?></label>
+        <textarea id="mago-input" class="mago-input" placeholder="<?= $escaper->escapeHtmlAttr(__('Ask anything…')) ?>" rows="1" aria-autocomplete="list"></textarea>
         <button type="button" id="mago-send" class="mago-send-btn is-idle" title="<?= $escaper->escapeHtmlAttr(__('Send')) ?>">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="13 5 20 12 13 19"/></svg>
         </button>
     </div>
+    <div id="mago-announcer" class="mago-sr-only" role="status"></div>
     <?php /* Privacy mode (#97 decision 3): non-blocking hint for FP-prone patterns the silent scrub
            does not cover; certain classes (email, IBAN, BSN, VAT, phone) are tokenised server-side. */ ?>
     <div id="mago-privacy-hint" class="mago-privacy-hint" hidden>
         <?= $escaper->escapeHtml(__('This looks like personal data. It is filtered best-effort before reaching the AI provider; avoid pasting customer details.')) ?>
     </div>
-</div>
+</aside>
 
 <script>
 window.MAGO_CONFIG = <?= /* @noEscape */ $block->getJsConfig() ?>;
@@ -172,9 +239,18 @@ window.MAGO_CONFIG.skills = <?= /* @noEscape */ $block->getSkillsJson() ?>;
 window.MAGO_CONFIG.commands = <?= /* @noEscape */ $block->getCommandsJson() ?>;
 </script>
 <script>
-require(['marked', 'MagoAssistant_Mago/js/mago-ui'], function(marked, MagoUI) {
-    window.marked = marked;
-    window.MagoUI = MagoUI;
-    require(['MagoAssistant_Mago/js/chat-panel']);
-});
+// Magento applies requirejs mixins only to modules required after its "mixins" module has
+// wrapped require(), and this inline script can run before that. Loading it first is what lets
+// another module extend mago-ui (MagoUI.register() from a mixin, see docs/widgets.md). Without a
+// "mixins" module the panel still loads, just without mixins.
+(function () {
+    function loadPanel() {
+        require(['marked', 'MagoAssistant_Mago/js/mago-ui'], function(marked, MagoUI) {
+            window.marked = marked;
+            window.MagoUI = MagoUI;
+            require(['MagoAssistant_Mago/js/chat-panel']);
+        });
+    }
+    require(['mixins'], loadPanel, loadPanel);
+})();
 </script>

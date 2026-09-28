@@ -7,18 +7,19 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Sales\OrderManager;
 
 use Magento\Sales\Model\ResourceModel\Order\Status\CollectionFactory as StatusCollectionFactory;
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\ConditionallyIrreversibleActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class UpdateStatusAction implements ActionInterface
+class UpdateStatusAction implements ConditionallyIrreversibleActionInterface
 {
     public function __construct(
         private readonly InternalApiClient $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl,
         private readonly OrderResolver $orderResolver,
-        private readonly StatusCollectionFactory $statusCollectionFactory
+        private readonly StatusCollectionFactory $statusCollectionFactory,
+        private readonly CustomerNotificationGuard $notificationGuard
     ) {
     }
 
@@ -52,7 +53,8 @@ class UpdateStatusAction implements ActionInterface
             ],
             'notify_customer' => [
                 'type' => 'boolean',
-                'description' => 'Whether to notify the customer (default: false)',
+                'description' => 'Whether to e-mail the status change to the customer (default: false). '
+                    . CustomerNotificationGuard::PARAMETER_RULES,
             ],
         ];
     }
@@ -87,6 +89,18 @@ class UpdateStatusAction implements ActionInterface
             . 'Common statuses: pending, processing, complete, holded, canceled, closed.';
     }
 
+    public function isIrreversible(array $params): bool
+    {
+        return !empty($params['notify_customer']);
+    }
+
+    public function getImpacts(array $params, int $adminUserId): array
+    {
+        $orderNumber = (string)($params['order_number'] ?? '');
+
+        return [$this->notificationGuard->describeEmail($orderNumber, 'the status change')];
+    }
+
     public function execute(array $params, int $adminUserId): array
     {
         $orderNumber = $params['order_number'] ?? '';
@@ -114,6 +128,17 @@ class UpdateStatusAction implements ActionInterface
         $notifyCustomer = !empty($params['notify_customer']);
         $comment = $params['comment'] ?? '';
 
+        if ($notifyCustomer) {
+            $refusal = $this->notificationGuard->findRefusal(
+                (int)$entityId,
+                (string)$order['increment_id'],
+                CustomerNotificationGuard::KIND_COMMENT
+            );
+            if ($refusal !== null) {
+                return $refusal;
+            }
+        }
+
         $body = [
             'statusHistory' => [
                 'comment' => $comment ?: 'Status updated to ' . $newStatus,
@@ -127,6 +152,10 @@ class UpdateStatusAction implements ActionInterface
 
         if (isset($result['error'])) {
             return $result;
+        }
+
+        if ($notifyCustomer) {
+            $this->notificationGuard->recordSent((int)$entityId, CustomerNotificationGuard::KIND_COMMENT);
         }
 
         return [

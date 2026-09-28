@@ -6,17 +6,18 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Sales\OrderManager;
 
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\ConditionallyIrreversibleActionInterface;
 use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class CreateShipmentAction implements ActionInterface
+class CreateShipmentAction implements ConditionallyIrreversibleActionInterface
 {
     public function __construct(
         private readonly InternalApiClient $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl,
-        private readonly OrderResolver $orderResolver
+        private readonly OrderResolver $orderResolver,
+        private readonly CustomerNotificationGuard $notificationGuard
     ) {
     }
 
@@ -51,7 +52,8 @@ class CreateShipmentAction implements ActionInterface
             ],
             'notify_customer' => [
                 'type' => 'boolean',
-                'description' => 'Whether to notify the customer (default: true)',
+                'description' => 'Whether to e-mail the shipment to the customer (default: false). '
+                    . CustomerNotificationGuard::PARAMETER_RULES,
             ],
             'comment' => [
                 'type' => 'string',
@@ -86,7 +88,20 @@ class CreateShipmentAction implements ActionInterface
     public function getInstructions(): string
     {
         return 'For European carriers (PostNL, DPD, GLS), use carrier_code "custom" with the carrier_title set to the carrier name. '
-            . 'Built-in Magento carrier codes: dhl, ups, fedex, usps, dhlint.';
+            . 'Built-in Magento carrier codes: dhl, ups, fedex, usps, dhlint. '
+            . 'Set notify_customer to true only when the user wants the customer to get the shipment e-mail.';
+    }
+
+    public function isIrreversible(array $params): bool
+    {
+        return !empty($params['notify_customer']);
+    }
+
+    public function getImpacts(array $params, int $adminUserId): array
+    {
+        $orderNumber = (string)($params['order_number'] ?? '');
+
+        return [$this->notificationGuard->describeEmail($orderNumber, 'the shipment')];
     }
 
     public function execute(array $params, int $adminUserId): array
@@ -107,11 +122,22 @@ class CreateShipmentAction implements ActionInterface
         }
 
         $entityId = $order['entity_id'];
-        $notify = $params['notify_customer'] ?? true;
+        $notify = !empty($params['notify_customer']);
         $comment = $params['comment'] ?? '';
 
+        if ($notify) {
+            $refusal = $this->notificationGuard->findRefusal(
+                (int)$entityId,
+                (string)$order['increment_id'],
+                CustomerNotificationGuard::KIND_SHIPMENT
+            );
+            if ($refusal !== null) {
+                return $refusal;
+            }
+        }
+
         $body = [
-            'notify' => (bool)$notify,
+            'notify' => $notify,
         ];
 
         $trackingNumber = $params['tracking_number'] ?? '';
@@ -138,6 +164,10 @@ class CreateShipmentAction implements ActionInterface
 
         if (isset($result['error'])) {
             return $result;
+        }
+
+        if ($notify) {
+            $this->notificationGuard->recordSent((int)$entityId, CustomerNotificationGuard::KIND_SHIPMENT);
         }
 
         $shipmentId = $result['result'] ?? $result['id'] ?? null;

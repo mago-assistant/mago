@@ -1,7 +1,7 @@
 // Config Tab Icon
 .admin__page-nav._collapsed.mago-tab .title,
 .admin__page-nav._collapsed._show.mago-tab .title {
-    background-image: url('@{baseDir}MagoAssistant_Mago/images/mago-icon.svg');
+    background-image: url('MagoAssistant_Mago::images/mago-icon.svg');
     background-position: 15px center;
     background-repeat: no-repeat;
     background-size: 20px auto;
@@ -35,7 +35,19 @@
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--mago-ink-muted, #9A918B);
+    color: var(--mago-ink-muted, #736B65);
+}
+
+.mago-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
 }
 
 // Page wrapper push when panel is open
@@ -170,6 +182,19 @@ html:has(body.mago-active) {
     button {
         font-family: var(--mago-font);
     }
+
+    // A solid ring: the admin theme's pale blue glow all but disappears on white
+    button:focus-visible,
+    [tabindex]:focus-visible {
+        outline: 2px solid var(--mago-ink, #373330);
+        outline-offset: 2px;
+        box-shadow: none;
+    }
+
+    // Spans the full panel width, so an outer ring would be clipped at the edges
+    .mago-messages:focus-visible {
+        outline-offset: -2px;
+    }
 }
 
 // Shared spinner ring: the working pill, the active tool step, the thinking row
@@ -241,7 +266,7 @@ html:has(body.mago-active) {
 .mago-subtitle {
     font-size: 11px;
     line-height: 1.3;
-    color: var(--mago-ink-muted, #9A918B);
+    color: var(--mago-ink-muted, #736B65);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -259,7 +284,7 @@ html:has(body.mago-active) {
     padding: 3px 9px 3px 7px;
     border-radius: 999px;
     background: var(--mago-accent-light, #FFE9DC);
-    color: var(--mago-deep, #E65000);
+    color: var(--mago-accent-ink, #B84000);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0;
@@ -281,7 +306,7 @@ html:has(body.mago-active) {
     height: 30px;
     background: transparent;
     border: none;
-    color: var(--mago-ink-muted, #9A918B);
+    color: var(--mago-ink-muted, #736B65);
     cursor: pointer;
     padding: 0;
     border-radius: 8px;
@@ -290,7 +315,8 @@ html:has(body.mago-active) {
     justify-content: center;
     transition: color 0.15s, background 0.15s;
 
-    &:hover {
+    &:hover,
+    &[aria-pressed="true"] {
         color: var(--mago-ink, #373330);
         background: var(--mago-surface, #F7F5F3);
     }
@@ -375,6 +401,12 @@ html:has(body.mago-active) {
         border-color: rgba(var(--mago-accent-rgb, 255, 122, 51), 0.5);
         background: #FFFBF9;
     }
+
+    &:focus-visible {
+        background: #FFFBF9;
+        outline: 2px solid var(--mago-accent, #FF7A33);
+        outline-offset: 2px;
+    }
 }
 
 .mago-starter-icon {
@@ -388,13 +420,14 @@ html:has(body.mago-active) {
     min-width: 0;
     font-size: 13px;
     font-weight: 500;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .mago-starter-chevron {
-    color: var(--mago-ink-muted, #9A918B);
+    color: var(--mago-ink-muted, #736B65);
     flex-shrink: 0;
 }
 
@@ -403,7 +436,7 @@ html:has(body.mago-active) {
     margin-top: auto;
     padding-top: 24px;
     font-size: 12px;
-    color: var(--mago-ink-muted, #9A918B);
+    color: var(--mago-ink-muted, #736B65);
 
     kbd {
         display: inline-block;
@@ -494,13 +527,14 @@ html:has(body.mago-active) {
         text-decoration: none;
         font-weight: 600;
         cursor: pointer;
-        color: var(--mago-deep, #E65000);
+        color: var(--mago-accent-ink, #B84000);
 
         &:hover {
             text-decoration: underline;
         }
 
         &::before {
+            --_icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3Cpolyline points='15 3 21 3 21 9'/%3E%3Cline x1='10' y1='14' x2='21' y2='3'/%3E%3C/svg%3E");
             content: '';
             display: inline-block;
             width: 11px;
@@ -508,8 +542,8 @@ html:has(body.mago-active) {
             margin-right: 3px;
             vertical-align: -1px;
             background: currentColor;
-            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3Cpolyline points='15 3 21 3 21 9'/%3E%3Cline x1='10' y1='14' x2='21' y2='3'/%3E%3C/svg%3E") center/contain no-repeat;
-            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3Cpolyline points='15 3 21 3 21 9'/%3E%3Cline x1='10' y1='14' x2='21' y2='3'/%3E%3C/svg%3E") center/contain no-repeat;
+            -webkit-mask: var(--_icon) center/contain no-repeat;
+            mask: var(--_icon) center/contain no-repeat;
         }
     }
 
@@ -600,7 +634,7 @@ html:has(body.mago-active) {
     gap: 8px;
     font-size: 12px;
     font-weight: 500;
-    color: var(--mago-deep, #E65000);
+    color: var(--mago-accent-ink, #B84000);
 }
 
 // Tool trace (S06 read lines from mago-ui.js) sits between the tags and the
@@ -665,7 +699,7 @@ html:has(body.mago-active) {
 // Message timestamp
 .mago-msg-time {
     font-size: 10px;
-    color: var(--mago-ink-muted, #9A918B);
+    color: var(--mago-ink-muted, #736B65);
     margin-top: 6px;
 }
 
@@ -697,7 +731,8 @@ html:has(body.mago-active) {
     box-sizing: border-box;
     background: var(--mago-panel, #FFFFFF);
     color: var(--mago-ink, #373330);
-    border: 1px solid var(--mago-hairline, #E9E5E1);
+    // A hairline is too faint to show where the field is; this border keeps 3:1
+    border: 1px solid var(--mago-control-border, #928983);
     border-radius: 10px;
     // 10 + 18 + 10 + 2px border = 40px, the exact height of the send button,
     // so a single line sits flush with it instead of a pixel or two short.
@@ -716,12 +751,12 @@ html:has(body.mago-active) {
     transition: border-color 0.15s, box-shadow 0.15s;
 
     &::placeholder {
-        color: var(--mago-ink-muted, #9A918B);
+        color: var(--mago-ink-muted, #736B65);
     }
 
     &:focus {
-        border-color: var(--mago-accent, #FF7A33);
-        box-shadow: 0 0 0 3px rgba(var(--mago-accent-rgb, 255, 122, 51), 0.16);
+        border-color: var(--mago-accent-ink, #B84000);
+        box-shadow: 0 0 0 1px var(--mago-accent-ink, #B84000);
     }
 }
 
@@ -757,7 +792,7 @@ html:has(body.mago-active) {
     &.is-idle,
     &:disabled {
         background: var(--mago-surface, #F7F5F3);
-        color: var(--mago-ink-muted, #9A918B);
+        color: var(--mago-ink-muted, #736B65);
         box-shadow: none;
     }
 
@@ -787,11 +822,6 @@ html:has(body.mago-active) {
         border-radius: 50%;
         background: var(--mago-accent, #FF7A33);
     }
-
-    &.is-active {
-        color: var(--mago-ink, #373330);
-        background: var(--mago-surface, #F7F5F3);
-    }
 }
 
 // History list
@@ -819,9 +849,15 @@ html:has(body.mago-active) {
 }
 
 .mago-history-item-title {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
     font-size: 13px;
     font-weight: 500;
-    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -830,7 +866,7 @@ html:has(body.mago-active) {
 
 .mago-history-item-date {
     font-size: 11px;
-    color: var(--mago-ink-muted, #9A918B);
+    color: var(--mago-ink-muted, #736B65);
     flex-shrink: 0;
     margin-left: 8px;
 }
@@ -843,11 +879,12 @@ html:has(body.mago-active) {
     cursor: pointer;
     padding: 4px;
     border-radius: 6px;
-    color: var(--mago-ink-muted, #9A918B);
+    color: var(--mago-ink-muted, #736B65);
     display: flex;
     align-items: center;
 
-    .mago-history-item:hover & {
+    .mago-history-item:hover &,
+    .mago-history-item:focus-within & {
         opacity: 1;
     }
 
@@ -872,7 +909,7 @@ html:has(body.mago-active) {
     }
 
     .mago-menu-title {
-        color: var(--mago-deep, #E65000);
+        color: var(--mago-accent-ink, #B84000);
         font-weight: 600;
     }
 }

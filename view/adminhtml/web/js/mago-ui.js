@@ -31,6 +31,7 @@ define([], function () {
     'use strict';
 
     var SVG_NS = 'http://www.w3.org/2000/svg';
+    var menuSeq = 0;
 
     // Inline icon set (24x24, stroke = currentColor). Kept as markup strings so
     // a builder can drop one into an <svg> without a template engine.
@@ -59,6 +60,12 @@ define([], function () {
         imageOff: '<rect x="3" y="4" width="18" height="14" rx="2.5"/><path d="M4 17l5-4 3.5 2.5"/><path d="M3 3l18 18"/>',
         sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.7 1.8L21.5 19.5l-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z"/>'
     };
+
+    // Inside an answer, a click on an element with SEND_ATTR sends its value as
+    // the admin's next message and one with FOCUS_ATTR moves the focus to the
+    // input. The chat panel handles both, so a widget needs no script of its own.
+    var SEND_ATTR = 'data-mago-send';
+    var FOCUS_ATTR = 'data-mago-focus';
 
     // Default English copy. Override per call through opts.labels, or globally
     // through MagoUI.labels before rendering.
@@ -856,6 +863,9 @@ define([], function () {
             icon('chevronRight', 16, 2.2)
         ]);
         setHref(node, opts.href);
+        if (!node.href && !opts.onClick) {
+            node.setAttribute(SEND_ATTR, opts.label);
+        }
         return clickable(node, opts.onClick);
     }
 
@@ -865,6 +875,8 @@ define([], function () {
             chip.type = 'button';
             if (c.onClick) {
                 chip.addEventListener('click', function (e) { c.onClick(e, c); });
+            } else {
+                chip.setAttribute(SEND_ATTR, c.label);
             }
             return chip;
         }));
@@ -1367,20 +1379,34 @@ define([], function () {
     // A "group" on an entry opens a heading row above it, so one menu can hold several
     // kinds of entry; activeIndex and the onSelect index stay flat over all of them.
     // Returns the menu; call menu.magoSetActive(i) to move the highlight.
+    // With onSelect the rows are listbox options driven from a text field through
+    // aria-activedescendant (menu.magoListId, menu.magoItems[i].id), so they take no focus
+    // themselves. Without it the menu is only a static list.
     function skillMenu(opts) {
         var L = labels(opts);
         var skillsList = opts.skills || [];
         var activeIndex = opts.activeIndex || 0;
+        var interactive = typeof opts.onSelect === 'function';
+        var prefix = 'mago-menu-' + (++menuSeq);
         var items = [];
         var listChildren = [];
         var openGroup = null;
+        var groupNode = null;
         skillsList.forEach(function (s, i) {
-            if (s.group && s.group !== openGroup) {
+            if (!s.group) {
+                openGroup = null;
+                groupNode = null;
+            } else if (s.group !== openGroup) {
                 openGroup = s.group;
-                listChildren.push(el('div', 'mago-menu-group', s.group));
+                var groupLabel = el('div', 'mago-menu-group', s.group);
+                groupLabel.id = prefix + '-group-' + i;
+                groupNode = el('div', 'mago-menu-group-items', groupLabel);
+                groupNode.setAttribute('role', 'group');
+                groupNode.setAttribute('aria-labelledby', groupLabel.id);
+                listChildren.push(groupNode);
             }
             var risk = s.risk || 'read';
-            var row = el('div', 'mago-menu-item' + (opts.itemClass ? ' ' + opts.itemClass : '') + (i === activeIndex ? ' is-active' : ''), [
+            var row = el('div', 'mago-menu-item' + (opts.itemClass ? ' ' + opts.itemClass : '') + (interactive && i === activeIndex ? ' is-active' : ''), [
                 el('span', 'mago-risk is-' + risk),
                 el('div', 'mago-menu-text', [
                     el('div', 'mago-menu-title', s.title || s.name),
@@ -1388,17 +1414,36 @@ define([], function () {
                 ]),
                 mono(s.riskLabel || L.risk[risk] || risk, 'mago-menu-risk')
             ]);
-            row.setAttribute('role', 'option');
-            row.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
-            clickable(row, opts.onSelect ? function (e) { opts.onSelect(s, i, e); } : null);
+            row.id = prefix + '-item-' + i;
+            if (interactive) {
+                row.classList.add('is-clickable');
+                row.setAttribute('role', 'option');
+                row.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
+                row.addEventListener('click', function (e) { opts.onSelect(s, i, e); });
+            } else {
+                row.setAttribute('role', 'listitem');
+            }
             items.push(row);
-            listChildren.push(row);
+            if (groupNode) {
+                groupNode.appendChild(row);
+            } else {
+                listChildren.push(row);
+            }
         });
+        var caption = el('div', 'mago-caption is-grow', opts.title || L.skills);
+        caption.id = prefix + '-caption';
+        var list = el('div', 'mago-menu-items', listChildren);
+        list.id = prefix + '-list';
+        list.setAttribute('role', interactive ? 'listbox' : 'list');
+        if (opts.hideHead) {
+            list.setAttribute('aria-label', opts.title || L.skills);
+        } else {
+            list.setAttribute('aria-labelledby', caption.id);
+        }
         var node = el('div', 'mago-menu', [
-            opts.hideHead ? null : el('div', 'mago-menu-head', [el('div', 'mago-caption is-grow', opts.title || L.skills), el('div', 'mago-menu-hint', opts.hint || L.menuHint)]),
-            el('div', 'mago-menu-items', listChildren)
+            opts.hideHead ? null : el('div', 'mago-menu-head', [caption, el('div', 'mago-menu-hint', opts.hint || L.menuHint)]),
+            list
         ]);
-        node.setAttribute('role', 'listbox');
         node.magoSetActive = function (index) {
             items.forEach(function (it, i) {
                 it.classList.toggle('is-active', i === index);
@@ -1409,6 +1454,7 @@ define([], function () {
             }
         };
         node.magoItems = items;
+        node.magoListId = list.id;
         return node;
     }
 
@@ -1454,12 +1500,86 @@ define([], function () {
     };
 
     // Build a widget from a plain spec: {type: 'stat', label: ..., ...}.
-    // Unknown types return null so a caller can fall back to plain text.
+    // Unknown types return null so a caller can fall back to plain text, and so
+    // does a builder that throws: one broken widget must not break the answer.
     function render(spec) {
-        if (!spec || typeof spec !== 'object' || !BUILDERS[spec.type]) {
+        if (!spec || typeof spec !== 'object' || !Object.prototype.hasOwnProperty.call(BUILDERS, spec.type)) {
             return null;
         }
-        return BUILDERS[spec.type](spec);
+        try {
+            return BUILDERS[spec.type](spec) || null;
+        } catch (e) {
+            if (typeof console !== 'undefined') {
+                console.warn('[Mago] widget "' + spec.type + '" failed to render', e);
+            }
+            return null;
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Extension                                                            */
+    /* ------------------------------------------------------------------ */
+
+    // Another module adds a widget type from a requirejs mixin on this module
+    // (see docs/widgets.md). Built-in types cannot be replaced.
+    var TYPE_PATTERN = /^[a-zA-Z][a-zA-Z0-9]*$/;
+
+    function register(type, builder) {
+        if (typeof type !== 'string' || !TYPE_PATTERN.test(type) || typeof builder !== 'function') {
+            warn('MagoUI.register() needs a camelCase type and a builder function');
+            return false;
+        }
+        if (Object.prototype.hasOwnProperty.call(BUILDERS, type)) {
+            warn('widget type "' + type + '" already exists');
+            return false;
+        }
+        BUILDERS[type] = builder;
+        MagoUI[type] = builder;
+        MagoUI.types.push(type);
+        return true;
+    }
+
+    function warn(message) {
+        if (typeof console !== 'undefined') {
+            console.warn('[Mago] ' + message);
+        }
+    }
+
+    // What a widget built from an answer may not contain, whoever wrote the
+    // builder: the spec came from the model, and the HTML lands in innerHTML.
+    // Raw-text elements are out because their content serializes unescaped and
+    // parses differently the second time; SVG animation can rewrite an href.
+    var FORBIDDEN_TAGS = new RegExp('^(script|style|iframe|frame|object|embed|link|meta|base|form|template'
+        + '|xmp|noembed|noframes|noscript|plaintext|math|foreignobject'
+        + '|animate|animatemotion|animatetransform|set|handler|listener)$', 'i');
+    var URL_ATTRS = /^(href|src|action|formaction|xlink:href|poster|background)$/i;
+
+    function scrub(root) {
+        var nodes = [root].concat(Array.prototype.slice.call(root.querySelectorAll('*')));
+        nodes.forEach(function (node) {
+            if (node !== root && FORBIDDEN_TAGS.test(node.tagName)) {
+                node.parentNode.removeChild(node);
+                return;
+            }
+            Array.prototype.slice.call(node.attributes).forEach(function (attr) {
+                var name = attr.name.toLowerCase();
+                if (name.indexOf('on') === 0 || name === 'srcdoc'
+                    || (URL_ATTRS.test(name) && safeHref(attr.value) === null)
+                    || (name === 'style' && /url\s*\(|expression\s*\(|javascript:/i.test(attr.value))) {
+                    node.removeAttribute(attr.name);
+                }
+            });
+        });
+        return root;
+    }
+
+    // The HTML goes back through innerHTML, which may not parse it the way the
+    // builder built it. Parse it once in an inert document, where nothing loads
+    // or runs, and scrub what that parse produced: that is what the page gets.
+    function scrubbedHtml(root) {
+        var html = scrub(root).outerHTML;
+        var parsed = new DOMParser().parseFromString(html, 'text/html').body.firstElementChild;
+        return parsed ? scrub(parsed).outerHTML : null;
     }
 
     // Render a JSON string (a ```mago fenced block) to HTML, or null when it
@@ -1469,7 +1589,12 @@ define([], function () {
         try {
             spec = JSON.parse(json);
         } catch (e) {
-            return null;
+            // Models sometimes put several widgets in one block as {...},{...}: read that as a list.
+            try {
+                spec = JSON.parse('[' + json + ']');
+            } catch (e2) {
+                return null;
+            }
         }
         var specs = Array.isArray(spec) ? spec : [spec];
         var wrap = el('div', 'mago-answer');
@@ -1479,7 +1604,7 @@ define([], function () {
         try {
             specs.forEach(function (s) {
                 var node = render(s);
-                if (node) {
+                if (node instanceof Node) {
                     wrap.appendChild(node);
                     built++;
                 }
@@ -1487,7 +1612,7 @@ define([], function () {
         } finally {
             allowHtml = true;
         }
-        return built ? wrap.outerHTML : null;
+        return built ? scrubbedHtml(wrap) : null;
     }
 
     var MagoUI = {
@@ -1508,6 +1633,12 @@ define([], function () {
         chips: chips,
         render: render,
         renderJson: renderJson,
+        register: register,
+        el: el,
+        content: content,
+        safeHref: safeHref,
+        sendAttr: SEND_ATTR,
+        focusAttr: FOCUS_ATTR,
         types: Object.keys(BUILDERS)
     };
     Object.keys(BUILDERS).forEach(function (k) { MagoUI[k] = BUILDERS[k]; });

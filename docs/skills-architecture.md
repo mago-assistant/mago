@@ -126,14 +126,50 @@ never change anything.
 named in the input, so a skill needs no extra code. `ChatService` asks the tool before it sends a
 confirmation and adds `irreversible: true` plus the `impacts` to that tool in the `confirm` event;
 the chat panel then shows the "cannot be undone" card with an acknowledgement checkbox instead of
-a plain Allow button. Built-in irreversible actions: `order_manager` `cancel` and
-`create_creditmemo`, `url_rewrite_manager` `delete`.
+a plain Allow button. Built-in irreversible actions: `order_manager` `cancel`,
+`create_creditmemo` and `resend_confirmation`, `url_rewrite_manager` `delete`.
+
+An action that is only irreversible for some calls implements
+`ConditionallyIrreversibleActionInterface` and answers `isIrreversible(array $params)`; the other
+calls get the plain Allow button. The `order_manager` actions `add_comment`, `update_status`,
+`create_invoice` and `create_shipment` do this: they are irreversible when `notify_customer` is
+true, because a sent e-mail cannot be recalled.
+
+Every `order_manager` action that e-mails the customer first asks `CustomerNotificationGuard`,
+after approval and right before the API call. It lets each kind of e-mail (comment, invoice,
+shipment, credit memo, order confirmation) go to the customer of an order once per
+`mago/tools/customer_notification_interval` minutes (default 60, 0 removes the limit) and
+refuses the rest as a tool result. Only a successful call counts as sent. This is what stops a
+request like "send 100 confirmation e-mails": the prompt and the confirmation card alone do not.
+
+The rules that keep the model from trying in the first place (no bulk or repeated e-mail, `resend_confirmation`
+rather than a comment e-mail for the order confirmation, no "try again" after a failed e-mail) are appended to every
+`notify_customer` parameter description (`CustomerNotificationGuard::PARAMETER_RULES`). They cannot
+go in `getInstructions()`: those only reach the model after its first call of the tool, and not at
+all after a confirmed write. They also stay out of the tool description, which the confirmation
+card shows to the administrator.
 
 A `confirm` event also carries each tool call's `id`. With several writes in one turn the panel
 shows a tick list; the confirm request then sends the ticked ids as `tool_call_ids`, and
 `executeConfirmedTools()` answers every unticked call with `{"skipped": true, ...}` without
 running it. A tool that returns an `error` key is reported to the panel with a `tool_status` of
 `failed` and the error as `message`.
+
+#### `PresentableToolInterface`
+
+A tool decides how the chat panel shows it by implementing
+`MagoAssistant\Mago\Api\Tool\PresentableToolInterface`:
+
+- `getDisplayName(): string` is the title on its cards and in the session log. Without it the
+  panel derives one from the tool name (`stock_alerts` reads "Stock alerts").
+- `getStatusMessage(string $action, array $input): ?string` is the line shown while the call runs
+  ("Checking stock levels..."). Return `null` to keep the default ("Running stock_alerts...").
+  The input is the call as the model proposed it, so personal values in it are still masked.
+
+Built-in tools take their status lines from a list in `ChatService::getToolStatusMessage()`; a
+tool from another module implements this interface instead. The display name reaches the panel
+through the skills list (`MAGO_CONFIG.skills[].title`). To add an answer widget alongside a tool,
+see [widgets.md](widgets.md).
 
 #### `ActionScopedToolInterface`
 
@@ -309,6 +345,15 @@ The module ships with 10 tools grouped into 4 skill areas:
 | `sales_data` | `Service\Skills\Analytics\SalesData` | Yes | Revenue summaries, top products, recent orders, order counts by status. Supports period filters (`today`, `7days`, `30days`, custom date ranges). |
 | `product_data` | `Service\Skills\Analytics\ProductData` | Yes | Product search, lookup by SKU, inventory counts, low-stock alerts. |
 | `customer_data` | `Service\Skills\Analytics\CustomerData` | Yes | Customer counts, recent signups, top spenders. **Never returns PII** — only aggregates and IDs. |
+
+### Inventory
+
+Both tools implement `AvailabilityAwareToolInterface`, so the registry offers exactly one of them depending on whether Multi-Source Inventory is enabled.
+
+| Tool | Class | Read-only | Description |
+|------|-------|-----------|-------------|
+| `stock_level` | `Service\Skills\Inventory\StockLevel` | Yes | Stock of one SKU from the catalog stock item: quantity, in-stock status, manage stock, backorders. Stores without MSI only. |
+| `stock_level_msi` | `Service\Skills\Inventory\StockLevelMsi` | Yes | Quantity and status per inventory source, salable quantity per stock. Stores with MSI only; MSI services are resolved at run time so disabling or removing the Inventory modules does not break the registry. |
 
 ### Store Configuration
 
@@ -611,6 +656,7 @@ Add a `system.xml` field under the Admin Assistant tools section so store admins
 - **Include `_links` for navigable records** — if your tool returns orders, products, or other admin-viewable entities, add a `_links` array so the admin can click through to the relevant page.
 - **Set `isReadOnly()` correctly** — if your tool has any side effects (writes, API calls that change state), return `false`. This triggers the user confirmation flow.
 - **Classify every output field** (`getFieldClassification()`, required since 2.0.0) — the privacy filter strips any field you do not declare, so an incomplete map silently empties your tool's output. Fields that can carry personal data are `PiiClass::STRIP` (or `TOKENISE` for bare linkable ids); see `docs/privacy-mode/README.md` for the four canonical shapes.
+- **Depend on an optional module? Implement `AvailabilityAwareToolInterface`** — return `false` from `isAvailable()` when the module is off, and the registry leaves the tool out entirely. Do not inject services of that module in the constructor: the registry instantiates every tool, so a missing dependency breaks all of them. `Service\Skills\Inventory\StockLevelMsi` shows the pattern.
 - **Never return secrets** — API keys, passwords, tokens should never appear in tool output. They would be sent to the LLM.
 - **Handle errors gracefully** — throw exceptions with clear messages. The ChatService catches them and reports to the user.
 

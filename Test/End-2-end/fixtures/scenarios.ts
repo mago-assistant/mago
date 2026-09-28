@@ -288,3 +288,21 @@ export const formApplyNotAnObject: ChatScenario = {
         },
     ],
 }
+
+/* The panel escapes the answer's HTML before a ```mago block is parsed, but JSON's own \u003c escapes
+   survive that and decode to markup inside the spec: this is how a model smuggles HTML to a builder. */
+export const widgetAnswerWithUnicodeEscapedMarkup = (widgets: unknown): ChatScenario =>
+    widgetAnswerJson(JSON.stringify(widgets).replace(/</g, '\\u003c').replace(/>/g, '\\u003e'));
+
+export const widgetAnswer = (widgets: unknown): ChatScenario => widgetAnswerJson(JSON.stringify(widgets));
+
+const widgetAnswerJson = (json: string): ChatScenario => ({
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        { event: 'text', data: { text: 'Here you go.\n\n```mago\n' + json + '\n```\n' } },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: false },
+        },
+    ],
+})

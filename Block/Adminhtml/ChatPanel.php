@@ -11,10 +11,12 @@ use Magento\Backend\Block\Template\Context;
 use Magento\Backend\Model\Auth\Session as AdminSession;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
+use MagoAssistant\Mago\Api\Tool\PresentableToolInterface;
 use MagoAssistant\Mago\Service\Command\CommandRegistry;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
+use MagoAssistant\Mago\Service\Welcome\ExampleQuestions;
 
 class ChatPanel extends Template
 {
@@ -43,6 +45,8 @@ class ChatPanel extends Template
      */
     public const FORM_BYTE_CAP = 200000;
 
+    private const ACL_ASSISTANT = 'MagoAssistant_Mago::assistant_read';
+
     protected $_template = 'MagoAssistant_Mago::chat/panel.phtml';
 
     public function __construct(
@@ -54,6 +58,7 @@ class ChatPanel extends Template
         private readonly CommandRegistry $commandRegistry,
         private readonly CommandRunner $commandRunner,
         private readonly FormPolicy $formPolicy,
+        private readonly ExampleQuestions $exampleQuestions,
         array $data = []
     ) {
         parent::__construct($context, $data);
@@ -67,6 +72,15 @@ class ChatPanel extends Template
 
         // Only show when admin user is logged in
         return $this->adminSession->isLoggedIn();
+    }
+
+    /**
+     * The chat controllers require assistant_read; without it the panel shows a notice rather
+     * than wiring a chat whose every call would 403 (#159).
+     */
+    public function canUseAssistant(): bool
+    {
+        return $this->_authorization->isAllowed(self::ACL_ASSISTANT);
     }
 
     public function getJsConfig(): string
@@ -133,6 +147,13 @@ class ChatPanel extends Template
             'Action rejected. No changes were made.',
             'CMS page',
             'CMS block',
+            'Delete conversation: %1',
+            '%1 suggestions. Use up and down to choose, Enter to insert.',
+            '1 suggestion. Press Enter to insert.',
+            'Table',
+            '%1 replied: %2',
+            'Waiting for your confirmation.',
+            '%1 is working…',
         ];
 
         return array_combine($sentences, array_map(static fn (string $sentence): string => (string)__($sentence), $sentences));
@@ -160,6 +181,8 @@ class ChatPanel extends Template
             $definition = $this->toolRegistry->getToolDefinition($tool, $adminUserId);
             $skills[] = [
                 'name' => $definition['name'],
+                // The panel's card title; without one it derives a title from the name
+                'title' => $tool instanceof PresentableToolInterface ? $tool->getDisplayName() : null,
                 'description' => $definition['description'],
                 'readOnly' => $tool->isReadOnly() || !$this->toolRegistry->hasWriteAccess($tool, $adminUserId),
             ];
@@ -194,6 +217,14 @@ class ChatPanel extends Template
             ];
         }
         return (string)$this->json->serialize($commands);
+    }
+
+    /**
+     * @return list<array{question: string, icon: string}>
+     */
+    public function getExampleQuestions(): array
+    {
+        return $this->exampleQuestions->getForAdmin($this->getAdminUserId());
     }
 
     private function getAdminUserId(): ?int

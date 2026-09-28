@@ -67,6 +67,20 @@ controlled by *Stores > Configuration > Mago Assistant > Chat Settings > Answer
 Widgets* (`mago/chat/answer_widgets`, default Yes); switching it off keeps the
 renderer but stops the model from being told about it.
 
+Inside an answer, clicks work through two attributes the panel handles for every
+widget: `data-mago-send="text"` (`MagoUI.sendAttr`) sends the text as the admin's
+next message and `data-mago-focus` (`MagoUI.focusAttr`) focuses the input. Chips
+and suggestion cards without their own `onClick` or `href` carry
+`data-mago-send` with their label. Whatever a builder returns is scrubbed before
+it reaches the page (no scripts, event attributes or unsafe links), and a
+builder that throws is skipped.
+
+Another module can add its own widget type with `MagoUI.register(type, builder)`
+and the `widgets` argument of `AnswerWidgets` in its `di.xml`; see
+[widgets.md](widgets.md) for the full walkthrough and
+[examples/Vendor_MagoStockAlert](examples/Vendor_MagoStockAlert) for a working
+module.
+
 ## Widgets (W01–W21)
 
 | # | Builder | Options |
@@ -116,7 +130,7 @@ changes in place, it does not move.
 | S10 | `paramPrompt` | `text`, `prefix`, `value`, `placeholder`, `type`, `onSubmit(value)`, `chips: [{label, value}]` |
 | S11 | `undoCallout` | `text`, `onUndo`, `undoLabel`, `expiresText` |
 | S12 | `sessionLog` | `title`, `entries: [{text, time, tone}]`, `onExport` |
-| S14 | `skillMenu` | `skills: [{name, title, description, risk: read\|write\|irreversible, group}]`, `title`, `activeIndex`, `onSelect(skill, index)`, `itemClass`. A `group` opens a heading row above the entry, so one menu can hold several kinds of entry; `activeIndex` and the `onSelect` index stay flat over all of them. Exposes `magoSetActive(index)`. |
+| S14 | `skillMenu` | `skills: [{name, title, description, risk: read\|write\|irreversible, group}]`, `title`, `activeIndex`, `onSelect(skill, index)`, `itemClass`. A `group` opens a heading row above the entry, so one menu can hold several kinds of entry; `activeIndex` and the `onSelect` index stay flat over all of them. Exposes `magoSetActive(index)`. With `onSelect` the rows are listbox options that take no focus: drive them from a text field through `aria-controls` (`magoListId`) and `aria-activedescendant` (`magoItems[i].id`). Without it the menu is a static list. |
 
 ## Where the panel uses them
 
