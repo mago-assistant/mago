@@ -37,9 +37,9 @@ class GetDocumentAction implements ActionInterface
                 'enum' => array_keys($this->documentTypes),
                 'description' => 'What kind of document to get or list',
             ],
-            'reference' => [
+            'document_number' => [
                 'type' => 'string',
-                'description' => 'Number of the document, as the user gave it (e.g. "000000549")',
+                'description' => 'The document\'s own number, as the user gave it (e.g. "000000549")',
             ],
         ];
     }
@@ -76,14 +76,14 @@ class GetDocumentAction implements ActionInterface
             return ['error' => 'You do not have permission to access ' . $typeName . ' documents'];
         }
 
-        $reference = $params['reference'] ?? '';
-        if ($reference === '') {
-            return ['error' => 'reference is required for get_document'];
+        $documentNumber = $params['document_number'] ?? '';
+        if ($documentNumber === '') {
+            return ['error' => 'document_number is required for get_document'];
         }
 
-        $documents = $documentType->list(['document_number' => $reference])->documents(1);
+        $documents = $documentType->list(['document_number' => $documentNumber])->documents(1);
         if ($documents === []) {
-            return ['error' => 'No ' . str_replace('_', ' ', $typeName) . ' has number ' . $reference];
+            return ['error' => 'No ' . str_replace('_', ' ', $typeName) . ' has number ' . $documentNumber];
         }
 
         return $documents[0];

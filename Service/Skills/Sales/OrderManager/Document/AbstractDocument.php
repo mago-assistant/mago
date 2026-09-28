@@ -24,6 +24,7 @@ abstract class AbstractDocument implements DocumentTypeInterface
         'currency' => [PiiClass::PUBLIC],
         'qty' => [PiiClass::PUBLIC],
         'tracking' => [PiiClass::TOKENISE, 'tracking'],
+        'carrier' => [PiiClass::PUBLIC],
         'admin_url' => [PiiClass::TOKENISE, 'url'],
     ];
 

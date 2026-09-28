@@ -193,6 +193,48 @@ class ListDocumentsActionTest extends TestCase
     }
 
     #[Test]
+    public function itListsTheInvoicesOfACustomer(): void
+    {
+        $firstOrderId = $this->fixture->order('IT-1001', ['email' => 'kees.visser@example.com']);
+        $secondOrderId = $this->fixture->order('IT-1002', ['email' => 'anna.jansen@example.com']);
+        $this->fixture->invoice($firstOrderId, 'IT-2001');
+        $this->fixture->invoice($secondOrderId, 'IT-2002');
+
+        $result = $this->listDocuments(['document_type' => 'invoice', 'customer' => 'kees.visser@example.com']);
+        self::assertSame(['IT-2001'], $this->numbers($result));
+    }
+
+    #[Test]
+    public function itListsTheInvoicesOfOrdersWithAProduct(): void
+    {
+        $firstOrderId = $this->fixture->order('IT-1001', ['sku' => 'VELO-2', 'product' => 'Velora X2']);
+        $secondOrderId = $this->fixture->order('IT-1002', ['sku' => 'FJORD-300', 'product' => 'Fjordrunner 300']);
+        $this->fixture->invoice($firstOrderId, 'IT-2001');
+        $this->fixture->invoice($secondOrderId, 'IT-2002');
+
+        $result = $this->listDocuments([
+            'document_type' => 'invoice',
+            'with' => [['document_type' => 'order', 'product' => 'Velora']],
+        ]);
+        self::assertSame(['IT-2001'], $this->numbers($result));
+    }
+
+    #[Test]
+    public function itListsTheInvoicesOfOrdersFromOtherCustomers(): void
+    {
+        $firstOrderId = $this->fixture->order('IT-1001', ['email' => 'kees.visser@example.com']);
+        $secondOrderId = $this->fixture->order('IT-1002', ['email' => 'anna.jansen@example.com']);
+        $this->fixture->invoice($firstOrderId, 'IT-2001');
+        $this->fixture->invoice($secondOrderId, 'IT-2002');
+
+        $result = $this->listDocuments([
+            'document_type' => 'invoice',
+            'without' => [['document_type' => 'order', 'customer' => 'kees.visser@example.com']],
+        ]);
+        self::assertSame(['IT-2002'], $this->numbers($result));
+    }
+
+    #[Test]
     public function itListsTheOrdersWithARefundedCreditMemo(): void
     {
         $refundedOrderId = $this->fixture->order('IT-1001');

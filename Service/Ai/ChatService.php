@@ -924,11 +924,11 @@ class ChatService implements ChatServiceInterface
             $msg = $messages[$key];
 
             // Add context from input
-            if ($action === 'get_document' && !empty($input['reference'])) {
+            if ($action === 'get_document' && !empty($input['document_number'])) {
                 $documentType = $input['document_type'] ?? 'order';
                 $documentLabel = str_replace('_', ' ', $documentType);
-                $reference = $input['reference'];
-                return 'Looking up ' . $documentLabel . ' ' . $reference . '...';
+                $documentNumber = $input['document_number'];
+                return 'Looking up ' . $documentLabel . ' ' . $documentNumber . '...';
             }
             if ($action === 'get_by_sku' && !empty($input['query'])) {
                 return 'Fetching product ' . $input['query'] . '...';

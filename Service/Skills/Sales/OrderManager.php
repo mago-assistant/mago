@@ -33,6 +33,7 @@ class OrderManager extends AbstractSkill
             . 'Use get_document if you need to find the entity_id. '
             . 'Order operations are irreversible — always confirm details with the user. '
             . 'After creating a shipment or invoice, include the new entity ID and admin URL in the response. '
-            . 'Set notify_customer only when the user asks to inform the customer.';
+            . 'Set notify_customer only when the user asks to inform the customer. '
+            . 'A token like mago://tracking_1 shows the admin the real value, so write it as it came back.';
     }
 }

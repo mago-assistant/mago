@@ -99,12 +99,15 @@ class ShipmentDocument extends AbstractDocument
 
     protected function describe(AbstractDb $shipments): array
     {
-        $trackNumbers = $this->trackNumbers($shipments);
+        $tracksPerShipment = $this->tracks($shipments);
 
         $documents = [];
         foreach ($shipments as $shipment) {
             $document = $shipment->getData();
             $entityId = (int)($document['entity_id'] ?? 0);
+            $tracks = $tracksPerShipment[$entityId] ?? [];
+            $trackNumbers = array_column($tracks, 'track_number');
+            $carriers = array_unique(array_column($tracks, 'title'));
             $adminUrl = $this->secureAdminUrl->getUrl('sales/shipment/view', ['shipment_id' => $entityId]);
 
             $documents[] = [
@@ -112,7 +115,8 @@ class ShipmentDocument extends AbstractDocument
                 'date' => $document['created_at'] ?? '',
                 'order_id' => (int)($document['order_id'] ?? 0),
                 'qty' => (float)($document['total_qty'] ?? 0),
-                'tracking' => $trackNumbers[$entityId] ?? [],
+                'tracking' => $trackNumbers,
+                'carrier' => implode(', ', $carriers),
                 'admin_url' => $adminUrl,
             ];
         }
@@ -120,7 +124,7 @@ class ShipmentDocument extends AbstractDocument
         return $documents;
     }
 
-    private function trackNumbers(AbstractDb $shipments): array
+    private function tracks(AbstractDb $shipments): array
     {
         $shipmentIds = $shipments->getColumnValues('entity_id');
         if ($shipmentIds === []) {
@@ -130,11 +134,11 @@ class ShipmentDocument extends AbstractDocument
         $tracks = $this->trackCollectionFactory->create();
         $tracks->addFieldToFilter('parent_id', ['in' => $shipmentIds]);
 
-        $trackNumbers = [];
+        $tracksPerShipment = [];
         foreach ($tracks as $track) {
-            $trackNumbers[(int)$track->getParentId()][] = $track->getTrackNumber();
+            $tracksPerShipment[(int)$track->getParentId()][] = $track->getData();
         }
 
-        return $trackNumbers;
+        return $tracksPerShipment;
     }
 }

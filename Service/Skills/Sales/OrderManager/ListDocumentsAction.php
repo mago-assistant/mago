@@ -208,7 +208,7 @@ class ListDocumentsAction implements ActionInterface
         $documentList = $documentType->list($filters);
         foreach (['with' => false, 'without' => true] as $key => $exclude) {
             foreach ($params[$key] ?? [] as $relatedParams) {
-                $relatedQuery = $this->query($relatedParams);
+                $relatedQuery = $this->query($relatedParams + ['period' => 'all']);
                 if (isset($relatedQuery['error'])) {
                     return $relatedQuery;
                 }

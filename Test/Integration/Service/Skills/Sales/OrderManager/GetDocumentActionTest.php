@@ -56,6 +56,7 @@ class GetDocumentActionTest extends TestCase
         self::assertSame('IT-1001', $order['order_number']);
         self::assertSame('IT-2001', $invoice['number']);
         self::assertSame(['NF123'], $shipment['tracking']);
+        self::assertSame('NordFreight', $shipment['carrier']);
         self::assertSame('refunded', $creditmemo['state']);
     }
 
@@ -66,11 +67,11 @@ class GetDocumentActionTest extends TestCase
         self::assertSame('No credit memo has number IT-4999', $result['error']);
     }
 
-    private function getDocument(string $documentType, string $reference): array
+    private function getDocument(string $documentType, string $documentNumber): array
     {
         $params = [
             'document_type' => $documentType,
-            'reference' => $reference,
+            'document_number' => $documentNumber,
         ];
 
         return $this->action->execute($params, self::ADMIN_USER_ID);

@@ -35,7 +35,7 @@ class GetDocumentActionTest extends TestCase
     {
         $params = [
             'document_type' => 'parcel',
-            'reference' => '000000045',
+            'document_number' => '000000045',
         ];
 
         $result = $this->action()->execute($params, self::ADMIN_USER_ID);
@@ -43,10 +43,10 @@ class GetDocumentActionTest extends TestCase
     }
 
     #[Test]
-    public function itRequiresAReference(): void
+    public function itRequiresADocumentNumber(): void
     {
         $result = $this->action()->execute(['document_type' => 'invoice'], self::ADMIN_USER_ID);
-        self::assertSame('reference is required for get_document', $result['error']);
+        self::assertSame('document_number is required for get_document', $result['error']);
     }
 
     #[Test]
@@ -55,7 +55,7 @@ class GetDocumentActionTest extends TestCase
         $action = $this->action([]);
         $params = [
             'document_type' => 'invoice',
-            'reference' => '000000045',
+            'document_number' => '000000045',
         ];
 
         $result = $action->execute($params, self::ADMIN_USER_ID);
