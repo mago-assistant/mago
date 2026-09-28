@@ -78,8 +78,17 @@ class OrderDocument extends AbstractDocument
 
         $nameParts = explode(' ', $customer);
         $lastName = end($nameParts);
+        $nameFields = ['main_table.customer_lastname', 'billing_address.lastname'];
+        if (count($nameParts) === 1) {
+            $nameFields[] = 'main_table.customer_firstname';
+            $nameFields[] = 'billing_address.firstname';
+        }
 
-        $orders->addFieldToFilter('main_table.customer_lastname', ['like' => '%' . $lastName . '%']);
+        $nameCondition = ['like' => '%' . $lastName . '%'];
+        $orders->addFieldToFilter(
+            $nameFields,
+            array_fill(0, count($nameFields), $nameCondition)
+        );
     }
 
     private function filterProduct(OrderCollection $orders, array $filters): void

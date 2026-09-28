@@ -31,13 +31,16 @@ class SalesDocumentFixture
 
     public function order(string $number, array $data = []): int
     {
+        $firstname = $data['firstname'] ?? 'Anna';
+        $lastname = $data['lastname'] ?? 'Jansen';
+
         $orderId = $this->insert('sales_order', [
             'increment_id' => $number,
             'status' => $data['status'] ?? 'processing',
             'state' => $data['status'] ?? 'processing',
             'customer_email' => $data['email'] ?? 'anna.jansen@example.com',
-            'customer_firstname' => $data['firstname'] ?? 'Anna',
-            'customer_lastname' => $data['lastname'] ?? 'Jansen',
+            'customer_firstname' => $firstname,
+            'customer_lastname' => $lastname,
             'grand_total' => $data['total'] ?? 100.00,
             'order_currency_code' => self::CURRENCY,
             'created_at' => $this->createdAt,
@@ -53,6 +56,13 @@ class SalesDocumentFixture
         $this->insert('sales_order_payment', [
             'parent_id' => $orderId,
             'method' => $data['payment'] ?? 'checkmo',
+        ]);
+
+        $this->insert('sales_order_address', [
+            'parent_id' => $orderId,
+            'address_type' => 'billing',
+            'firstname' => $data['billing_firstname'] ?? $firstname,
+            'lastname' => $data['billing_lastname'] ?? $lastname,
         ]);
 
         return $orderId;

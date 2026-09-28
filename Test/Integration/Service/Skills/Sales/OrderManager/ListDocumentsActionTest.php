@@ -87,6 +87,32 @@ class ListDocumentsActionTest extends TestCase
     }
 
     #[Test]
+    public function itFindsAGuestOrderByTheNameOnItsBillingAddress(): void
+    {
+        $this->fixture->order('IT-1001', [
+            'firstname' => '',
+            'lastname' => '',
+            'billing_firstname' => 'Kees',
+            'billing_lastname' => 'Visser',
+        ]);
+        $this->fixture->order('IT-1002');
+
+        $result = $this->listDocuments(['document_type' => 'order', 'customer' => 'Kees Visser']);
+        self::assertSame(['IT-1001'], $this->numbers($result));
+        self::assertSame('Kees Visser', $result['documents'][0]['customer']);
+    }
+
+    #[Test]
+    public function itFindsOrdersByAFirstNameAlone(): void
+    {
+        $this->fixture->order('IT-1001', ['firstname' => 'Kees', 'lastname' => 'Visser']);
+        $this->fixture->order('IT-1002', ['firstname' => 'Anna', 'lastname' => 'Jansen']);
+
+        $result = $this->listDocuments(['document_type' => 'order', 'customer' => 'Kees']);
+        self::assertSame(['IT-1001'], $this->numbers($result));
+    }
+
+    #[Test]
     public function itFindsOrdersByProductSkuOrName(): void
     {
         $this->fixture->order('IT-1001', ['sku' => 'FJORD-300', 'product' => 'Fjordrunner 300']);
