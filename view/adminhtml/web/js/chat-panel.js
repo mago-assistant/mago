@@ -692,7 +692,7 @@ define([
         loading.style.display = 'none';
         inputArea.style.display = 'none';
         histList.style.display = '';
-        histList.innerHTML = '<div style="padding:16px;color:var(--mago-ink-muted, #736B65);font-size:13px;">Loading...</div>';
+        histList.innerHTML = '<div class="mago-history-empty">Loading...</div>';
 
         fetch(config.historyUrl, {
             headers: {'X-Requested-With':'XMLHttpRequest'},
@@ -702,7 +702,7 @@ define([
         .then(function(data) {
             histList.innerHTML = '';
             if (!data.conversations || !data.conversations.length) {
-                histList.innerHTML = '<div style="padding:16px;color:var(--mago-ink-muted, #736B65);font-size:13px;">No previous chats</div>';
+                histList.innerHTML = '<div class="mago-history-empty">No previous chats</div>';
                 return;
             }
             data.conversations.forEach(function(conv) {
@@ -728,7 +728,7 @@ define([
             });
         })
         .catch(function() {
-            histList.innerHTML = '<div style="padding:16px;color:var(--mago-danger, #B8402A);font-size:13px;">Failed to load history</div>';
+            histList.innerHTML = '<div class="mago-history-empty is-error">Failed to load history</div>';
         });
     }
 

@@ -10,7 +10,9 @@ use Magento\Framework\Indexer\IndexerInterface;
 use Magento\Framework\Indexer\IndexerRegistry;
 use Magento\Indexer\Model\Indexer\Collection;
 use Magento\Indexer\Model\Indexer\CollectionFactory;
+use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Skills\Configuration\IndexerManager;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeConfigRepository;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -121,7 +123,7 @@ final class IndexerManagerTest extends TestCase
         $factory = $this->createStub(CollectionFactory::class);
         $factory->method('create')->willThrowException(new \RuntimeException('indexer_state unreadable'));
 
-        return new IndexerManager($factory, $this->createStub(IndexerRegistry::class));
+        return $this->createManager($factory, $this->createStub(IndexerRegistry::class));
     }
 
     private function manager(): IndexerManager
@@ -143,6 +145,16 @@ final class IndexerManagerTest extends TestCase
         $registry = $this->createStub(IndexerRegistry::class);
         $registry->method('get')->willThrowException(new \InvalidArgumentException('not found'));
 
-        return new IndexerManager($factory, $registry);
+        return $this->createManager($factory, $registry);
+    }
+
+    private function createManager(CollectionFactory $factory, IndexerRegistry $registry): IndexerManager
+    {
+        return new IndexerManager(
+            $factory,
+            $registry,
+            $this->createStub(InternalApiClient::class),
+            (new FakeConfigRepository())->withReindexAllowed(true)
+        );
     }
 }

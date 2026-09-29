@@ -2,10 +2,10 @@
 .admin__page-nav._collapsed.mago-tab .title,
 .admin__page-nav._collapsed._show.mago-tab .title {
     background-image: url('MagoAssistant_Mago::images/mago-icon.svg');
-    background-position: 15px center;
+    background-position: @mago-size__15 center;
     background-repeat: no-repeat;
-    background-size: 20px auto;
-    padding-left: 5.2rem;
+    background-size: @mago-size__20 auto;
+    padding-left: @mago-size__52;
 }
 
 // Mago Assistant Chat Panel
@@ -25,13 +25,13 @@
 // Reusable: a bordered card, the surface every structured thing in the panel sits on
 .mago-card() {
     background: var(--mago-panel, #FFFFFF);
-    border: 1px solid var(--mago-hairline, #E9E5E1);
-    border-radius: 12px;
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    border-radius: @mago-size__12;
 }
 
 // Reusable: small uppercase label ("TRY ONE", table headers)
 .mago-eyebrow() {
-    font-size: 10px;
+    font-size: @font-size__xs;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -40,9 +40,9 @@
 
 .mago-sr-only {
     position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
+    width: @mago-size__1;
+    height: @mago-size__1;
+    margin: -@mago-size__1;
     padding: 0;
     overflow: hidden;
     clip-path: inset(50%);
@@ -52,14 +52,14 @@
 
 // Page wrapper push when panel is open
 body.mago-active .page-wrapper {
-    width: calc(100% - 8.8rem - var(--mago-panel-width, 440px)) !important;
+    width: ~"calc(100% - 8.8rem - var(--mago-panel-width, @{mago-panel-width}))" !important;
 }
 
 // Full-screen Page Builder is position:fixed outside .page-wrapper, so the rule
 // above misses it. Narrowing the wrapper is all it needs: the stage header is
 // sticky inside it and takes its own width from it, per theme.
 body.mago-active .pagebuilder-stage-wrapper.stage-full-screen {
-    right: var(--mago-panel-width, 440px);
+    right: var(--mago-panel-width, @mago-panel-width);
     width: auto;
 }
 
@@ -104,7 +104,7 @@ html:has(body.mago-active) {
     height: @page-header-action__height;
     padding: 0;
     border: none;
-    border-radius: 8px;
+    border-radius: @mago-size__8;
     background: transparent;
     // Colored rather than the neutral ink the other header icons use, so it
     // stands out as Mago's own brand rather than blending into the toolbar.
@@ -135,15 +135,15 @@ html:has(body.mago-active) {
     position: fixed;
     right: 0;
     top: 0;
-    width: var(--mago-panel-width, 440px);
+    width: var(--mago-panel-width, @mago-panel-width);
     height: 100vh;
     background: var(--mago-panel, #FFFFFF);
     color: var(--mago-ink, #373330);
     font-family: var(--mago-font);
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     letter-spacing: var(--mago-tracking, -0.01em);
-    border-left: 1px solid var(--mago-hairline, #E9E5E1);
-    box-shadow: -12px 0 32px rgba(55, 51, 48, 0.06);
+    border-left: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    box-shadow: -@mago-size__12 0 @mago-size__32 rgba(55, 51, 48, 0.06);
     z-index: 901;
     display: flex;
     flex-direction: column;
@@ -162,8 +162,8 @@ html:has(body.mago-active) {
     }
 
     ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: @mago-size__8;
+        height: @mago-size__8;
     }
 
     ::-webkit-scrollbar-track {
@@ -172,7 +172,7 @@ html:has(body.mago-active) {
 
     ::-webkit-scrollbar-thumb {
         background: rgba(55, 51, 48, 0.14);
-        border-radius: 4px;
+        border-radius: @mago-size__4;
 
         &:hover {
             background: rgba(55, 51, 48, 0.26);
@@ -186,23 +186,23 @@ html:has(body.mago-active) {
     // A solid ring: the admin theme's pale blue glow all but disappears on white
     button:focus-visible,
     [tabindex]:focus-visible {
-        outline: 2px solid var(--mago-ink, #373330);
-        outline-offset: 2px;
+        outline: @mago-size__2 solid var(--mago-ink, #373330);
+        outline-offset: @mago-size__2;
         box-shadow: none;
     }
 
     // Spans the full panel width, so an outer ring would be clipped at the edges
     .mago-messages:focus-visible {
-        outline-offset: -2px;
+        outline-offset: -@mago-size__2;
     }
 }
 
 // Shared spinner ring: the working pill, the active tool step, the thinking row
 .mago-spinner {
     display: inline-block;
-    width: 12px;
-    height: 12px;
-    border: 2px solid rgba(var(--mago-accent-rgb, 255, 122, 51), 0.25);
+    width: @mago-size__12;
+    height: @mago-size__12;
+    border: @mago-size__2 solid rgba(var(--mago-accent-rgb, 255, 122, 51), 0.25);
     border-top-color: var(--mago-accent, #FF7A33);
     border-radius: 50%;
     animation: mago-spin 0.8s linear infinite;
@@ -218,25 +218,25 @@ html:has(body.mago-active) {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    min-height: 60px;
-    padding: 12px 16px 12px 20px;
+    gap: @mago-size__12;
+    min-height: @mago-size__60;
+    padding: @mago-size__12 @mago-size__16 @mago-size__12 @mago-size__20;
     background: var(--mago-panel, #FFFFFF);
-    border-bottom: 1px solid var(--mago-hairline, #E9E5E1);
+    border-bottom: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
     flex-shrink: 0;
 }
 
 .mago-header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: @mago-size__10;
     min-width: 0;
 }
 
 .mago-mascot {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
+    width: @mago-size__28;
+    height: @mago-size__28;
+    border-radius: @mago-size__8;
     background: linear-gradient(135deg, var(--mago-accent, #FF7A33), var(--mago-deep, #E65000));
     color: var(--mago-accent-text, #FFFFFF);
     flex-shrink: 0;
@@ -252,11 +252,11 @@ html:has(body.mago-active) {
 .mago-title-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: @mago-size__8;
 }
 
 .mago-title {
-    font-size: 15px;
+    font-size: @mago-font-size__15;
     font-weight: 700;
     letter-spacing: -0.02em;
     color: var(--mago-ink, #373330);
@@ -264,7 +264,7 @@ html:has(body.mago-active) {
 }
 
 .mago-subtitle {
-    font-size: 11px;
+    font-size: @font-size__tiny;
     line-height: 1.3;
     color: var(--mago-ink-muted, #736B65);
     overflow: hidden;
@@ -276,16 +276,27 @@ html:has(body.mago-active) {
     }
 }
 
+// EU AI Act art. 50 disclosure next to the assistant name
+.mago-ai-badge {
+    font-size: @font-size__tiny;
+    line-height: 1;
+    padding: @mago-size__2 @mago-size__7;
+    border-radius: @mago-size__9;
+    background: rgba(0, 0, 0, .07);
+    opacity: .75;
+    white-space: nowrap;
+}
+
 // "Working" pill — visible while a request streams
 .mago-working-pill {
     display: none;
     align-items: center;
-    gap: 6px;
-    padding: 3px 9px 3px 7px;
-    border-radius: 999px;
+    gap: @mago-size__6;
+    padding: @mago-size__3 @mago-size__9 @mago-size__3 @mago-size__7;
+    border-radius: @mago-radius__pill;
     background: var(--mago-accent-light, #FFE9DC);
     color: var(--mago-accent-ink, #B84000);
-    font-size: 11px;
+    font-size: @font-size__tiny;
     font-weight: 600;
     letter-spacing: 0;
     white-space: nowrap;
@@ -297,19 +308,19 @@ html:has(body.mago-active) {
 
 .mago-header-actions {
     display: flex;
-    gap: 2px;
+    gap: @mago-size__2;
     flex-shrink: 0;
 }
 
 .mago-btn-icon {
-    width: 30px;
-    height: 30px;
+    width: @mago-size__30;
+    height: @mago-size__30;
     background: transparent;
     border: none;
     color: var(--mago-ink-muted, #736B65);
     cursor: pointer;
     padding: 0;
-    border-radius: 8px;
+    border-radius: @mago-size__8;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -326,10 +337,10 @@ html:has(body.mago-active) {
 .mago-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 20px 20px 12px;
+    padding: @mago-size__20 @mago-size__20 @mago-size__12;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: @mago-size__16;
 }
 
 // Welcome state — only while the conversation is empty
@@ -337,7 +348,7 @@ html:has(body.mago-active) {
     display: none;
     flex: 1;
     flex-direction: column;
-    padding-top: 12px;
+    padding-top: @mago-size__12;
 
     .mago-chat-panel.is-empty & {
         display: flex;
@@ -345,21 +356,21 @@ html:has(body.mago-active) {
 }
 
 .mago-welcome-mark {
-    width: 40px;
-    height: 40px;
-    border-radius: 11px;
+    width: @mago-size__40;
+    height: @mago-size__40;
+    border-radius: @mago-size__11;
     background: linear-gradient(135deg, var(--mago-accent, #FF7A33), var(--mago-deep, #E65000));
     color: var(--mago-accent-text, #FFFFFF);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 20px;
+    margin-bottom: @mago-size__20;
 }
 
 .mago-welcome-title {
-    margin: 0 0 10px;
+    margin: 0 0 @mago-size__10;
     font-family: var(--mago-font);
-    font-size: 22px;
+    font-size: @mago-font-size__22;
     font-weight: 700;
     line-height: 1.2;
     letter-spacing: -0.025em;
@@ -367,31 +378,31 @@ html:has(body.mago-active) {
 }
 
 .mago-welcome-text {
-    margin: 0 0 28px;
-    max-width: 320px;
-    font-size: 13px;
+    margin: 0 0 @mago-size__28;
+    max-width: @mago-size__320;
+    font-size: @mago-font-size__13;
     line-height: 1.65;
     color: var(--mago-ink-soft, #6B645F);
 }
 
 .mago-welcome-label {
     .mago-eyebrow();
-    margin-bottom: 10px;
+    margin-bottom: @mago-size__10;
 }
 
 .mago-starters {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: @mago-size__12;
 }
 
 .mago-starter {
     .mago-card();
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: @mago-size__12;
     width: 100%;
-    padding: 12px 14px;
+    padding: @mago-size__12 @mago-size__14;
     text-align: left;
     color: var(--mago-ink, #373330);
     cursor: pointer;
@@ -418,7 +429,7 @@ html:has(body.mago-active) {
 .mago-starter-text {
     flex: 1;
     min-width: 0;
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     font-weight: 500;
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -434,19 +445,19 @@ html:has(body.mago-active) {
 // Keyboard hint pinned to the bottom of the welcome state
 .mago-welcome-hint {
     margin-top: auto;
-    padding-top: 24px;
-    font-size: 12px;
+    padding-top: @mago-size__24;
+    font-size: @font-size__s;
     color: var(--mago-ink-muted, #736B65);
 
     kbd {
         display: inline-block;
-        min-width: 18px;
-        padding: 1px 5px;
-        border: 1px solid var(--mago-hairline, #E9E5E1);
-        border-radius: 5px;
+        min-width: @mago-size__18;
+        padding: @mago-size__1 @mago-size__5;
+        border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+        border-radius: @mago-size__5;
         background: var(--mago-surface, #F7F5F3);
         font-family: var(--mago-font);
-        font-size: 11px;
+        font-size: @font-size__tiny;
         font-weight: 600;
         text-align: center;
         color: var(--mago-ink-soft, #6B645F);
@@ -455,15 +466,15 @@ html:has(body.mago-active) {
 
 // Messages: the user's question is a tinted bubble, the answer is plain text
 .mago-message {
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     line-height: 1.6;
     word-wrap: break-word;
 
     &.is-user {
         align-self: flex-end;
         max-width: 85%;
-        padding: 10px 14px;
-        border-radius: 12px;
+        padding: @mago-size__10 @mago-size__14;
+        border-radius: @mago-size__12;
         background: var(--mago-accent-light, #FFE9DC);
         color: var(--mago-ink, #373330);
     }
@@ -477,7 +488,7 @@ html:has(body.mago-active) {
 
 .mago-message-content {
     p {
-        margin: 0 0 10px;
+        margin: 0 0 @mago-size__10;
         &:last-child {
             margin-bottom: 0;
         }
@@ -492,20 +503,20 @@ html:has(body.mago-active) {
         .mago-card();
         background: var(--mago-surface, #F7F5F3);
         color: var(--mago-ink, #373330);
-        padding: 10px 12px;
-        border-radius: 10px;
+        padding: @mago-size__10 @mago-size__12;
+        border-radius: @mago-size__10;
         overflow-x: auto;
-        font-size: 12px;
+        font-size: @font-size__s;
         line-height: 1.5;
-        margin: 10px 0;
+        margin: @mago-size__10 0;
     }
 
     code {
         background: var(--mago-surface, #F7F5F3);
-        border: 1px solid var(--mago-hairline, #E9E5E1);
-        padding: 1px 5px;
-        border-radius: 5px;
-        font-size: 12px;
+        border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+        padding: @mago-size__1 @mago-size__5;
+        border-radius: @mago-size__5;
+        font-size: @font-size__s;
     }
 
     pre code {
@@ -515,12 +526,12 @@ html:has(body.mago-active) {
     }
 
     ul, ol {
-        margin: 6px 0;
-        padding-left: 20px;
+        margin: @mago-size__6 0;
+        padding-left: @mago-size__20;
     }
 
     li {
-        margin: 2px 0;
+        margin: @mago-size__2 0;
     }
 
     a {
@@ -537,10 +548,10 @@ html:has(body.mago-active) {
             --_icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3Cpolyline points='15 3 21 3 21 9'/%3E%3Cline x1='10' y1='14' x2='21' y2='3'/%3E%3C/svg%3E");
             content: '';
             display: inline-block;
-            width: 11px;
-            height: 11px;
-            margin-right: 3px;
-            vertical-align: -1px;
+            width: @mago-size__11;
+            height: @mago-size__11;
+            margin-right: @mago-size__3;
+            vertical-align: -@mago-size__1;
             background: currentColor;
             -webkit-mask: var(--_icon) center/contain no-repeat;
             mask: var(--_icon) center/contain no-repeat;
@@ -548,9 +559,9 @@ html:has(body.mago-active) {
     }
 
     h1, h2, h3, h4 {
-        margin: 14px 0 6px;
+        margin: @mago-size__14 0 @mago-size__6;
         font-family: var(--mago-font);
-        font-size: 14px;
+        font-size: @font-size__base;
         font-weight: 600;
         letter-spacing: -0.015em;
         color: var(--mago-ink, #373330);
@@ -562,8 +573,8 @@ html:has(body.mago-active) {
 
     hr {
         border: none;
-        border-top: 1px solid var(--mago-hairline, #E9E5E1);
-        margin: 12px 0;
+        border-top: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+        margin: @mago-size__12 0;
     }
 
     // Tables become the bordered data card from the design
@@ -571,7 +582,7 @@ html:has(body.mago-active) {
         .mago-card();
         display: block;
         overflow-x: auto;
-        margin: 12px 0;
+        margin: @mago-size__12 0;
         -webkit-overflow-scrolling: touch;
     }
 
@@ -581,14 +592,14 @@ html:has(body.mago-active) {
         width: max-content;
         min-width: 100%;
         margin: 0;
-        font-size: 12px;
+        font-size: @font-size__s;
         border: none !important;
     }
 
     th, td {
         border: none !important;
-        border-bottom: 1px solid var(--mago-hairline, #E9E5E1) !important;
-        padding: 9px 14px !important;
+        border-bottom: @mago-size__1 solid var(--mago-hairline, #E9E5E1) !important;
+        padding: @mago-size__9 @mago-size__14 !important;
         text-align: left;
         white-space: nowrap !important;
         word-break: keep-all !important;
@@ -624,15 +635,15 @@ html:has(body.mago-active) {
 // text with the same rhythm as the tool trace.
 .mago-message > .mago-skill,
 .mago-message > .mago-line {
-    margin-top: 10px;
+    margin-top: @mago-size__10;
 }
 
 // Thinking row — shown between the question and the first streamed token
 .mago-thinking {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12px;
+    gap: @mago-size__8;
+    font-size: @font-size__s;
     font-weight: 500;
     color: var(--mago-accent-ink, #B84000);
 }
@@ -641,7 +652,7 @@ html:has(body.mago-active) {
 // answer: done steps go quiet, the active step carries the orange. Only the
 // spacing lives here; an empty trace takes no room.
 .mago-chat-panel .mago-message .mago-tool-trace {
-    margin: 0 0 10px;
+    margin: 0 0 @mago-size__10;
 
     &:empty {
         display: none;
@@ -649,36 +660,36 @@ html:has(body.mago-active) {
 }
 
 .mago-tool-status {
-    padding: 2px 0;
+    padding: @mago-size__2 0;
 }
 
 // Tool tags — small neutral chips above the answer
 .mago-tool-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: @mago-size__4;
 
     &:not(:empty) {
-        margin-bottom: 8px;
+        margin-bottom: @mago-size__8;
     }
 }
 
 .mago-tool-tag {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: @mago-size__4;
     background: var(--mago-surface, #F7F5F3);
-    border: 1px solid var(--mago-hairline, #E9E5E1);
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
     color: var(--mago-ink-soft, #6B645F);
-    font-size: 11px;
+    font-size: @font-size__tiny;
     font-weight: 500;
-    padding: 2px 8px;
-    border-radius: 999px;
+    padding: @mago-size__2 @mago-size__8;
+    border-radius: @mago-radius__pill;
     white-space: nowrap;
 
     svg {
-        width: 10px;
-        height: 10px;
+        width: @mago-size__10;
+        height: @mago-size__10;
         color: var(--mago-accent, #FF7A33);
     }
 }
@@ -686,21 +697,21 @@ html:has(body.mago-active) {
 // Date separator
 .mago-date-sep {
     text-align: center;
-    padding: 2px 0;
+    padding: @mago-size__2 0;
 
     span {
         .mago-eyebrow();
-        padding: 3px 10px;
-        border-radius: 999px;
+        padding: @mago-size__3 @mago-size__10;
+        border-radius: @mago-radius__pill;
         background: var(--mago-surface, #F7F5F3);
     }
 }
 
 // Message timestamp
 .mago-msg-time {
-    font-size: 10px;
+    font-size: @font-size__xs;
     color: var(--mago-ink-muted, #736B65);
-    margin-top: 6px;
+    margin-top: @mago-size__6;
 }
 
 .mago-message.is-user .mago-msg-time {
@@ -711,17 +722,17 @@ html:has(body.mago-active) {
 .mago-input-wrapper {
     display: flex;
     align-items: flex-end;
-    padding: 12px 20px 20px;
+    padding: @mago-size__12 @mago-size__20 @mago-size__20;
     background: var(--mago-panel, #FFFFFF);
-    gap: 8px;
+    gap: @mago-size__8;
     flex-shrink: 0;
     position: relative;
 }
 
 .mago-privacy-hint {
-    font-size: 11px;
+    font-size: @font-size__tiny;
     line-height: 1.4;
-    padding: 3px 20px 8px;
+    padding: @mago-size__3 @mago-size__20 @mago-size__8;
     color: var(--mago-ink, #373330);
     opacity: 0.7;
 }
@@ -732,20 +743,20 @@ html:has(body.mago-active) {
     background: var(--mago-panel, #FFFFFF);
     color: var(--mago-ink, #373330);
     // A hairline is too faint to show where the field is; this border keeps 3:1
-    border: 1px solid var(--mago-control-border, #928983);
-    border-radius: 10px;
+    border: @mago-size__1 solid var(--mago-control-border, #928983);
+    border-radius: @mago-size__10;
     // 10 + 18 + 10 + 2px border = 40px, the exact height of the send button,
     // so a single line sits flush with it instead of a pixel or two short.
-    padding: 10px 14px;
+    padding: @mago-size__10 @mago-size__14;
     font-family: var(--mago-font);
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     letter-spacing: var(--mago-tracking, -0.01em);
-    line-height: 18px;
+    line-height: @mago-size__18;
     resize: none;
     overflow-y: hidden;
-    height: 40px;
-    min-height: 40px;
-    max-height: 240px;
+    height: @mago-size__40;
+    min-height: @mago-size__40;
+    max-height: @mago-size__240;
     outline: none;
     box-shadow: none;
     transition: border-color 0.15s, box-shadow 0.15s;
@@ -756,14 +767,14 @@ html:has(body.mago-active) {
 
     &:focus {
         border-color: var(--mago-accent-ink, #B84000);
-        box-shadow: 0 0 0 1px var(--mago-accent-ink, #B84000);
+        box-shadow: 0 0 0 @mago-size__1 var(--mago-accent-ink, #B84000);
     }
 }
 
 .mago-send-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: @mago-size__40;
+    height: @mago-size__40;
+    border-radius: @mago-size__10;
     background: var(--mago-accent, #FF7A33);
     color: var(--mago-accent-text, #FFFFFF);
     border: none;
@@ -775,12 +786,12 @@ html:has(body.mago-active) {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(var(--mago-accent-rgb, 255, 122, 51), 0.35);
+    box-shadow: 0 @mago-size__2 @mago-size__8 rgba(var(--mago-accent-rgb, 255, 122, 51), 0.35);
     transition: background 0.15s, box-shadow 0.15s, color 0.15s;
 
     svg {
-        width: 16px;
-        height: 16px;
+        width: @mago-size__16;
+        height: @mago-size__16;
         flex-shrink: 0;
     }
 
@@ -805,7 +816,7 @@ html:has(body.mago-active) {
 .mago-log-view {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 20px;
+    padding: @mago-size__16 @mago-size__20;
 }
 
 // The log button carries a dot once something was written this session
@@ -815,30 +826,40 @@ html:has(body.mago-active) {
     &.has-entries::after {
         content: '';
         position: absolute;
-        top: 6px;
-        right: 6px;
-        width: 6px;
-        height: 6px;
+        top: @mago-size__6;
+        right: @mago-size__6;
+        width: @mago-size__6;
+        height: @mago-size__6;
         border-radius: 50%;
         background: var(--mago-accent, #FF7A33);
     }
 }
 
 // History list
+.mago-history-empty {
+    padding: @mago-size__16;
+    font-size: @mago-font-size__13;
+    color: var(--mago-ink-muted, #736B65);
+
+    &.is-error {
+        color: var(--mago-danger, #B8402A);
+    }
+}
+
 .mago-history-list {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 20px;
+    padding: @mago-size__16 @mago-size__20;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: @mago-size__8;
 }
 
 .mago-history-item {
     .mago-card();
     display: flex;
     align-items: center;
-    padding: 12px 14px;
+    padding: @mago-size__12 @mago-size__14;
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s;
 
@@ -856,7 +877,7 @@ html:has(body.mago-active) {
     background: transparent;
     text-align: left;
     cursor: pointer;
-    font-size: 13px;
+    font-size: @mago-font-size__13;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -865,20 +886,20 @@ html:has(body.mago-active) {
 }
 
 .mago-history-item-date {
-    font-size: 11px;
+    font-size: @font-size__tiny;
     color: var(--mago-ink-muted, #736B65);
     flex-shrink: 0;
-    margin-left: 8px;
+    margin-left: @mago-size__8;
 }
 
 .mago-history-item-delete {
     opacity: 0;
-    margin-left: 8px;
+    margin-left: @mago-size__8;
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 4px;
-    border-radius: 6px;
+    padding: @mago-size__4;
+    border-radius: @mago-size__6;
     color: var(--mago-ink-muted, #736B65);
     display: flex;
     align-items: center;
@@ -898,9 +919,9 @@ html:has(body.mago-active) {
 // The wrapper only positions it; the card look comes from .mago-menu.
 .mago-slash-menu {
     position: absolute;
-    bottom: calc(100% - 4px);
-    left: 20px;
-    right: 20px;
+    bottom: ~"calc(100% - @{mago-size__4})";
+    left: @mago-size__20;
+    right: @mago-size__20;
     display: none;
     z-index: 10;
 
@@ -921,15 +942,15 @@ html:has(body.mago-active) {
     box-shadow: none;
 
     .mago-header {
-        padding-left: 32px;
-        padding-right: 28px;
+        padding-left: @mago-size__32;
+        padding-right: @mago-size__28;
     }
 
     .mago-messages {
-        max-width: 760px;
+        max-width: @mago-fullsize-width;
         margin: 0 auto;
         width: 100%;
-        padding: 32px;
+        padding: @mago-size__32;
     }
 
     .mago-message.is-user {
@@ -937,16 +958,16 @@ html:has(body.mago-active) {
     }
 
     .mago-input-wrapper {
-        max-width: 760px;
+        max-width: @mago-fullsize-width;
         margin: 0 auto;
         width: 100%;
-        padding-left: 32px;
-        padding-right: 32px;
+        padding-left: @mago-size__32;
+        padding-right: @mago-size__32;
     }
 
     .mago-slash-menu {
-        left: 32px;
-        right: 32px;
+        left: @mago-size__32;
+        right: @mago-size__32;
     }
 }
 
@@ -955,7 +976,7 @@ body.mago-active.mago-fullsize .page-wrapper {
 }
 
 // Responsive - full width on small screens
-@media (max-width: 768px) {
+@media (max-width: @screen__m) {
     .mago-chat-panel {
         width: 100vw;
     }
@@ -964,7 +985,7 @@ body.mago-active.mago-fullsize .page-wrapper {
 // Field highlight (task 007): decorates fields the assistant just staged a value on. These are
 // Magento's own admin form fields, outside .mago-chat-panel, so this stays a top-level selector.
 .mago-field-changed {
-    outline: 2px solid var(--mago-accent, #E8710A);
-    outline-offset: 2px;
-    border-radius: 2px;
+    outline: @mago-size__2 solid var(--mago-accent, #E8710A);
+    outline-offset: @mago-size__2;
+    border-radius: @mago-size__2;
 }

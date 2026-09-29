@@ -22,7 +22,7 @@ class PiiHeuristic
     private const IBAN = '/\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/i';
     private const VAT_NL = '/\bNL\d{9}B\d{2}\b/i';
     private const BSN = '/\b\d{3}[\s.\-]?\d{3}[\s.\-]?\d{3}\b/';
-    private const PHONE_NL = '/(?:\+31|0031|0)[\s\-]?6(?:[\s\-]?\d){8}\b/';
+    private const PHONE_NL = '/(?<!\w)(?:\+31|0031|0)[\s\-]?6(?:[\s\-]?\d){8}\b/';
 
     public function tokeniseFreeText(string $text, ConversationVault $vault): string
     {

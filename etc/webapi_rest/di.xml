@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <type name="Magento\Webapi\Controller\Rest\RequestValidator">
+        <plugin name="mago_require_admin_user_token" type="MagoAssistant\Mago\Plugin\Webapi\RequireAdminUserToken"/>
+    </type>
+    <type name="MagoAssistant\Mago\Plugin\Webapi\RequireAdminUserToken">
+        <arguments>
+            <argument name="serviceClasses" xsi:type="array">
+                <item name="indexer_management" xsi:type="string">MagoAssistant\Mago\Api\WebApi\IndexerManagementInterface</item>
+            </argument>
+        </arguments>
+    </type>
+</config>

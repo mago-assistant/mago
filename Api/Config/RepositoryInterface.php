@@ -18,12 +18,14 @@ interface RepositoryInterface
     public const XML_PATH_EXTENSION_ENABLE = 'mago/general/enabled';
     public const XML_PATH_DEBUG = 'mago/debug/debug';
     public const XML_PATH_PAYLOAD_RETENTION_DAYS = 'mago/debug/payload_retention_days';
+    public const XML_PATH_HISTORY_RETENTION_DAYS = 'mago/privacy/history_retention_days';
     public const XML_PATH_AI_SERVICE = 'mago/api/ai_service';
     public const XML_PATH_MAX_TOKENS = 'mago/api/max_tokens';
     public const XML_PATH_STREAMING = 'mago/api/streaming';
     public const XML_PATH_SYSTEM_PROMPT = 'mago/chat/system_prompt';
     public const XML_PATH_MAX_TOOL_ITERATIONS = 'mago/chat/max_tool_iterations';
     public const XML_PATH_MAX_RESPONSE_TOKENS = 'mago/tools/max_response_tokens';
+    public const XML_PATH_ALLOW_REINDEX = 'mago/tools/allow_reindex';
     public const XML_PATH_CUSTOMER_NOTIFICATION_INTERVAL = 'mago/tools/customer_notification_interval';
     public const XML_PATH_ACCENT_COLOR = 'mago/chat/accent_color';
     public const XML_PATH_TEXT_COLOR = 'mago/chat/text_color';
@@ -79,6 +81,11 @@ interface RepositoryInterface
     public function getPayloadRetentionDays(): int;
 
     /**
+     * @return int
+     */
+    public function getHistoryRetentionDays(): int;
+
+    /**
      * Row id of the MageOS_AiBase service the assistant runs on.
      *
      * Empty means "whichever service is usable first", which is what a single-provider store wants
@@ -113,6 +120,11 @@ interface RepositoryInterface
      * @return int
      */
     public function getMaxResponseTokens(): int;
+
+    /**
+     * @return bool
+     */
+    public function isReindexAllowed(): bool;
 
     /**
      * Minutes Mago waits before it e-mails the customer of the same order again, 0 when unlimited
