@@ -13,14 +13,10 @@ use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 
 class ConfigReader implements ToolInterface
 {
-    private const BLOCKED_PATTERNS = [
-        '*key*', '*secret*', '*password*', '*token*', '*credential*',
-        'payment/*', '*api_key*', '*private*', '*encrypt*',
-    ];
-
     public function __construct(
         private readonly ScopeConfigInterface $scopeConfig,
-        private readonly StoreScopeContext $scopeContext
+        private readonly StoreScopeContext $scopeContext,
+        private readonly ConfigPathAccess $pathAccess
     ) {
     }
 
@@ -66,7 +62,7 @@ class ConfigReader implements ToolInterface
             return ['error' => 'Path parameter is required'];
         }
 
-        if ($this->isBlockedPath($path)) {
+        if ($this->pathAccess->isBlocked($path)) {
             return ['error' => 'Access to this configuration path is restricted for security reasons'];
         }
 
@@ -180,31 +176,6 @@ class ConfigReader implements ToolInterface
 
     public function getMagentoAcl(array $input = []): string
     {
-        return 'Magento_Config::config';
-    }
-
-    private function isBlockedPath(string $path): bool
-    {
-        $pathLower = strtolower($path);
-        foreach (self::BLOCKED_PATTERNS as $pattern) {
-            $regex = '/^' . str_replace(['*', '/'], ['.*', '\/'], $pattern) . '$/';
-            if (preg_match($regex, $pathLower)) {
-                return true;
-            }
-        }
-        // Also check path segments
-        $segments = explode('/', $pathLower);
-        $blockedWords = ['key', 'secret', 'password', 'token', 'credential', 'private', 'encrypt'];
-        foreach ($segments as $segment) {
-            foreach ($blockedWords as $word) {
-                if (str_contains($segment, $word)) {
-                    return true;
-                }
-            }
-        }
-        if (str_starts_with($pathLower, 'payment/')) {
-            return true;
-        }
-        return false;
+        return $this->pathAccess->aclResourceFor((string)($input['path'] ?? ''));
     }
 }

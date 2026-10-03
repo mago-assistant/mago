@@ -14,15 +14,11 @@ use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 
 class ConfigWriter implements ToolInterface
 {
-    private const BLOCKED_PATTERNS = [
-        '*key*', '*secret*', '*password*', '*token*', '*credential*',
-        'payment/*', '*api_key*', '*private*', '*encrypt*',
-    ];
-
     public function __construct(
         private readonly ConfigResource $configResource,
         private readonly TypeListInterface $cacheTypeList,
-        private readonly StoreScopeContext $scopeContext
+        private readonly StoreScopeContext $scopeContext,
+        private readonly ConfigPathAccess $pathAccess
     ) {
     }
 
@@ -74,7 +70,7 @@ class ConfigWriter implements ToolInterface
             return ['error' => 'Path parameter is required'];
         }
 
-        if ($this->isBlockedPath($path)) {
+        if ($this->pathAccess->isBlocked($path)) {
             return ['error' => 'Cannot modify this configuration path for security reasons'];
         }
 
@@ -135,30 +131,6 @@ class ConfigWriter implements ToolInterface
 
     public function getMagentoAcl(array $input = []): string
     {
-        return 'Magento_Config::config';
-    }
-
-    private function isBlockedPath(string $path): bool
-    {
-        $pathLower = strtolower($path);
-        foreach (self::BLOCKED_PATTERNS as $pattern) {
-            $regex = '/^' . str_replace(['*', '/'], ['.*', '\/'], $pattern) . '$/';
-            if (preg_match($regex, $pathLower)) {
-                return true;
-            }
-        }
-        $segments = explode('/', $pathLower);
-        $blockedWords = ['key', 'secret', 'password', 'token', 'credential', 'private', 'encrypt'];
-        foreach ($segments as $segment) {
-            foreach ($blockedWords as $word) {
-                if (str_contains($segment, $word)) {
-                    return true;
-                }
-            }
-        }
-        if (str_starts_with($pathLower, 'payment/')) {
-            return true;
-        }
-        return false;
+        return $this->pathAccess->aclResourceFor((string)($input['path'] ?? ''));
     }
 }

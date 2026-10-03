@@ -359,8 +359,8 @@ Both tools implement `AvailabilityAwareToolInterface`, so the registry offers ex
 
 | Tool | Class | Read-only | Description |
 |------|-------|-----------|-------------|
-| `config_reader` | `Service\Skills\Configuration\ConfigReader` | Yes | Reads Magento system configuration by path and scope. Validates the scope against existing websites/store views and lists per-scope overrides of a default value. Blocks sensitive paths (keys, secrets, passwords, tokens, payment config). |
-| `config_writer` | `Service\Skills\Configuration\ConfigWriter` | No | Writes Magento system configuration on a validated default/website/store view scope. Same blocked-path protections. Requires user confirmation. |
+| `config_reader` | `Service\Skills\Configuration\ConfigReader` | Yes | Reads Magento system configuration by path and scope. Validates the scope against existing websites/store views and lists per-scope overrides of a default value. Each path is gated by the ACL resource its section declares in `system.xml` (`Magento_Payment::payment`, `Magento_Config::config_admin`, …), the same resource the admin needs to open that section under Stores > Configuration; a path outside any section is refused. Blocks sensitive paths (keys, secrets, passwords, tokens, payment config). |
+| `config_writer` | `Service\Skills\Configuration\ConfigWriter` | No | Writes Magento system configuration on a validated default/website/store view scope. Same per-section ACL gate and blocked-path protections, shared through `ConfigPathAccess`. Requires user confirmation. |
 | `cache_manager` | `Service\Skills\Configuration\CacheManager` | No | Flush all caches, flush specific cache types, or view cache status. Requires confirmation for flush actions. |
 | `indexer_manager` | `Service\Skills\Configuration\IndexerManager` | No | Reindex specific indexers or all, check indexer status, change indexer mode (realtime/schedule). Requires confirmation. |
 

@@ -7,9 +7,11 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Configuration;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
+use MagoAssistant\Mago\Service\Skills\Configuration\ConfigPathAccess;
 use MagoAssistant\Mago\Service\Skills\Configuration\ConfigReader;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 use MagoAssistant\Mago\Test\Unit\Fakes\BuildsStoreLayouts;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeConfigStructure;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -108,7 +110,11 @@ class ConfigReaderTest extends TestCase
     {
         $scopeConfig = $this->createMock(ScopeConfigInterface::class);
         $scopeConfig->expects(self::never())->method('getValue');
-        $reader = new ConfigReader($scopeConfig, new StoreScopeContext($this->multiStoreManager()));
+        $reader = new ConfigReader(
+            $scopeConfig,
+            new StoreScopeContext($this->multiStoreManager()),
+            $this->pathAccess()
+        );
 
         $result = $reader->execute(['path' => self::PATH, 'scope' => 'stores', 'scope_id' => 9]);
 
@@ -136,6 +142,31 @@ class ConfigReaderTest extends TestCase
     }
 
     /**
+     * The admin screen for a section is gated by the resource that section declares in system.xml,
+     * not by the configuration area as a whole; reading through chat asks for the same one (#200).
+     */
+    #[Test]
+    public function itGatesAPathByTheResourceOfItsSection(): void
+    {
+        $reader = $this->readerWith([]);
+
+        self::assertSame('Magento_Config::config_general', $reader->getMagentoAcl(['path' => self::PATH]));
+        self::assertSame('Magento_Config::web', $reader->getMagentoAcl(['path' => 'web/secure/use_in_adminhtml']));
+    }
+
+    #[Test]
+    public function itRefusesAPathOutsideAnyConfigurationSection(): void
+    {
+        self::assertSame('', $this->readerWith([])->getMagentoAcl(['path' => 'crontab/default/jobs']));
+    }
+
+    #[Test]
+    public function itAnswersTheConfigurationAreaWhenNoPathIsNamed(): void
+    {
+        self::assertSame('Magento_Config::config', $this->readerWith([])->getMagentoAcl());
+    }
+
+    /**
      * @param array<string, mixed> $values "scope:id" => value
      */
     private function readerWith(array $values, $storeManager = null): ConfigReader
@@ -147,7 +178,17 @@ class ConfigReaderTest extends TestCase
 
         return new ConfigReader(
             $scopeConfig,
-            new StoreScopeContext($storeManager ?? $this->multiStoreManager())
+            new StoreScopeContext($storeManager ?? $this->multiStoreManager()),
+            $this->pathAccess()
+        );
+    }
+
+    private function pathAccess(): ConfigPathAccess
+    {
+        return new ConfigPathAccess(
+            (new FakeConfigStructure())
+                ->withSection('general', 'Magento_Config::config_general')
+                ->withSection('web', 'Magento_Config::web')
         );
     }
 }
