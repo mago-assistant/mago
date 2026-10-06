@@ -15,6 +15,7 @@ use Magento\Framework\Data\Form\FormKey;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\ChatServiceInterface;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
+use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
 use MagoAssistant\Mago\Service\Conversation\NavigationNoteInjector;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
@@ -23,6 +24,7 @@ use MagoAssistant\Mago\Service\Form\PageContextNormalizer;
 class Confirm extends Action implements HttpPostActionInterface
 {
     use FormKeyJsonValidation;
+    use ReleasesSessionLock;
 
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::assistant_write';
 
@@ -35,7 +37,8 @@ class Confirm extends Action implements HttpPostActionInterface
         private readonly FormKey $formKey,
         private readonly PageContextNormalizer $pageContextNormalizer,
         private readonly PageContextHolder $pageContextHolder,
-        private readonly NavigationNoteInjector $navigationNoteInjector
+        private readonly NavigationNoteInjector $navigationNoteInjector,
+        private readonly ConfirmationClaim $confirmationClaim
     ) {
         parent::__construct($context);
     }
@@ -54,6 +57,7 @@ class Confirm extends Action implements HttpPostActionInterface
             ob_end_clean();
         }
         ob_implicit_flush(true);
+        $this->releaseSessionLock();
 
         try {
             $rawBody = $this->getRequest()->getContent();
@@ -78,12 +82,12 @@ class Confirm extends Action implements HttpPostActionInterface
                 $this->terminateResponse();
             }
 
-            $message = $this->conversationRepository->getMessageForUser($messageId, $adminUserId);
-            if (empty($message['pending_confirmation'])) {
-                $this->sendSse('error', ['error' => 'No pending confirmation for this message']);
-                $this->sendSse('done', []);
-                $this->terminateResponse();
-            }
+            // Claimed before anything runs, so a second click or a parallel REST confirm gets an
+            // "already handled" error instead of running the same writes again
+            $message = $this->confirmationClaim->claimToConfirm($messageId, $adminUserId);
+            // Claimed means it is never offered again, so a closed tab must not cut the batch short
+            // before every write ran and its outcome was stored
+            ignore_user_abort(true);
 
             $toolCalls = $message['tool_calls'] ?? [];
             if (is_string($toolCalls)) {

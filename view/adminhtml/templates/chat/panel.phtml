@@ -4,11 +4,9 @@
 if (!$block->isVisible()) {
     return;
 }
-$accentColorRaw = $block->getAccentColor();
-$textColorRaw = $block->getTextColor();
-// Sanitize: only allow valid hex colors
-$accentColor = preg_match('/^#[0-9a-fA-F]{6}$/', $accentColorRaw) ? $accentColorRaw : '#FF7A33';
-$accentText = preg_match('/^#[0-9a-fA-F]{6}$/', $textColorRaw) ? $textColorRaw : '#FFFFFF';
+// Both are validated as #RRGGBB by the config repository
+$accentColor = $block->getAccentColor();
+$accentText = $block->getTextColor();
 // Compute derived colors from accent
 $hex = ltrim($accentColor, '#');
 $r = hexdec(substr($hex, 0, 2));

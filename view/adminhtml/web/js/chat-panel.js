@@ -17,6 +17,7 @@ define([
     var formatDate = text.formatDate;
     var formatTime = text.formatTime;
     var previewValue = text.previewValue;
+    var confirmValuePreviewLength = text.confirmValuePreviewLength;
 
     var config = window.MAGO_CONFIG;
     var storeNavigateIntent = navigateIntent.store;
@@ -37,6 +38,9 @@ define([
     var formatWriteFieldsConfirmMessage = confirmText.formatWriteFieldsConfirmMessage;
     var formatToolConfirmMessage = confirmText.formatToolConfirmMessage;
     var formatConfirmMessage = confirmText.formatConfirmMessage;
+    var describeWriteFieldChanges = confirmText.describeWriteFieldChanges;
+    var formatWriteFieldsIntro = confirmText.formatWriteFieldsIntro;
+    var formatWriteFieldsFooter = confirmText.formatWriteFieldsFooter;
     var formatTargetDescription = confirmText.formatTargetDescription;
     var formatRefusalMessage = confirmText.formatRefusalMessage;
     var failedLabels = confirmText.failedLabels;
@@ -1597,13 +1601,12 @@ define([
         var text = first && first.description ? first.description : 'I want to perform an action. Allow this?';
 
         /* A form write is the one confirmation the tool's own description cannot describe: what
-           matters is which fields change and from what, read off the form open right now. That
-           sentence is built in chat/confirm-text.js, as DOM with every value a text node, and replaces
-           both the description and the parameter table, which would otherwise show the raw
-           directive JSON. Every other tool keeps the generic card. */
-        var formWriteMessage = isFormWrite(first)
-            ? formatConfirmMessage(tools)
-            : null;
+           matters is which fields change and from what, read off the form open right now. The
+           heading comes from chat/confirm-text.js and the field list from UI.fieldChanges, both as
+           DOM with every value a text node; every field is listed, a long value folded but never
+           cut. It replaces both the description and the parameter table, which would otherwise
+           show the raw directive JSON. Every other tool keeps the generic card. */
+        var formWriteMessage = isFormWrite(first) ? buildFormWriteMessage(first) : null;
         var hooks = {actions: 'mago-confirm-actions', allow: 'mago-btn--confirm', confirm: 'mago-btn--confirm', later: 'mago-btn--reject', cancel: 'mago-btn--reject'};
         var irreversible = tools.filter(function(t) { return t.irreversible; });
         var card;
@@ -1613,10 +1616,11 @@ define([
             title = tools.length + ' actions';
             card = UI.skillBulk({
                 title: title,
-                text: 'Choose which of these to run.',
+                text: 'Tick each action you want to run. Nothing is ticked for you.',
+                labels: {allArguments: t('Show all arguments'), fullValue: t('Show full value')},
                 notice: irreversible.length ? UI.callout({tone: 'danger', text: irreversible.length + ' of these cannot be undone: ' + irreversible.map(function(t) { return toolLabel(t); }).join(', ') + '.'}) : null,
                 items: tools.map(function(t, i) {
-                    return {id: t.id || String(i), label: toolLabel(t), meta: summarizeInput(t.input)};
+                    return {id: t.id || String(i), label: toolLabel(t), meta: summarizeInput(t.input), params: UI.paramsFromInput(t.input)};
                 }),
                 confirmLabel: function(n) { return 'Run ' + n; },
                 classes: hooks,
@@ -1657,7 +1661,11 @@ define([
         msgEl.appendChild(card);
         msgs.scrollTop = msgs.scrollHeight;
 
+        var decided = false;
+        // One answer per card: a second click (or a double click) must not send a second confirm.
         function decide(allowed, selectedIds) {
+            if (decided) return;
+            decided = true;
             actions.innerHTML = '';
             actions.appendChild(UI.spinner());
             getMessageId(function(mid) {
@@ -1718,6 +1726,28 @@ define([
             }));
             setBusy(false);
         }
+    }
+
+    function buildFormWriteMessage(tool) {
+        var intro = document.createElement('div');
+        var footer = document.createElement('div');
+        intro.appendChild(formatWriteFieldsIntro(tool));
+        [formatWriteFieldsFooter(), t('Allow this?')].forEach(function(sentence) {
+            var paragraph = document.createElement('p');
+            paragraph.textContent = sentence;
+            footer.appendChild(paragraph);
+        });
+        var message = document.createElement('div');
+        message.className = 'mago-form-write-message';
+        message.appendChild(intro);
+        message.appendChild(UI.fieldChanges({
+            changes: describeWriteFieldChanges(tool),
+            hiddenLabel: t('(hidden)'),
+            previewLength: confirmValuePreviewLength,
+            labels: {fullValue: t('Show full value')}
+        }));
+        message.appendChild(footer);
+        return message;
     }
 
     // run = {card, title, tools, startedAt}: the S02 card that replaced the
@@ -1898,6 +1928,10 @@ define([
             body: JSON.stringify({message_id: messageId, form_key: formKey}),
             credentials: 'same-origin'
         }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d && d.error) {
+                showError(addMsg('assistant', ''), d.error);
+                return;
+            }
             addTextMsg('assistant', t('Action rejected. No changes were made.'));
         }).catch(function(e) {
             showError(addMsg('assistant', ''), e.message);

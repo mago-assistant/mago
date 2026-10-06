@@ -1755,18 +1755,21 @@
     flex-direction: column;
 }
 
+.mago-bulk-item {
+    border-bottom: @mago-size__1 solid var(--mago-accent-chip);
+
+    &:last-child {
+        border-bottom: none;
+    }
+}
+
 .mago-bulk-row {
     display: flex;
     align-items: center;
     gap: @mago-size__11;
     padding: @mago-size__11 0;
     font-size: @mago-font-size__13-5;
-    border-bottom: @mago-size__1 solid var(--mago-accent-chip);
     color: var(--mago-ink-muted, #736B65);
-
-    &:last-child {
-        border-bottom: none;
-    }
 
     .mago-check-box {
         border-color: #E1D0C2;
@@ -1812,6 +1815,57 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: @mago-font-size__12-5;
+}
+
+// Every argument of one bulk row, folded under it; values wrap rather than run off the card
+.mago-bulk-details {
+    padding: 0 0 @mago-size__11;
+    font-size: @mago-font-size__12-5;
+
+    .mago-param-value .is-chip {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+}
+
+.mago-bulk-details-toggle,
+.mago-value-summary {
+    cursor: pointer;
+    color: var(--mago-ink-muted, #736B65);
+}
+
+// A value on a confirmation card: whole when short, folded behind its start when long
+.mago-field-changes {
+    margin: 0 0 @mago-size__11;
+    padding-left: @mago-size__12;
+}
+
+.mago-field-change {
+    overflow-wrap: anywhere;
+}
+
+.mago-value-fold {
+    display: inline;
+
+    &[open] {
+        display: block;
+    }
+}
+
+.mago-value-summary {
+    display: inline;
+}
+
+.mago-value-full {
+    margin: @mago-size__6 0;
+    padding: @mago-size__6 @mago-size__7;
+    max-height: @mago-size__240;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: var(--mago-track);
+    border-radius: @mago-size__6;
     font-size: @mago-font-size__12-5;
 }
 

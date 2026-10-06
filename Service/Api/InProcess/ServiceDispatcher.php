@@ -10,6 +10,7 @@ use Magento\Framework\AuthorizationInterface;
 use Magento\Framework\ObjectManagerInterface;
 use Magento\Framework\Webapi\ServiceInputProcessor;
 use Magento\Framework\Webapi\Validator\EntityArrayValidator\InputArraySizeLimitValue;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Api\InProcess\FollowUp\ServiceCallFollowUpInterface;
 use MagoAssistant\Mago\Service\Api\InProcess\Guard\ServiceCallGuardInterface;
 
@@ -36,6 +37,7 @@ class ServiceDispatcher
         private readonly ObjectManagerInterface $objectManager,
         private readonly ErrorMapper $errorMapper,
         private readonly TransactionBoundary $transactionBoundary,
+        private readonly ErrorReporter $errorReporter,
         private readonly array $guards = [],
         private readonly array $followUps = []
     ) {
@@ -96,7 +98,12 @@ class ServiceDispatcher
     private function runFollowUps(ResolvedRoute $route, array $arguments): void
     {
         foreach ($this->followUps as $followUp) {
-            $followUp->afterCall($route, $arguments);
+            // The service call already succeeded; a failed follow-up must not report it as failed.
+            try {
+                $followUp->afterCall($route, $arguments);
+            } catch (\Throwable $e) {
+                $this->errorReporter->log('Internal API follow-up ' . $route->routePath, $e);
+            }
         }
     }
 }

@@ -32,6 +32,7 @@ define([], function () {
     }
 
     // The first few parameters on one line, for a bulk row: "identifier: summer-sale, title: Summer Sale".
+    // Only a reminder of which call this is: the row's own details list every argument in full.
     function summarizeInput(input) {
         var parts = [];
         Object.keys(input || {}).forEach(function(k) {
@@ -65,7 +66,8 @@ define([], function () {
         return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
     }
 
-    // A description can be hundreds of characters; the card is a review, not the value itself.
+    // A description can be hundreds of characters: past this a value on a confirmation card starts
+    // folded, and unfolds to the whole of it.
     var MAX_CONFIRM_VALUE_PREVIEW = 80;
 
     function previewValue(value) {
@@ -81,6 +83,7 @@ define([], function () {
         summarizeInput: summarizeInput,
         formatDate: formatDate,
         formatTime: formatTime,
-        previewValue: previewValue
+        previewValue: previewValue,
+        confirmValuePreviewLength: MAX_CONFIRM_VALUE_PREVIEW
     };
 });

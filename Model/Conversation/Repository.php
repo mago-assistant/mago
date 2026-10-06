@@ -199,6 +199,21 @@ class Repository implements ConversationRepositoryInterface
         return $row;
     }
 
+    public function claimPendingConfirmation(int $messageId, int $adminUserId, ?int $maxAgeSeconds = null): bool
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $table = $this->resourceConnection->getTableName('mago_message');
+
+        $where = $this->ownedMessageWhere($messageId, $adminUserId);
+        $where['pending_confirmation = ?'] = 1;
+        if ($maxAgeSeconds !== null) {
+            // Compared in SQL so created_at and NOW() share the connection's time zone
+            $where[] = $connection->quoteInto('created_at >= NOW() - INTERVAL ? SECOND', $maxAgeSeconds);
+        }
+
+        return $connection->update($table, ['pending_confirmation' => 0], $where) === 1;
+    }
+
     public function resolveConfirmation(
         int $messageId,
         bool $confirmed,
@@ -208,14 +223,9 @@ class Repository implements ConversationRepositoryInterface
         $connection = $this->resourceConnection->getConnection();
         $table = $this->resourceConnection->getTableName('mago_message');
 
-        $where = ['entity_id = ?' => $messageId];
-        if ($adminUserId !== null) {
-            $conversationTable = $this->resourceConnection->getTableName('mago_conversation');
-            $where[] = $connection->quoteInto(
-                'conversation_id IN (SELECT entity_id FROM ' . $conversationTable . ' WHERE admin_user_id = ?)',
-                $adminUserId
-            );
-        }
+        $where = $adminUserId !== null
+            ? $this->ownedMessageWhere($messageId, $adminUserId)
+            : ['entity_id = ?' => $messageId];
 
         // The answered row is what a reloaded conversation rebuilds its result card from, so the
         // outcome is written back onto the calls it already holds rather than only onto the reply.
@@ -225,5 +235,22 @@ class Repository implements ConversationRepositoryInterface
         }
 
         $connection->update($table, $values, $where);
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    private function ownedMessageWhere(int $messageId, int $adminUserId): array
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $conversationTable = $this->resourceConnection->getTableName('mago_conversation');
+
+        return [
+            'entity_id = ?' => $messageId,
+            $connection->quoteInto(
+                'conversation_id IN (SELECT entity_id FROM ' . $conversationTable . ' WHERE admin_user_id = ?)',
+                $adminUserId
+            ),
+        ];
     }
 }

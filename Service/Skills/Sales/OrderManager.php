@@ -18,8 +18,8 @@ class OrderManager extends AbstractSkill
     protected function getBaseDescription(): string
     {
         return 'Manage orders, invoices, shipments and credit memos: get, list, add comments, update status, '
-            . 'create shipments with tracking, create invoices, process refunds, cancel orders, and resend order '
-            . 'confirmations.';
+            . 'create shipments with tracking, create invoices, create offline credit memos, cancel orders, and '
+            . 'resend order confirmations.';
     }
 
     public function getMagentoAcl(array $input = []): string

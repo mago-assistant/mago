@@ -11,7 +11,19 @@
             <module name="Magento_Customer"/>
             <module name="Magento_Cms"/>
             <module name="Magento_Cron"/>
+            <module name="Magento_Authorization"/>
+            <module name="Magento_Directory"/>
+            <module name="Magento_Eav"/>
+            <module name="Magento_Indexer"/>
+            <module name="Magento_Integration"/>
+            <module name="Magento_Ui"/>
+            <module name="Magento_UrlRewrite"/>
+            <module name="Magento_Webapi"/>
             <module name="Magento_Theme"/>
+            <module name="Magento_Authorization"/>
+            <module name="Magento_Integration"/>
+            <module name="Magento_User"/>
+            <module name="Magento_Webapi"/>
             <module name="MageOS_AiBase"/>
         </sequence>
     </module>

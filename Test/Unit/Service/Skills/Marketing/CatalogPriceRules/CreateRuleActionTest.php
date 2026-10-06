@@ -8,7 +8,6 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Marketing\CatalogPriceRule
 
 use Magento\CatalogRule\Api\CatalogRuleRepositoryInterface;
 use Magento\CatalogRule\Model\Rule;
-use Magento\CatalogRule\Model\RuleFactory;
 use Magento\Framework\DataObject;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Logger\ErrorLogger;
@@ -16,6 +15,7 @@ use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
 use MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\CreateRuleAction;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeCatalogRuleServices;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeLogger;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -48,15 +48,11 @@ class CreateRuleActionTest extends TestCase
         $this->rule->method('getId')->willReturn(12);
         $this->rule->method('getData')->willReturn(['simple_action' => 'by_percent', 'discount_amount' => 500.0]);
 
-        $ruleFactory = $this->createMock(RuleFactory::class);
-        $ruleFactory->method('create')->willReturn($this->rule);
-
         $secureAdminUrl = $this->createMock(SecureAdminUrl::class);
         $secureAdminUrl->method('getUrl')->willReturn('https://example.test/admin/rule');
 
         $this->action = $this->actionWith([
-            'catalogRuleRepository' => $this->catalogRuleRepository,
-            'ruleFactory' => $ruleFactory,
+            'catalogRules' => new FakeCatalogRuleServices($this->catalogRuleRepository, $this->rule),
             'secureAdminUrl' => $secureAdminUrl,
             'errorReporter' => new ErrorReporter(new ErrorLogger(new FakeLogger(), new Json()), new PiiHeuristic()),
         ]);

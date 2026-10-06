@@ -10,18 +10,35 @@ use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
 use MagoAssistant\Mago\Model\Conversation\ConversationNotFoundException;
 
 /**
- * An in-memory conversation store holding the conversations and messages a test starts with.
+ * Conversations and messages in memory, with the same ownership and claim rules as the real
+ * repository. A message's age is set with ageMessage(), so expiry needs no clock.
  */
 final class FakeConversationRepository implements ConversationRepositoryInterface
 {
+    /** @var array<int, array<string, mixed>> */
+    private array $conversations = [];
+
+    /** @var array<int, array<string, mixed>> */
+    private array $messages = [];
+
+    /** @var array<int, int> Seconds since each message was written */
+    private array $ages = [];
+
     /**
      * @param array<int, array<string, mixed>> $conversations Keyed by conversation id
-     * @param array<int, list<array<string, mixed>>> $messages Keyed by conversation id
+     * @param array<int, list<array<string, mixed>>> $messages A test's starting messages, keyed by conversation id
      */
-    public function __construct(
-        private array $conversations = [],
-        private array $messages = []
-    ) {
+    public function __construct(array $conversations = [], array $messages = [])
+    {
+        $this->conversations = $conversations;
+        foreach ($messages as $conversationId => $conversationMessages) {
+            foreach ($conversationMessages as $message) {
+                $messageId = count($this->messages) + 1;
+                // Kept as the test wrote it, apart from where it belongs
+                $this->messages[$messageId] = $message + ['conversation_id' => $conversationId];
+                $this->ages[$messageId] = 0;
+            }
+        }
     }
 
     public function create(int $adminUserId, string $title = 'New Chat'): int
@@ -67,7 +84,11 @@ final class FakeConversationRepository implements ConversationRepositoryInterfac
 
     public function delete(int $conversationId, ?int $adminUserId = null): void
     {
-        unset($this->conversations[$conversationId], $this->messages[$conversationId]);
+        unset($this->conversations[$conversationId]);
+        $this->messages = array_filter(
+            $this->messages,
+            static fn (array $message): bool => $message['conversation_id'] !== $conversationId
+        );
     }
 
     public function addMessage(
@@ -78,39 +99,55 @@ final class FakeConversationRepository implements ConversationRepositoryInterfac
         bool $pendingConfirmation = false,
         ?string $toolCallId = null
     ): int {
-        $messageId = count($this->messages[$conversationId] ?? []) + 1;
-        $this->messages[$conversationId][] = [
+        $messageId = count($this->messages) + 1;
+        $this->messages[$messageId] = [
             'entity_id' => $messageId,
+            'conversation_id' => $conversationId,
             'role' => $role,
             'content' => $content,
-            'tool_calls' => $toolCalls,
-            'pending_confirmation' => (int)$pendingConfirmation,
+            'tool_calls' => $toolCalls === null ? null : (string)json_encode($toolCalls),
+            'tool_call_id' => $toolCallId,
+            'pending_confirmation' => $pendingConfirmation ? 1 : 0,
         ];
+        $this->ages[$messageId] = 0;
 
         return $messageId;
     }
 
     public function getMessages(int $conversationId): array
     {
-        return $this->messages[$conversationId] ?? [];
+        return array_values(array_filter(
+            $this->messages,
+            static fn (array $message): bool => $message['conversation_id'] === $conversationId
+        ));
     }
 
     public function getMessageById(int $messageId): array
     {
-        foreach ($this->messages as $messages) {
-            foreach ($messages as $message) {
-                if ((int)$message['entity_id'] === $messageId) {
-                    return $message;
-                }
-            }
-        }
-
-        throw new ConversationNotFoundException('Message not found: ' . $messageId);
+        return $this->messages[$messageId]
+            ?? throw new ConversationNotFoundException('Message not found: ' . $messageId);
     }
 
     public function getMessageForUser(int $messageId, int $adminUserId): array
     {
-        return $this->getMessageById($messageId);
+        $message = $this->getMessageById($messageId);
+        $this->getByIdForUser((int)$message['conversation_id'], $adminUserId);
+
+        return $message;
+    }
+
+    public function claimPendingConfirmation(int $messageId, int $adminUserId, ?int $maxAgeSeconds = null): bool
+    {
+        $message = $this->getMessageForUser($messageId, $adminUserId);
+        if ($message['pending_confirmation'] !== 1) {
+            return false;
+        }
+        if ($maxAgeSeconds !== null && $this->ages[$messageId] > $maxAgeSeconds) {
+            return false;
+        }
+        $this->messages[$messageId]['pending_confirmation'] = 0;
+
+        return true;
     }
 
     public function resolveConfirmation(
@@ -119,5 +156,25 @@ final class FakeConversationRepository implements ConversationRepositoryInterfac
         ?int $adminUserId = null,
         ?array $toolCalls = null
     ): void {
+        $this->messages[$messageId]['pending_confirmation'] = 0;
+        if ($toolCalls !== null) {
+            $this->messages[$messageId]['tool_calls'] = (string)json_encode($toolCalls);
+        }
+    }
+
+    public function ageMessage(int $messageId, int $seconds): void
+    {
+        $this->ages[$messageId] = $seconds;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function messagesWithRole(int $conversationId, string $role): array
+    {
+        return array_values(array_filter(
+            $this->getMessages($conversationId),
+            static fn (array $message): bool => $message['role'] === $role
+        ));
     }
 }

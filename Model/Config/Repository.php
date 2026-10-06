@@ -22,6 +22,9 @@ use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepositoryInterfa
 
 class Repository extends System\BaseRepository implements ConfigRepositoryInterface
 {
+    private const DEFAULT_ACCENT_COLOR = '#F26322';
+    private const DEFAULT_TEXT_COLOR = '#FFFFFF';
+
     public function __construct(
         StoreManagerInterface $storeManager,
         ScopeConfigInterface $scopeConfig,
@@ -144,12 +147,21 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
 
     public function getAccentColor(): string
     {
-        return $this->getStoreValue(self::XML_PATH_ACCENT_COLOR) ?: '#F26322';
+        return $this->getColor(self::XML_PATH_ACCENT_COLOR, self::DEFAULT_ACCENT_COLOR);
     }
 
     public function getTextColor(): string
     {
-        return $this->getStoreValue(self::XML_PATH_TEXT_COLOR) ?: '#FFFFFF';
+        return $this->getColor(self::XML_PATH_TEXT_COLOR, self::DEFAULT_TEXT_COLOR);
+    }
+
+    /**
+     * Templates print the color unescaped inside <style>, so anything but #RRGGBB falls back to the default.
+     */
+    private function getColor(string $path, string $default): string
+    {
+        $value = $this->getStoreValue($path);
+        return HexColor::isValid($value) ? $value : $default;
     }
 
     public function getAssistantName(): string

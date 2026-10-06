@@ -17,6 +17,11 @@ use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * The refund payload, and the texts the admin confirms on and the model reads. The action posts to
+ * order/{id}/refund, the offline refund, so none of the texts may claim money goes back through
+ * the payment provider.
+ */
 final class CreateCreditmemoActionTest extends TestCase
 {
     private const ADMIN_USER_ID = 7;
@@ -56,6 +61,42 @@ final class CreateCreditmemoActionTest extends TestCase
                 'items' => [['entity_id' => 8, 'status' => 'processing', 'increment_id' => '000000008']],
             ])
             ->withResponse(FakeInternalApiClient::POST, 'order/8/refund', ['result' => 3]);
+    }
+
+    #[Test]
+    public function itTellsTheAdminNoMoneyIsRefundedThroughThePaymentProvider(): void
+    {
+        $impacts = implode(' ', $this->textsOnly()->getImpacts(['order_number' => '000000549'], 1));
+
+        self::assertStringContainsString('Order #000000549 gets an offline credit memo', $impacts);
+        self::assertStringContainsString('No money is refunded through the payment provider', $impacts);
+        self::assertStringNotContainsString('original payment method', $impacts);
+    }
+
+    #[Test]
+    public function itDescribesTheToolAsAnOfflineCreditMemo(): void
+    {
+        $description = $this->textsOnly()->getDescription();
+
+        self::assertStringContainsString('offline credit memo', $description);
+        self::assertStringContainsString('no money is refunded through the payment provider', $description);
+    }
+
+    #[Test]
+    public function itInstructsTheModelNeverToClaimTheCustomerWasRefunded(): void
+    {
+        $instructions = $this->textsOnly()->getInstructions();
+
+        self::assertStringContainsString('does not refund any money through the payment provider', $instructions);
+        self::assertStringContainsString('Never say the customer was refunded', $instructions);
+    }
+
+    /**
+     * The texts under test touch none of the collaborators
+     */
+    private function textsOnly(): CreateCreditmemoAction
+    {
+        return (new \ReflectionClass(CreateCreditmemoAction::class))->newInstanceWithoutConstructor();
     }
 
     /**

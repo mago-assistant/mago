@@ -150,7 +150,7 @@ all after a confirmed write. They also stay out of the tool description, which t
 card shows to the administrator.
 
 A `confirm` event also carries each tool call's `id`. With several writes in one turn the panel
-shows a tick list; the confirm request then sends the ticked ids as `tool_call_ids`, and
+shows a tick list where nothing starts ticked; the confirm request then sends the ticked ids as `tool_call_ids`, and
 `executeConfirmedTools()` answers every unticked call with `{"skipped": true, ...}` without
 running it. A tool that returns an `error` key is reported to the panel with a `tool_status` of
 `failed` and the error as `message`.
@@ -191,7 +191,10 @@ Orchestrates the conversation loop:
 2. Send messages + tool definitions to the AI provider
 3. If the AI requests a **read-only** tool → execute automatically, append result, loop
 4. If the AI requests a **write** tool → pause, return `pending_confirmation: true`
-5. On user confirmation → execute the write tool via `executeConfirmedTools()`
+5. On user confirmation → claim the pending message (`ConfirmationClaim`), then execute the write tool via `executeConfirmedTools()`.
+   The claim clears `pending_confirmation` in one conditional update before anything runs, so a double submit, or the
+   panel and the REST API at once, runs the writes once and the other request is told the action was already handled.
+   A proposal older than an hour can no longer be confirmed (it can still be rejected).
 6. Loop continues until the AI produces a final text response or `max_tool_iterations` is reached
 
 ```

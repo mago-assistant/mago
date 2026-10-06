@@ -17,6 +17,10 @@ use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 
 class ConversationView extends Template
 {
+    private const READABLE_JSON_FLAGS = JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+    private const SCRIPT_SAFE_JSON_FLAGS = JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
+        | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
+
     private ?array $conversation = null;
     private ?array $messages = null;
     private ?array $usageData = null;
@@ -286,24 +290,20 @@ class ConversationView extends Template
         // Italic: *text*
         $html = (string)preg_replace('/(?<!\*)\*([^*]+)\*(?!\*)/', '<em>$1</em>', $html);
 
-        // Markdown links: [text](url), http(s) or a path on this store. "//host" and "/\host" are
-        // off-site links that only look like paths, so the path may not start with either.
+        // Markdown links [text](url) and bare URLs in one pass, so a bare URL inside a link's own
+        // href is never linked a second time (that nested <a> broke out of the href attribute).
+        // A link is http(s) or a path on this store: "//host" and "/\host" only look like paths.
         $html = (string)preg_replace_callback(
-            '/\[([^\]]+)\]\(((?:https?:\/\/[^ )]+|\/(?![\/\\\\\s])[^ )]+))\)/',
+            '/\[([^\]]+)\]\(((?:https?:\/\/[^ )]+|\/(?![\/\\\\\s])[^ )]+))\)|(https?:\/\/[^\s<]+)/',
             function ($m) {
-                $linkText = $m[1];
+                if (isset($m[3])) {
+                    return '<a href="' . $m[3] . '" target="_blank" rel="noopener noreferrer">' . $m[3] . '</a>';
+                }
                 $url = str_replace(["\n", "\r"], '', $m[2]);
                 $target = str_starts_with($url, '/') ? '_self' : '_blank';
                 return '<a href="' . $url . '" target="' . $target . '" rel="noopener noreferrer">'
-                    . $linkText . '</a>';
+                    . $m[1] . '</a>';
             },
-            $html
-        );
-
-        // Bare URLs not already in href
-        $html = (string)preg_replace(
-            '/(?<!href="|">)(https?:\/\/[^\s<]+)/',
-            '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
             $html
         );
 
@@ -316,6 +316,9 @@ class ConversationView extends Template
         return strip_tags($html, '<p><br><strong><em><code><pre><a>');
     }
 
+    /**
+     * Readable JSON for output that is HTML-escaped afterwards. Not safe to print unescaped.
+     */
     public function formatJson(mixed $data): string
     {
         if (is_string($data)) {
@@ -326,11 +329,34 @@ class ConversationView extends Template
             }
         }
 
-        if (is_array($data)) {
-            $data = $this->decodeNestedJson($data);
+        return json_encode($this->decodeNestedValue($data), self::READABLE_JSON_FLAGS) ?: '';
+    }
+
+    /**
+     * JSON that can be printed unescaped inside a <script> block. Payloads hold stored customer
+     * input (reviews, addresses), so <, >, &, ' and " are always \u-escaped and a payload that
+     * isn't valid JSON is encoded as a JSON string instead of being passed through.
+     */
+    public function formatJsonForScript(mixed $data): string
+    {
+        if ($data === null || $data === '') {
+            return '';
         }
 
-        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
+        if (is_string($data)) {
+            try {
+                $data = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                return json_encode($data, self::SCRIPT_SAFE_JSON_FLAGS) ?: '""';
+            }
+        }
+
+        return json_encode($this->decodeNestedValue($data), self::SCRIPT_SAFE_JSON_FLAGS) ?: '""';
+    }
+
+    private function decodeNestedValue(mixed $data): mixed
+    {
+        return is_array($data) ? $this->decodeNestedJson($data) : $data;
     }
 
     private function decodeNestedJson(array $data): array

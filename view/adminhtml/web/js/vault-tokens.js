@@ -27,7 +27,10 @@ define([], function () {
     // The attributes a value may go into, because there it is only ever read as text. In any other
     // attribute it could decide what loads, where a click goes, how the element is styled or what
     // a script finds by id, so an attribute carrying a token anywhere else is dropped.
-    const TEXT_ATTRIBUTE = /^(?:title|alt|aria-label|placeholder|data-mago-send)$/i;
+    const TEXT_ATTRIBUTE = /^(?:title|alt|aria-label|placeholder)$/i;
+    // What a widget sends as the admin's next message goes to the provider, so it keeps its tokens:
+    // a value here would hand the provider the real value, and a review as the admin's own words.
+    const SEND_ATTRIBUTE = /^data-mago-send$/i;
 
     function canonical(token) {
         return token.replace(/\\/g, '');
@@ -141,6 +144,9 @@ define([], function () {
         Array.prototype.slice.call(element.attributes)
             .filter(function (attribute) { return containsToken(attribute.value); })
             .forEach(function (attribute) {
+                if (SEND_ATTRIBUTE.test(attribute.name)) {
+                    return;
+                }
                 if (TEXT_ATTRIBUTE.test(attribute.name)) {
                     element.setAttribute(attribute.name, replaceTokens(attribute.value, tokens));
                     return;

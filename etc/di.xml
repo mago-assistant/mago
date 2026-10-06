@@ -76,6 +76,12 @@
     <preference for="MagoAssistant\Mago\Api\WebApi\ChatManagementInterface" type="MagoAssistant\Mago\Model\WebApi\ChatManagement"/>
     <preference for="MagoAssistant\Mago\Api\WebApi\IndexerManagementInterface" type="MagoAssistant\Mago\Model\WebApi\IndexerManagement"/>
     <preference for="MagoAssistant\Mago\Api\Data\IndexerResultInterface" type="MagoAssistant\Mago\Model\Data\IndexerResult"/>
+    <type name="MagoAssistant\Mago\Api\WebApi\ChatManagementInterface">
+        <plugin name="mago_require_assistant_enabled" type="MagoAssistant\Mago\Plugin\Webapi\RequireAssistantEnabled"/>
+    </type>
+    <type name="MagoAssistant\Mago\Api\WebApi\IndexerManagementInterface">
+        <plugin name="mago_require_assistant_enabled" type="MagoAssistant\Mago\Plugin\Webapi\RequireAssistantEnabled"/>
+    </type>
 
     <!-- Module Info Repository -->
     <preference for="MagoAssistant\Mago\Api\ModuleInfo\RepositoryInterface" type="MagoAssistant\Mago\Model\ModuleInfo\Repository"/>
@@ -347,6 +353,18 @@
     <type name="MagoAssistant\Mago\Console\Command\CreateTool">
         <arguments>
             <argument name="aclResources" xsi:type="object">MagoAssistant\Mago\Service\Tool\Verify\AclResourceIndex\Proxy</argument>
+        </arguments>
+    </type>
+
+    <!-- The panel is on every admin page, also when the assistant is disabled or hidden, so it must
+         not build the registry (and every tool in it) until it actually renders -->
+    <type name="MagoAssistant\Mago\Block\Adminhtml\ChatPanel">
+        <arguments>
+            <argument name="toolRegistry" xsi:type="object">MagoAssistant\Mago\Service\Tool\ToolRegistry\Proxy</argument>
+            <argument name="commandRegistry" xsi:type="object">MagoAssistant\Mago\Service\Command\CommandRegistry\Proxy</argument>
+            <argument name="commandRunner" xsi:type="object">MagoAssistant\Mago\Service\Command\CommandRunner\Proxy</argument>
+            <argument name="formPolicy" xsi:type="object">MagoAssistant\Mago\Service\Form\FormPolicy\Proxy</argument>
+            <argument name="exampleQuestions" xsi:type="object">MagoAssistant\Mago\Service\Welcome\ExampleQuestions\Proxy</argument>
         </arguments>
     </type>
 

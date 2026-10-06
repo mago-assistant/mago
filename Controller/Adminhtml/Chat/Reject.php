@@ -14,6 +14,7 @@ use Magento\Framework\Controller\ResultInterface;
 use Magento\Framework\Data\Form\FormKey;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
+use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 
 class Reject extends Action implements HttpPostActionInterface
@@ -28,7 +29,8 @@ class Reject extends Action implements HttpPostActionInterface
         private readonly JsonFactory $jsonFactory,
         private readonly Json $json,
         private readonly ErrorReporter $errorReporter,
-        private readonly FormKey $formKey
+        private readonly FormKey $formKey,
+        private readonly ConfirmationClaim $confirmationClaim
     ) {
         parent::__construct($context);
     }
@@ -52,7 +54,7 @@ class Reject extends Action implements HttpPostActionInterface
                 return $result->setData(['error' => 'Not authorized']);
             }
 
-            $message = $this->conversationRepository->getMessageForUser($messageId, $adminUserId);
+            $message = $this->confirmationClaim->claimToReject($messageId, $adminUserId);
             $this->conversationRepository->resolveConfirmation(
                 $messageId,
                 false,

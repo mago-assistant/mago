@@ -13,6 +13,7 @@ use MagoAssistant\Mago\Api\ChatServiceInterface;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
 use MagoAssistant\Mago\Api\WebApi\ChatManagementInterface;
 use MagoAssistant\Mago\Service\Ai\ChatService;
+use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 
@@ -24,7 +25,8 @@ class ChatManagement implements ChatManagementInterface
         private readonly UserContextInterface $userContext,
         private readonly Json $json,
         private readonly ErrorReporter $errorReporter,
-        private readonly PrivacyService $privacyService
+        private readonly PrivacyService $privacyService,
+        private readonly ConfirmationClaim $confirmationClaim
     ) {
     }
 
@@ -139,10 +141,8 @@ class ChatManagement implements ChatManagementInterface
     {
         try {
             $adminUserId = $this->requireAdminUserId();
-            $message = $this->conversationRepository->getMessageForUser($messageId, $adminUserId);
-            if (empty($message['pending_confirmation'])) {
-                return $this->toJson(['error' => 'No pending confirmation for this message']);
-            }
+            // Same claim as the admin panel's Confirm, so the two cannot both run one proposal
+            $message = $this->confirmationClaim->claimToConfirm($messageId, $adminUserId);
 
             $toolCalls = $message['tool_calls'] ?? [];
             if (is_string($toolCalls)) {
@@ -193,8 +193,7 @@ class ChatManagement implements ChatManagementInterface
     {
         try {
             $adminUserId = $this->requireAdminUserId();
-            $message = $this->conversationRepository->getMessageForUser($messageId, $adminUserId);
-            $this->conversationRepository->resolveConfirmation($messageId, false, $adminUserId);
+            $message = $this->confirmationClaim->claimToReject($messageId, $adminUserId);
 
             $conversationId = (int)$message['conversation_id'];
 

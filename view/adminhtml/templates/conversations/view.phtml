@@ -317,8 +317,8 @@ if (!empty($apiCalls)):
                             <button type="button" class="mago-conv-tool-toggle" onclick="magoOpenPayloadModal(<?= (int)$call['entity_id'] ?>)">
                                 <?= $escaper->escapeHtml(__('View')) ?>
                             </button>
-                            <script type="text/json" id="mago-payload-req-<?= (int)$call['entity_id'] ?>"><?= /* @noEscape */ $block->formatJson($call['request_payload'] ?? '') ?></script>
-                            <script type="text/json" id="mago-payload-res-<?= (int)$call['entity_id'] ?>"><?= /* @noEscape */ $block->formatJson($call['response_payload'] ?? '') ?></script>
+                            <script type="text/json" id="mago-payload-req-<?= (int)$call['entity_id'] ?>"><?= /* @noEscape */ $block->formatJsonForScript($call['request_payload'] ?? '') ?></script>
+                            <script type="text/json" id="mago-payload-res-<?= (int)$call['entity_id'] ?>"><?= /* @noEscape */ $block->formatJsonForScript($call['response_payload'] ?? '') ?></script>
                         <?php else: ?>
                             <span style="color:#ccc;font-size:11px;"><?= $escaper->escapeHtml(__('Not recorded')) ?></span>
                         <?php endif; ?>
@@ -358,9 +358,21 @@ require(['jquery', 'Magento_Ui/js/modal/modal'], function($, modal) {
     var $el = $('#mago-payload-modal');
     modal(opts, $el);
 
+    var readable = function(text) {
+        if (!text) {
+            return '';
+        }
+        try {
+            var value = JSON.parse(text);
+            return typeof value === 'string' ? value : JSON.stringify(value, null, 4);
+        } catch (e) {
+            return text;
+        }
+    };
+
     window.magoOpenPayloadModal = function(id) {
-        var req = $('#mago-payload-req-' + id).text();
-        var res = $('#mago-payload-res-' + id).text();
+        var req = readable($('#mago-payload-req-' + id).text());
+        var res = readable($('#mago-payload-res-' + id).text());
         $('#mago-payload-modal-req').text(req || 'Not recorded');
         $('#mago-payload-modal-res').text(res || 'Not recorded');
         $el.modal('openModal');

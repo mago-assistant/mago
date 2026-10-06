@@ -8,7 +8,6 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\ReviewManager;
 
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Framework\Exception\NoSuchEntityException;
-use Magento\Review\Model\ResourceModel\Review\CollectionFactory;
 use Magento\Review\Model\Review;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
@@ -16,7 +15,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
 class GetStatsAction implements ActionInterface
 {
     public function __construct(
-        private readonly CollectionFactory $collectionFactory,
+        private readonly ReviewServices $reviewServices,
         private readonly ProductRepositoryInterface $productRepository
     ) {
     }
@@ -105,7 +104,7 @@ class GetStatsAction implements ActionInterface
 
     private function getCountByStatus(int $statusId, ?int $productId): int
     {
-        $collection = $this->collectionFactory->create();
+        $collection = $this->reviewServices->createCollection();
         $collection->addStatusFilter($statusId);
 
         if ($productId) {
@@ -117,7 +116,7 @@ class GetStatsAction implements ActionInterface
 
     private function getAverageRating(?int $productId): ?float
     {
-        $collection = $this->collectionFactory->create();
+        $collection = $this->reviewServices->createCollection();
         $collection->addStatusFilter(Review::STATUS_APPROVED);
 
         if ($productId) {

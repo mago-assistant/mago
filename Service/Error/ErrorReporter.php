@@ -10,6 +10,7 @@ use Magento\Framework\Exception\AuthorizationException;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Exception\NoSuchEntityException;
 use MagoAssistant\Mago\Logger\ErrorLogger;
+use MagoAssistant\Mago\Model\Conversation\ConfirmationUnavailableException;
 use MagoAssistant\Mago\Model\Conversation\ConversationNotFoundException;
 use MagoAssistant\Mago\Service\Ai\AiNotConfiguredException;
 use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
@@ -43,6 +44,7 @@ class ErrorReporter
     private const USER_FACING = [
         AiNotConfiguredException::class,
         AuthorizationException::class,
+        ConfirmationUnavailableException::class,
         ConversationNotFoundException::class,
     ];
 

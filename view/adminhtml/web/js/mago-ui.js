@@ -97,6 +97,8 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         cannotUndo: 'Cannot be undone',
         stepOf: 'step %1 of %2',
         ofSelected: '%1 of %2',
+        allArguments: 'Show all arguments',
+        fullValue: 'Show full value',
         somethingElse: 'Something else…'
     };
 
@@ -1025,6 +1027,41 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         }));
     }
 
+    // A value the admin approves, shown whole. A long one starts folded behind its first
+    // characters, and the fold opens onto every character of it; text nodes only, never markup.
+    // {value, previewLength, labels}
+    function fullValue(opts) {
+        var L = labels(opts);
+        var value = opts.value;
+        var text = value === null || value === undefined ? '' : (typeof value === 'object' ? JSON.stringify(value) : String(value));
+        var previewLength = opts.previewLength || 80;
+        if (text.length <= previewLength) {
+            return el('code', 'mago-value', text);
+        }
+        return el('details', 'mago-value-fold', [
+            el('summary', 'mago-value-summary', [
+                el('code', 'mago-value', text.slice(0, previewLength) + '…'),
+                el('span', 'mago-value-toggle', ' ' + L.fullValue)
+            ]),
+            el('pre', 'mago-value-full', text)
+        ]);
+    }
+
+    // Field changes on a form-write card, every one of them: "Label: old → new".
+    // {changes: [{label, from, isFromHidden, isFromUnknown, to}], hiddenLabel, previewLength, labels}
+    function fieldChanges(opts) {
+        return el('ul', 'mago-field-changes', (opts.changes || []).map(function (change) {
+            var to = fullValue({value: change.to, previewLength: opts.previewLength, labels: opts.labels});
+            if (change.isFromUnknown) {
+                return el('li', 'mago-field-change', [change.label + ': ', to]);
+            }
+            var from = change.isFromHidden
+                ? el('span', 'mago-param-muted', opts.hiddenLabel || '(hidden)')
+                : fullValue({value: change.from, previewLength: opts.previewLength, labels: opts.labels});
+            return el('li', 'mago-field-change', [change.label + ': ', from, ' → ', to]);
+        }));
+    }
+
     // Convert a tool input object into parameter rows. Nested values are shown as JSON.
     function paramsFromInput(input) {
         var out = [];
@@ -1238,13 +1275,16 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
     }
 
     // S08 Bulk with selection: tick the records to act on, the button counts them.
-    // {title, icon, text, items: [{id, label, meta, checked, disabled}], confirmLabel(n), onConfirm(selectedIds), onLater,
-    //  classes: {actions, confirm, later}}
+    // Nothing starts ticked unless an item says checked: true, so every write is chosen on purpose.
+    // An item's params open under its row with every argument in full, so the short meta line is
+    // never all the admin gets to see of what runs.
+    // {title, icon, text, items: [{id, label, meta, params, checked, disabled}], confirmLabel(n), onConfirm(selectedIds),
+    //  onLater, classes: {actions, confirm, later}}
     function skillBulk(opts) {
         var L = labels(opts);
         var classes = opts.classes || {};
         var items = opts.items || [];
-        var state = items.map(function (it) { return it.checked !== false && !it.disabled; });
+        var state = items.map(function (it) { return it.checked === true && !it.disabled; });
         var counter = num('', 'mago-skill-count');
         var confirm = button('', 'is-primary' + (classes.confirm ? ' ' + classes.confirm : ''), function (e) {
             var selected = items.filter(function (it, i) { return state[i]; });
@@ -1278,7 +1318,11 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
                     sync();
                 });
             }
-            return row;
+            var details = it.params && it.params.length ? el('details', 'mago-bulk-details', [
+                el('summary', 'mago-bulk-details-toggle', L.allArguments),
+                paramTable(it.params)
+            ]) : null;
+            return el('div', 'mago-bulk-item', [row, details]);
         });
         sync();
         return el('div', 'mago-widget mago-skill is-accent is-flush', [
@@ -1680,6 +1724,8 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         formatNumber: formatNumber,
         paramsFromInput: paramsFromInput,
         paramTable: paramTable,
+        fullValue: fullValue,
+        fieldChanges: fieldChanges,
         traceStep: traceStep,
         suggestionCard: suggestionCard,
         chips: chips,

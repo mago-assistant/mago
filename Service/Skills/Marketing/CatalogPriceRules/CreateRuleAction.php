@@ -6,10 +6,8 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
-use Magento\CatalogRule\Api\CatalogRuleRepositoryInterface;
 use Magento\CatalogRule\Model\Rule\Condition\Combine;
 use Magento\CatalogRule\Model\Rule\Condition\Product;
-use Magento\CatalogRule\Model\RuleFactory;
 use Magento\Customer\Model\ResourceModel\Group\CollectionFactory as CustomerGroupCollectionFactory;
 use Magento\Framework\DataObject;
 use Magento\Store\Model\StoreManagerInterface;
@@ -21,8 +19,7 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 class CreateRuleAction implements ActionInterface
 {
     public function __construct(
-        private readonly CatalogRuleRepositoryInterface $catalogRuleRepository,
-        private readonly RuleFactory $ruleFactory,
+        private readonly CatalogRuleServices $catalogRules,
         private readonly StoreManagerInterface $storeManager,
         private readonly CustomerGroupCollectionFactory $customerGroupCollectionFactory,
         private readonly SecureAdminUrl $secureAdminUrl,
@@ -152,7 +149,7 @@ class CreateRuleAction implements ActionInterface
             $websiteIds = $params['website_ids'] ?? $this->getAllWebsiteIds();
             $customerGroupIds = $params['customer_group_ids'] ?? $this->getAllCustomerGroupIds();
 
-            $rule = $this->ruleFactory->create();
+            $rule = $this->catalogRules->createRule();
             $rule->setData('name', $name);
             $rule->setData('is_active', 1);
             $rule->setData('simple_action', $simpleAction);
@@ -194,7 +191,7 @@ class CreateRuleAction implements ActionInterface
                 return ['error' => implode(' ', array_map('strval', (array)$validation))];
             }
 
-            $this->catalogRuleRepository->save($rule);
+            $this->catalogRules->getRepository()->save($rule);
             $ruleId = (int)$rule->getId();
 
             return [

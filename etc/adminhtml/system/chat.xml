@@ -31,12 +31,14 @@
             <comment>Background color for the chat header, user messages and buttons (default: #F26322).</comment>
             <validate>validate-no-empty</validate>
             <frontend_model>MagoAssistant\Mago\Block\Adminhtml\System\Config\ColorPicker</frontend_model>
+            <backend_model>MagoAssistant\Mago\Model\Config\Backend\HexColor</backend_model>
         </field>
         <field id="text_color" translate="label comment" type="text" sortOrder="35" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
             <label>Text Color on Accent</label>
             <comment>Text and icon color on accent backgrounds — header, user messages, buttons (default: #FFFFFF).</comment>
             <validate>validate-no-empty</validate>
             <frontend_model>MagoAssistant\Mago\Block\Adminhtml\System\Config\ColorPicker</frontend_model>
+            <backend_model>MagoAssistant\Mago\Model\Config\Backend\HexColor</backend_model>
         </field>
     </group>
 </include>

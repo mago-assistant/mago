@@ -461,6 +461,22 @@ export default class ChatPanel {
     return page.locator('#mago-messages .mago-btn--reject');
   }
 
+  /**
+   * One tick row per write on a batch confirmation card, and the folded list of every argument
+   * that sits under each row.
+   */
+  batchRows(page: Page): Locator {
+    return page.locator('#mago-messages .mago-bulk-row');
+  }
+
+  batchArguments(page: Page): Locator {
+    return page.locator('#mago-messages .mago-bulk-details');
+  }
+
+  fieldChanges(page: Page): Locator {
+    return page.locator('#mago-messages .mago-field-change');
+  }
+
   slashMenu(page: Page): Locator {
     return page.locator('#mago-slash-menu');
   }

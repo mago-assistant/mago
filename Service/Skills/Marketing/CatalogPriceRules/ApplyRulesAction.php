@@ -6,7 +6,6 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
-use Magento\CatalogRule\Model\Rule\Job;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
@@ -14,7 +13,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
 class ApplyRulesAction implements ActionInterface
 {
     public function __construct(
-        private readonly Job $ruleJob,
+        private readonly CatalogRuleServices $catalogRules,
         private readonly ErrorReporter $errorReporter
     ) {
     }
@@ -66,7 +65,7 @@ class ApplyRulesAction implements ActionInterface
         }
 
         try {
-            $this->ruleJob->applyAll();
+            $this->catalogRules->getJob()->applyAll();
 
             return [
                 'success' => true,

@@ -195,7 +195,7 @@ test.describe('Batch writes at store scope', () => {
     await expect(chatPanel.lastAssistantMessage(page)).toContainText('Descrizione breve');
   });
 
-  test('it keeps the confirmation prompt readable at twenty fields', async ({page}) => {
+  test('it lists all twenty fields in the confirmation prompt', async ({page}) => {
     test.setTimeout(40000);
 
     const target = {
@@ -228,13 +228,10 @@ test.describe('Batch writes at store scope', () => {
     await chatPanel.ask(page, 'Translate these fields to Italian');
     await expect(chatPanel.confirmButton(page)).toHaveCount(1);
 
-    const promptText = (await chatPanel.lastAssistantMessage(page).innerText());
-    const bulletLines = promptText.split('\n').filter((line) => line.trim().indexOf('-') === 0);
-
-    expect(promptText).toContain('20 field');
-    expect(promptText).toMatch(/more field/i);
-    expect(bulletLines.length).toBeLessThan(20);
-    expect(promptText).not.toContain('Custom Field 20');
+    await expect(chatPanel.lastAssistantMessage(page)).toContainText('20 field');
+    await expect(chatPanel.fieldChanges(page)).toHaveCount(20);
+    await expect(chatPanel.lastAssistantMessage(page)).toContainText('Value 20');
+    await expect(chatPanel.lastAssistantMessage(page)).not.toContainText(/more field/i);
   });
 
   test('it stages each field at the store view scope the form is on', async ({page}) => {

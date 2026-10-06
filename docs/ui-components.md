@@ -131,7 +131,7 @@ changes in place, it does not move.
 | S04 | `skillFailed` | `title`, `code`, `text`, `details`, `onRetry`, `onDetails` |
 | S06 | `readLine` | `text`, `tool`, `action`, `state: done\|active` — one quiet line per read-only call |
 | S07 | `skillIrreversible` | `title`, `tool`, `text`, `impacts: [...]`, `ackLabel`, `confirmLabel`, `onConfirm`, `onCancel`. The confirm button stays disabled until the acknowledgement is ticked. |
-| S08 | `skillBulk` | `title`, `items: [{id, label, meta, checked, disabled}]`, `confirmLabel(n)`, `onConfirm(ids, items)`, `onLater` |
+| S08 | `skillBulk` | `title`, `items: [{id, label, meta, params, checked, disabled}]`, `confirmLabel(n)`, `onConfirm(ids, items)`, `onLater`. Items start unticked unless `checked: true`. `params` (rows as for S01) fold out under the row with every argument in full. |
 | S09 | `skillPlan` | `title`, `current`, `total`, `steps: [{title, meta, state: done\|active\|ask\|pending}]`, `onAllowAll`, `onPause` |
 | S10 | `paramPrompt` | `text`, `prefix`, `value`, `placeholder`, `type`, `onSubmit(value)`, `chips: [{label, value}]` |
 | S11 | `undoCallout` | `text`, `onUndo`, `undoLabel`, `expiresText` |
@@ -151,9 +151,10 @@ changes in place, it does not move.
 - a write whose action implements `IrreversibleActionInterface` arrives with
   `irreversible: true` and an `impacts` list and renders as the S07 card: the
   Allow button stays disabled until the acknowledgement is ticked;
-- several writes in one turn render as the S08 tick list; the ticked tool call
-  ids go to the confirm endpoint as `tool_call_ids`, unticked calls are answered
-  with a "skipped" tool result and never run;
+- several writes in one turn render as the S08 tick list. Nothing starts
+  ticked, and every row folds out to all of its arguments in full; the ticked
+  tool call ids go to the confirm endpoint as `tool_call_ids`, unticked calls are
+  answered with a "skipped" tool result and never run;
 - `tool_status` events for read-only tools render as S06 lines above the answer,
   a failed read shows the error in the line's tooltip;
 - `error` events render as a danger callout (W18);

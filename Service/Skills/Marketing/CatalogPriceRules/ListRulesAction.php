@@ -6,7 +6,6 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
-use Magento\CatalogRule\Model\ResourceModel\Rule\CollectionFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
@@ -15,7 +14,7 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 class ListRulesAction implements ActionInterface
 {
     public function __construct(
-        private readonly CollectionFactory $collectionFactory,
+        private readonly CatalogRuleServices $catalogRules,
         private readonly SecureAdminUrl $secureAdminUrl,
         private readonly ErrorReporter $errorReporter
     ) {
@@ -89,7 +88,7 @@ class ListRulesAction implements ActionInterface
         ];
 
         try {
-            $collection = $this->collectionFactory->create();
+            $collection = $this->catalogRules->createCollection();
             $collection->addFieldToFilter('is_active', (string)$isActive);
             $collection->setOrder('sort_order', 'ASC');
 

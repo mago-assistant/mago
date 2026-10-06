@@ -69,6 +69,17 @@ test.describe('Customer text in an answer', () => {
     await expect(answer.locator('a')).toHaveCount(0);
   });
 
+  test('a suggestion chip sends the token, never the customer text behind it', async ({page}) => {
+    const chip = '```mago\n{"type":"suggestions","chips":[{"label":"Reply to ' + REVIEW_TOKEN + '"}]}\n```';
+    await chatMock.install(page, vaultAnswer(['Next step?\n\n' + chip], {[REVIEW_TOKEN]: HOSTILE_TEXT}));
+    await chatPanel.openOnDashboard(page);
+    await chatPanel.askAndAwaitReply(page, 'What does the latest review say?');
+
+    const button = chatPanel.lastAssistantMessage(page).locator('[data-mago-send]');
+    await expect(button).toContainText('**bold** [click]');
+    await expect(button).toHaveAttribute('data-mago-send', 'Reply to ' + REVIEW_TOKEN);
+  });
+
   test('it still links an admin url the server built', async ({page}) => {
     await chatMock.install(page, vaultAnswer(['[Open the review](' + URL_TOKEN + ')'], {[URL_TOKEN]: REVIEW_URL}));
     await chatPanel.openOnDashboard(page);

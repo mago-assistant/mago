@@ -92,9 +92,19 @@ class DocsSyncService
             foreach ($tree['paths'] as $i => $path) {
                 $progress('fetch', $i + 1, $totalPaths);
                 $content = $this->source->fetchRaw($repo, $ref, $path);
-                if ($content !== null) {
-                    $rawByPath[$path] = $content;
+                if ($content === null) {
+                    // A partial corpus would replace the full one and mark this commit synced, so it
+                    // would never be retried. Failing here keeps the old corpus and the old SHA.
+                    throw new \RuntimeException(sprintf(
+                        'Could not fetch %s from %s@%s (file %d of %d), keeping existing corpus',
+                        $path,
+                        $repo,
+                        $ref,
+                        $i + 1,
+                        $totalPaths
+                    ));
                 }
+                $rawByPath[$path] = $content;
             }
 
             if (!$rawByPath) {

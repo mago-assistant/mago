@@ -75,9 +75,9 @@ Also out of scope, by design, not as a bug to fix:
 
 Like every write skill, `write_fields` pauses and shows a **Confirm / Reject** prompt before
 touching anything. For a field write specifically, the prompt lists each field by its label with
-its current value and the proposed one (for example, "Product Name: `Old Name` → `New Name`"),
-capped at ten lines with an "...and N more fields" note for a larger batch, so you can actually
-review it rather than scroll past a wall of text.
+its current value and the proposed one (for example, "Product Name: `Old Name` → `New Name`").
+Every field is listed, however many there are. A value longer than 80 characters starts folded
+behind its first part; "Show full value" opens the whole of it, so nothing you approve is hidden.
 
 - **Confirm** stages the listed changes into the fields on the form that is open in your browser
   right now — not necessarily the one that was open when the assistant proposed the change. If you

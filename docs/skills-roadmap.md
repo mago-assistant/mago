@@ -93,7 +93,7 @@ Order operations beyond read-only.
 - `update_status` — change order status
 - `create_shipment` — create shipment with tracking
 - `create_invoice` — create invoice
-- `create_creditmemo` — create credit memo / refund
+- `create_creditmemo`: create an offline credit memo (no refund through the payment provider)
 - `cancel` — cancel an order
 - `resend_confirmation` — send the order confirmation e-mail again (also needs `Magento_Sales::emails`)
 - **Magento ACL:** `Magento_Sales::sales_order`

@@ -14,6 +14,7 @@ use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
 use MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\GetRuleAction;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeCatalogRuleServices;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeLogger;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -54,7 +55,7 @@ final class GetRuleActionTest extends TestCase
         $repository->method('get')->willThrowException($exception);
 
         return new GetRuleAction(
-            $repository,
+            new FakeCatalogRuleServices($repository),
             $this->createStub(SecureAdminUrl::class),
             new ErrorReporter(new ErrorLogger(new FakeLogger(), new Json()), new PiiHeuristic())
         );

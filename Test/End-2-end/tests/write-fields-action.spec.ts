@@ -6,7 +6,7 @@ import {expect, test, type APIRequestContext, type Page} from '@playwright/test'
 import ChatPanel from 'Pages/backend/ChatPanel';
 import ChatMock from 'Actions/backend/ChatMock';
 import MagentoApi from 'Services/MagentoApi';
-import {stageFieldChange} from 'Fixtures/scenarios';
+import {LONG_FIELD_VALUE, stageFieldChange, stageManyFieldChanges} from 'Fixtures/scenarios';
 import {PROVIDER_ROUND_TRIP_TIMEOUT} from 'Config/timeouts';
 
 const chatPanel = new ChatPanel();
@@ -75,6 +75,23 @@ test.describe('page_form.write_fields confirmation prompt', () => {
     } finally {
       await magentoApi.deleteProduct(request, product.sku);
     }
+  });
+
+  test('it lists every field and lets the admin read a long value in full', async ({page}) => {
+    await chatMock.install(page, stageManyFieldChanges);
+
+    await chatPanel.openOnDashboard(page);
+    await chatPanel.ask(page, 'Fill in these fields');
+
+    await expect(chatPanel.confirmButton(page)).toHaveCount(1);
+    await expect(chatPanel.fieldChanges(page)).toHaveCount(12);
+    await expect(chatPanel.lastAssistantMessage(page)).toContainText('Value 11');
+
+    const longField = chatPanel.fieldChanges(page).last();
+    await longField.locator('summary').click();
+
+    await expect(longField.locator('.mago-value-full')).toHaveText(LONG_FIELD_VALUE);
+    await expect(longField.locator('b')).toHaveCount(0);
   });
 
   test('it stages nothing when the admin rejects the confirmation', async ({page}) => {
