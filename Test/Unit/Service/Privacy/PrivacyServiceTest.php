@@ -255,4 +255,90 @@ class PrivacyServiceTest extends TestCase
 
         self::assertSame('I will call 0612345678', $service->rehydrate('I will call mago://phone_1'));
     }
+
+    /**
+     * #160: the model sometimes escapes a token's underscore or brackets as markdown. Markdown then
+     * shows the plain token again, so it has to resolve like one.
+     */
+    #[Test]
+    public function itResolvesATokenTheModelEscapedAsMarkdown(): void
+    {
+        $vault = new ConversationVault();
+        $service = $this->service($vault);
+        $url = $vault->tokenise('https://shop.test/admin/user/index/key/abc/', 'url');
+        $name = $vault->tokenise('Jan Jansen', 'name');
+
+        self::assertSame('mago://url_1', $url);
+        self::assertSame(
+            ['mago://url_1' => 'https://shop.test/admin/user/index/key/abc/', 'mago://name_1' => 'Jan Jansen'],
+            $service->tokenValues('Open mago://url\_1 for mago://name\_1')
+        );
+        self::assertSame('Hi Jan Jansen', $service->displayText('Hi mago://name\_1'));
+        self::assertSame('Hi Jan Jansen', $service->rehydrate('Hi mago://name\_1'));
+        self::assertSame('Hi Jan Jansen', $service->rehydrate('Hi mago\:\/\/name_1'));
+    }
+
+    #[Test]
+    public function anEscapedTokenItCannotResolveShowsTheNeutralLabel(): void
+    {
+        self::assertSame(
+            'Open [earlier record] now',
+            $this->service(new ConversationVault())->displayText('Open mago://url\_7 now')
+        );
+    }
+
+    /**
+     * An escaped admin URL token in a write must refuse like the plain one, now that it rehydrates:
+     * otherwise the escape would carry the admin secret key into store data.
+     */
+    #[Test]
+    public function anEscapedTokenInAWriteIsRefusedLikeThePlainOne(): void
+    {
+        $service = $this->service(new ConversationVault());
+
+        self::assertTrue($service->containsSensitiveToken(['content' => 'See mago://url\_2']));
+        self::assertTrue($service->containsSensitiveToken(['content' => 'See \[url\_2\]']));
+        self::assertTrue($service->containsSensitiveToken(['content' => 'See mago\://url_2']));
+        self::assertTrue($service->containsCustomerWrittenToken(['content' => 'Quote mago://reviewtext\_1']));
+        self::assertTrue($service->containsPersonalToken(['content' => 'For mago://name\_1']));
+        self::assertTrue($service->containsToken(['content' => 'For mago://name\_9']));
+    }
+
+    #[Test]
+    public function itRehydratesAnEscapedTokenInToolArguments(): void
+    {
+        $vault = new ConversationVault();
+        $vault->tokenise('jan@example.com', 'email');
+
+        self::assertSame(
+            ['search' => 'jan@example.com'],
+            $this->service($vault)->rehydrateArguments(['search' => 'mago://email\_1'])
+        );
+    }
+
+    #[Test]
+    public function itHoldsBackAnEscapedTokenThatSplitsAcrossStreamedChunks(): void
+    {
+        $service = $this->service(new ConversationVault());
+
+        [$emit1, $carry1] = $service->splitStreamDelta('', 'Open mago://url\\');
+        [$emit2, $carry2] = $service->splitStreamDelta($carry1, '_3 now');
+
+        self::assertSame('Open ', $emit1);
+        self::assertSame('mago://url\_3 now', $emit2);
+        self::assertSame('', $carry2);
+    }
+
+    #[Test]
+    public function itHoldsBackATokenCutRightAfterAnEscapeInItsScheme(): void
+    {
+        $service = $this->service(new ConversationVault());
+
+        [$emit1, $carry1] = $service->splitStreamDelta('', 'Open mago\\');
+        [$emit2, $carry2] = $service->splitStreamDelta($carry1, '://url_3 now');
+
+        self::assertSame('Open ', $emit1);
+        self::assertSame('mago\\://url_3 now', $emit2);
+        self::assertSame('', $carry2);
+    }
 }

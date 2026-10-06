@@ -84,4 +84,13 @@ final class SystemPromptBuilderTest extends TestCase
         );
         self::assertStringNotContainsString('Respond in the same language as the user.', $prompt);
     }
+
+    #[Test]
+    public function itTellsTheModelToUseAnAdminLinkTokenAsALinkTargetUnescaped(): void
+    {
+        $prompt = $this->builder->build('auto', '2026-09-01');
+
+        self::assertStringContainsString('[Admin Users](mago://url_1)', $prompt);
+        self::assertStringContainsString('never escape any character in a masked value', $prompt);
+    }
 }

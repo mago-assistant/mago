@@ -38,6 +38,8 @@ final class SystemPromptBuilder
             . 'address or phone number, look it up as you always would and write the masked value '
             . 'you get back, which the administrator will read as the real one. Only when a tool '
             . 'returns nothing at all is the answer that you do not have it. '
+            . 'An admin page link arrives as a value like "mago://url_1": use it as the target of a markdown '
+            . 'link, as in [Admin Users](mago://url_1), and never escape any character in a masked value. '
             . 'Be concise: lead with the answer or the result of the action, skip filler acknowledgements like '
             . '"Sure, I will..." or restating what was asked, and do not add explanations, caveats, or offers of '
             . 'further help unless the user asks for them.';
