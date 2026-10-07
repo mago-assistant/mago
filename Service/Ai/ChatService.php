@@ -635,11 +635,18 @@ class ChatService implements ChatServiceInterface
                 [
                     'content' => $response['content'] ?? '',
                     'tool_calls' => $response['tool_calls'] ?? [],
-                ]
+                ],
+                $this->nullableInt($response['usage']['cache_read_tokens'] ?? null),
+                $this->nullableInt($response['usage']['cache_write_tokens'] ?? null)
             );
         } catch (\Throwable $e) {
             $this->errorReporter->log('UsageLogger', $e);
         }
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        return $value === null ? null : (int)$value;
     }
 
     /**

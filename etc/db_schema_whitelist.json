@@ -60,6 +60,8 @@
             "input_tokens": true,
             "output_tokens": true,
             "total_tokens": true,
+            "cache_read_tokens": true,
+            "cache_write_tokens": true,
             "skill_names": true,
             "request_payload": true,
             "response_payload": true,

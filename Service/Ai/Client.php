@@ -69,7 +69,7 @@ class Client
      * @param AiClientInterface $client
      * @param array<int,array<string,mixed>> $messages
      * @param array<int,array<string,mixed>> $tools
-     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int>}
+     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int|null>}
      */
     public function chat(AiClientInterface $client, array $messages, array $tools): array
     {
@@ -89,7 +89,7 @@ class Client
      * @param array<int,array<string,mixed>> $messages
      * @param array<int,array<string,mixed>> $tools
      * @param callable $onChunk Receives (string $event, array $payload)
-     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int>}
+     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int|null>}
      */
     public function stream(AiClientInterface $client, array $messages, array $tools, callable $onChunk): array
     {
@@ -134,7 +134,7 @@ class Client
 
     /**
      * @param ChatResponseInterface $response
-     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int>}
+     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int|null>}
      */
     private function toArray(ChatResponseInterface $response): array
     {
@@ -153,7 +153,31 @@ class Client
             'usage' => [
                 'input_tokens' => $usage?->getPromptTokens() ?? 0,
                 'output_tokens' => $usage?->getCompletionTokens() ?? 0,
+                // Null, not zero, when the provider does not report them: "no cache hits" and "no
+                // cache figures" are different facts, and only the first one means caching missed.
+                'cache_read_tokens' => $this->cacheTokens($usage, 'getCacheReadTokens'),
+                'cache_write_tokens' => $this->cacheTokens($usage, 'getCacheWriteTokens'),
             ],
         ];
+    }
+
+    /**
+     * Read one cache figure off the usage, if this version of MageOS_AiBase reports it.
+     *
+     * The cache getters arrived after the first AiBase release, and this module still accepts it, so
+     * the call is guarded rather than assumed.
+     *
+     * @param object|null $usage
+     * @param string $getter
+     */
+    private function cacheTokens(?object $usage, string $getter): ?int
+    {
+        if ($usage === null || !method_exists($usage, $getter)) {
+            return null;
+        }
+
+        $tokens = $usage->{$getter}();
+
+        return is_int($tokens) ? $tokens : null;
     }
 }
