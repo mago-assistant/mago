@@ -127,6 +127,7 @@ class ConversationView extends Template
                 'total_tokens' => new Expression('SUM(total_tokens)'),
                 'input_tokens' => new Expression('SUM(input_tokens)'),
                 'output_tokens' => new Expression('SUM(output_tokens)'),
+                'cache_read_tokens' => new Expression('SUM(cache_read_tokens)'),
                 'api_calls' => new Expression('COUNT(*)'),
             ])
             ->where('conversation_id = ?', $this->getConversationId());
@@ -209,6 +210,23 @@ class ConversationView extends Template
     public function getAssistantName(): string
     {
         return $this->configRepository->getAssistantName();
+    }
+
+    /**
+     * Share of prompt tokens served from the provider's cache, as "NN%", or '' when not reported.
+     *
+     * @param array<string, mixed> $row Row with input_tokens and cache_read_tokens
+     */
+    public function formatCacheShare(array $row): string
+    {
+        if (!isset($row['cache_read_tokens'])) {
+            return '';
+        }
+        $input = (int)($row['input_tokens'] ?? 0);
+        if ($input <= 0) {
+            return '';
+        }
+        return round(min(100, (int)$row['cache_read_tokens'] / $input * 100)) . '%';
     }
 
     public function getEstimatedCost(): string
