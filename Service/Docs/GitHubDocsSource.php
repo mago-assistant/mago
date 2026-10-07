@@ -6,7 +6,6 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Docs;
 
-use Magento\Framework\HTTP\Client\CurlFactory;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
@@ -16,9 +15,11 @@ class GitHubDocsSource
     private const TREES_URL = 'https://api.github.com/repos/%s/git/trees/%s?recursive=1';
     private const RAW_URL = 'https://raw.githubusercontent.com/%s/%s/%s';
     private const USER_AGENT = 'MagoAssistant-Mago';
+    private const TIMEOUT = 30;
+    private const CONNECT_TIMEOUT = 10;
+    private const MAX_REDIRECTS = 5;
 
     public function __construct(
-        private readonly CurlFactory $curlFactory,
         private readonly Json $json,
         private readonly ErrorLogger $errorLogger,
         private readonly ErrorReporter $errorReporter
@@ -91,33 +92,51 @@ class GitHubDocsSource
     }
 
     /**
+     * A plain curl handle, freed when the call returns. Magento's HTTP client never closes its
+     * handle and references itself from its header callback, so a sync of several hundred files
+     * kept as many sockets open until the cycle collector ran and hit "Too many open files" (#248).
+     *
      * @param array<string, string> $headers
      */
     private function get(string $url, array $headers = []): ?string
     {
-        try {
-            $curl = $this->curlFactory->create();
-            $curl->setOptions([
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_CONNECTTIMEOUT => 10,
-            ]);
-            $curl->addHeader('User-Agent', self::USER_AGENT);
-            foreach ($headers as $name => $value) {
-                $curl->addHeader($name, $value);
-            }
-            $curl->get($url);
+        $httpHeaders = ['User-Agent: ' . self::USER_AGENT];
+        foreach ($headers as $name => $value) {
+            $httpHeaders[] = $name . ': ' . $value;
+        }
 
-            $status = $curl->getStatus();
-            if ($status !== 200) {
-                $this->errorLogger->addLog('DocsSource', 'HTTP ' . $status . ' for ' . $url);
-                return null;
-            }
-
-            return $curl->getBody();
-        } catch (\Throwable $e) {
-            $this->errorReporter->log('DocsSource: ' . $url, $e);
+        $ch = curl_init($url);
+        if ($ch === false) {
+            $this->errorLogger->addLog('DocsSource', 'Could not start a request for ' . $url);
             return null;
         }
+        try {
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => self::MAX_REDIRECTS,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
+                CURLOPT_TIMEOUT => self::TIMEOUT,
+                CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
+                CURLOPT_HTTPHEADER => $httpHeaders,
+            ]);
+            $body = curl_exec($ch);
+            $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+        } finally {
+            curl_close($ch);
+        }
+
+        if ($body === false) {
+            $this->errorLogger->addLog('DocsSource', $error . ' for ' . $url);
+            return null;
+        }
+        if ($status !== 200) {
+            $this->errorLogger->addLog('DocsSource', 'HTTP ' . $status . ' for ' . $url);
+            return null;
+        }
+
+        return (string)$body;
     }
 }

@@ -65,6 +65,23 @@ final class DocsSyncServiceTest extends TestCase
         self::assertStringContainsString('help/catalog/products.md', implode("\n", $this->logger->getMessages()));
     }
 
+    #[Test]
+    public function anErrorFlagThatCannotBeSavedStillReturnsTheOriginalError(): void
+    {
+        $source = $this->sourceWithTwoFiles()->failingOn('help/catalog/products.md');
+        $this->flagManager->failingOn('mago_docs_last_error');
+
+        $result = $this->syncService($source)->sync();
+
+        self::assertStringContainsString('help/catalog/products.md', (string)$result['error']);
+        self::assertSame([['path' => 'help/old.md']], $this->docRepository->getRows());
+        self::assertSame(self::OLD_SHA, $this->flagManager->getFlagData('mago_docs_source_sha'));
+        self::assertNull($this->flagManager->getFlagData('mago_docs_last_error'));
+        $log = implode("\n", $this->logger->getMessages());
+        self::assertStringContainsString('help/catalog/products.md', $log);
+        self::assertStringContainsString('Could not save flag', $log);
+    }
+
     private function sourceWithTwoFiles(): FakeDocsSource
     {
         return (new FakeDocsSource(self::NEW_SHA))
