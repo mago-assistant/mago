@@ -178,9 +178,10 @@ class PrivacyFilter
         // "mago://email_1" planted in a wildcard-public tool's data (a poisoned product name, CMS
         // text) cannot reach the model and be echoed into an argument that then rehydrates to a real
         // value. Both shapes are defanged: conversations minted before the change still hold the
-        // bracket form, and a forgery can wear either.
-        $value = (string)preg_replace('/\[([a-z]+_\d+)\]/', '($1)', $value);
-        $value = (string)preg_replace('#mago://([a-z]+_\d+)#', '($1)', $value);
+        // bracket form, and a forgery can wear either, also with the markdown escapes a token is
+        // resolved through (#160): "mago://email\_1" would otherwise rehydrate once echoed.
+        $value = (string)preg_replace('/\\\\?\[([a-z]+)\\\\?_(\d+)\\\\?\]/', '($1_$2)', $value);
+        $value = (string)preg_replace('#mago\\\\?:\\\\?/\\\\?/([a-z]+)\\\\?_(\d+)#', '($1_$2)', $value);
 
         // A value the vault already tokenised (an order number, an id) has no signature the
         // heuristic can match when a tool echoes it back in free text; the vault itself does.

@@ -93,7 +93,7 @@ class PrivacyService
             if (is_array($value)) {
                 $input[$key] = $this->rehydrateArguments($value);
             } elseif (is_string($value)) {
-                $input[$key] = $this->vault->rehydrate($value);
+                $input[$key] = $this->vault->rehydrate($this->canonicalTokens($value));
             }
         }
 
@@ -126,6 +126,21 @@ class PrivacyService
      * conversations stored.
      */
     private const TOKEN = '/(?:\[[a-z]+_\d+\]|mago:\/\/[a-z]+_\d+)/';
+
+    /**
+     * A token the model wrote with markdown escapes: "mago://url\_3", "mago\://url_3", "\[name\_1\]". Markdown
+     * shows it as the token again, so the admin saw raw token grammar where a link or name belonged
+     * (#160), and a write check that only knows the plain form would let it through.
+     */
+    private const ESCAPED_SCHEME_TOKEN = '/mago\\\\?:\\\\?\/\\\\?\/([a-z]+)\\\\?_(\d+)/';
+    private const ESCAPED_BRACKET_TOKEN = '/\\\\?\[([a-z]+)\\\\?_(\d+)\\\\?\]/';
+
+    /**
+     * A token cut off at the end of a streamed delta, escaped or not. Every branch consumes at least
+     * one character, or it matches the empty string at the end of any delta and nothing is emitted.
+     */
+    private const PARTIAL_TOKEN = '/(?:\\\\?\[[a-z]*(?:\\\\?_?\d*)?\\\\?'
+        . '|m(?:a(?:g(?:o(?:\\\\?:(?:\\\\?\/(?:\\\\?\/[a-z]*(?:\\\\?_?\d*)?)?)?)?)?)?)?)\\\\?$/';
 
     /**
      * True when any argument carries a token of a write-refused class (see WRITE_REFUSED_TYPES).
@@ -169,7 +184,7 @@ class PrivacyService
             if (is_array($value) && $this->matchesAnywhere($value, $pattern)) {
                 return true;
             }
-            if (is_string($value) && preg_match($pattern, $value) === 1) {
+            if (is_string($value) && preg_match($pattern, $this->canonicalTokens($value)) === 1) {
                 return true;
             }
         }
@@ -199,7 +214,7 @@ class PrivacyService
             if (is_array($value) && $this->containsToken($value)) {
                 return true;
             }
-            if (is_string($value) && preg_match(self::TOKEN, $value) === 1) {
+            if (is_string($value) && preg_match(self::TOKEN, $this->canonicalTokens($value)) === 1) {
                 return true;
             }
         }
@@ -213,7 +228,7 @@ class PrivacyService
      */
     public function rehydrate(string $text): string
     {
-        return $this->vault->rehydrate($text);
+        return $this->vault->rehydrate($this->canonicalTokens($text));
     }
 
     /**
@@ -226,7 +241,7 @@ class PrivacyService
         return (string)preg_replace(
             self::TOKEN,
             '[earlier record]',
-            $this->vault->rehydrate($text)
+            $this->rehydrate($text)
         );
     }
 
@@ -240,7 +255,7 @@ class PrivacyService
      */
     public function tokenValues(string $text): array
     {
-        if (preg_match_all(self::TOKEN, $text, $matches) === 0) {
+        if (preg_match_all(self::TOKEN, $this->canonicalTokens($text), $matches) === 0) {
             return [];
         }
 
@@ -263,11 +278,23 @@ class PrivacyService
         $text = $carry . $delta;
         // Every branch has to consume at least one character, or the pattern matches the empty
         // string at the end of any delta and nothing is ever emitted.
-        if (preg_match('/(?:\[[a-z]*(?:_\d*)?|m(?:a(?:g(?:o(?::(?:\/(?:\/[a-z]*(?:_\d*)?)?)?)?)?)?)?)$/', $text, $m, PREG_OFFSET_CAPTURE) !== 1) {
+        if (preg_match(self::PARTIAL_TOKEN, $text, $m, PREG_OFFSET_CAPTURE) !== 1) {
             return [$text, ''];
         }
         $offset = (int)$m[0][1];
 
         return [substr($text, 0, $offset), substr($text, $offset)];
+    }
+
+    /**
+     * Every token in its plain form, whatever markdown escapes the model put in it.
+     */
+    private function canonicalTokens(string $text): string
+    {
+        return (string)preg_replace(
+            [self::ESCAPED_SCHEME_TOKEN, self::ESCAPED_BRACKET_TOKEN],
+            ['mago://$1_$2', '[$1_$2]'],
+            $text
+        );
     }
 }

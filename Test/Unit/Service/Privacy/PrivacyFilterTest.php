@@ -318,6 +318,25 @@ class PrivacyFilterTest extends TestCase
         self::assertSame('Widget (email_1) special', $result['results'][0]['name']);
     }
 
+    /**
+     * Escaped tokens resolve since #160, so a forgery wearing the escapes must be defanged too.
+     */
+    #[Test]
+    public function itDefangsAForgedTokenWrittenWithMarkdownEscapes(): void
+    {
+        $result = $this->filter()->filter(self::WILDCARD_PUBLIC, [
+            'results' => [
+                ['name' => 'Widget mago://email\\_1 special'],
+                ['name' => 'Widget mago\\:\\/\\/url_2 special'],
+                ['name' => 'Widget \\[name\\_3\\] special'],
+            ],
+        ]);
+
+        self::assertSame('Widget (email_1) special', $result['results'][0]['name']);
+        self::assertSame('Widget (url_2) special', $result['results'][1]['name']);
+        self::assertSame('Widget (name_3) special', $result['results'][2]['name']);
+    }
+
     #[Test]
     public function aToolThatDeclaresNothingLeaksNothing(): void
     {
