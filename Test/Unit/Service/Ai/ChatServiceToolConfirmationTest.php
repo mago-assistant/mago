@@ -197,7 +197,7 @@ final class ChatServiceToolConfirmationTest extends TestCase
             (new FakeConfigRepository())->withMaxToolIterations(5)->withMaxResponseTokens(4000),
             $this->client,
             new ToolRegistry($this->permissions, array_merge([$cmsData], $extraSkills)),
-            new DebugLogger(new FakeLogger(), $json),
+            new DebugLogger(new FakeLogger(), $json, new FakeConfigRepository()),
             new ErrorReporter(new ErrorLogger(new FakeLogger(), $json), new PiiHeuristic()),
             new FakeUsageLogger(),
             new StoreScopeContext($this->singleStoreManager()),

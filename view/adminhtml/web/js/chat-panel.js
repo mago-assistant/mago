@@ -1609,6 +1609,7 @@ define([
         var formWriteMessage = isFormWrite(first) ? buildFormWriteMessage(first) : null;
         var hooks = {actions: 'mago-confirm-actions', allow: 'mago-btn--confirm', confirm: 'mago-btn--confirm', later: 'mago-btn--reject', cancel: 'mago-btn--reject'};
         var irreversible = tools.filter(function(t) { return t.irreversible; });
+        var cautioned = tools.filter(function(t) { return t.caution; });
         var card;
 
         if (tools.length > 1) {
@@ -1618,7 +1619,12 @@ define([
                 title: title,
                 text: 'Tick each action you want to run. Nothing is ticked for you.',
                 labels: {allArguments: t('Show all arguments'), fullValue: t('Show full value')},
-                notice: irreversible.length ? UI.callout({tone: 'danger', text: irreversible.length + ' of these cannot be undone: ' + irreversible.map(function(t) { return toolLabel(t); }).join(', ') + '.'}) : null,
+                notice: irreversible.length ? UI.callout({tone: 'danger', text: irreversible.length + ' of these cannot be undone: ' + irreversible.map(function(t) { return toolLabel(t); }).join(', ') + '.'})
+                    : cautioned.length ? UI.callout({
+                        tone: 'warn',
+                        text: t('Check these before you run them, and run only what you asked for yourself:') + ' '
+                            + cautioned.map(function(c) { return toolLabel(c) + ': ' + (c.impacts || []).slice(0, 2).join(' '); }).join(' ')
+                    }) : null,
                 items: tools.map(function(t, i) {
                     return {id: t.id || String(i), label: toolLabel(t), meta: summarizeInput(t.input), params: UI.paramsFromInput(t.input)};
                 }),
@@ -1627,15 +1633,16 @@ define([
                 onConfirm: function(ids) { decide(true, ids); },
                 onLater: function() { decide(false); }
             });
-        } else if (first && first.irreversible) {
-            // S07: the write has no undo, so it asks with its impact list and a ticked acknowledgement.
+        } else if (first && (first.irreversible || first.caution)) {
+            // S07: the write has no undo, or changes something to weigh first (#245), so it asks with
+            // its impact list and a ticked acknowledgement.
             card = UI.skillIrreversible({
                 title: title,
                 tool: first.name,
                 text: text,
                 params: UI.paramsFromInput(first.input),
                 impacts: first.impacts || [],
-                ackLabel: 'I understand this cannot be undone',
+                ackLabel: first.irreversible ? 'I understand this cannot be undone' : t('I understand what this changes'),
                 confirmLabel: 'Allow',
                 classes: hooks,
                 onConfirm: function() { decide(true); },

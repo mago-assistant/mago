@@ -16,9 +16,23 @@ class FakeConfigRepository implements RepositoryInterface
     private int $customerNotificationInterval = 0;
     private bool $answerWidgets = false;    private int $maxResponseTokens = 0;
     private bool $reindexAllowed = false;
+    private bool $isDebugEnabled = false;
+    private int $debugEnabledReads = 0;
     private bool $isEnabled = true;
     private string $docsSourceRepo = '';
     private string $docsRef = '';
+
+    public function withDebugEnabled(bool $isEnabled): self
+    {
+        $this->isDebugEnabled = $isEnabled;
+
+        return $this;
+    }
+
+    public function getDebugEnabledReads(): int
+    {
+        return $this->debugEnabledReads;
+    }
 
     public function withMaxToolIterations(int $maxToolIterations): self
     {
@@ -92,7 +106,9 @@ class FakeConfigRepository implements RepositoryInterface
 
     public function isDebugEnabled(): bool
     {
-        return false;
+        $this->debugEnabledReads++;
+
+        return $this->isDebugEnabled;
     }
 
     public function getProvider(): string

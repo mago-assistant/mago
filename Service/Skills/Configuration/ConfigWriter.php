@@ -6,19 +6,22 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Configuration;
 
-use Magento\Config\Model\ResourceModel\Config as ConfigResource;
 use Magento\Framework\App\Cache\TypeListInterface;
-use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use Magento\Framework\App\Config\ScopeConfigInterface;
+use Magento\Framework\Exception\LocalizedException;
+use MagoAssistant\Mago\Api\Tool\HighImpactToolInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 
-class ConfigWriter implements ToolInterface
+class ConfigWriter implements HighImpactToolInterface
 {
     public function __construct(
-        private readonly ConfigResource $configResource,
+        private readonly ConfigValueSaver $valueSaver,
         private readonly TypeListInterface $cacheTypeList,
         private readonly StoreScopeContext $scopeContext,
-        private readonly ConfigPathAccess $pathAccess
+        private readonly ConfigPathAccess $pathAccess,
+        private readonly ConfigWriteImpact $impact,
+        private readonly ScopeConfigInterface $scopeConfig
     ) {
     }
 
@@ -29,7 +32,7 @@ class ConfigWriter implements ToolInterface
 
     public function getDescription(): string
     {
-        return 'Modify Magento store configuration values. Requires merchant confirmation before execution. Sensitive paths are blocked.';
+        return 'Modify Magento store configuration values. Requires merchant confirmation before execution. Credentials, payment config and Mago\'s own settings are blocked.';
     }
 
     public function getParameterSchema(): array
@@ -70,6 +73,11 @@ class ConfigWriter implements ToolInterface
             return ['error' => 'Path parameter is required'];
         }
 
+        if (!is_scalar($value)) {
+            return ['error' => 'The value must be text, a number or true/false'];
+        }
+        $value = (string)$value;
+
         if ($this->pathAccess->isBlocked($path)) {
             return ['error' => 'Cannot modify this configuration path for security reasons'];
         }
@@ -92,10 +100,14 @@ class ConfigWriter implements ToolInterface
 
         $scopeLabel = $this->scopeContext->describeScope($scope, $scopeId);
 
-        $this->configResource->saveConfig($path, $value, $scope, $scopeId);
+        try {
+            $this->valueSaver->save($path, $value, $scope, $scopeId);
+        } catch (LocalizedException $e) {
+            return ['error' => $e->getMessage()];
+        }
         $this->cacheTypeList->cleanType('config');
 
-        return [
+        $result = [
             'success' => true,
             'path' => $path,
             'value' => $value,
@@ -104,6 +116,77 @@ class ConfigWriter implements ToolInterface
             'scope_label' => $scopeLabel,
             'message' => sprintf('Configuration "%s" has been set to "%s" on %s', $path, $value, $scopeLabel),
         ];
+        // A sensitive value goes back to the model only under masked_value, which becomes a token.
+        if ($this->pathAccess->isSensitive($path)) {
+            unset($result['value']);
+            $result[ConfigReader::MASKED_VALUE] = $value;
+            $result['message'] = sprintf('Configuration "%s" has been set on %s', $path, $scopeLabel);
+        }
+
+        return $result;
+    }
+
+    /**
+     * A change to a setting where a write proposed from text the assistant read would hurt most
+     * comes to the admin with what it changes, from what, and a reminder to check they asked for
+     * it (#245). Paths this tool refuses anyway need no caution.
+     *
+     * @param array $input
+     * @param int $adminUserId
+     * @return string[]
+     */
+    public function getCautions(array $input, int $adminUserId): array
+    {
+        $path = $this->pathAccess->normalise($input['path'] ?? '');
+        $scope = (string)($input['scope'] ?? StoreScopeContext::SCOPE_DEFAULT);
+        $scopeId = (int)($input['scope_id'] ?? 0);
+        if ($path === '' || $this->pathAccess->isBlocked($path)
+            || $this->scopeContext->validateScope($scope, $scopeId) !== null
+        ) {
+            return [];
+        }
+
+        $reason = $this->impact->reasonFor($path);
+        if ($reason === null) {
+            return [];
+        }
+        $scopeLabel = $this->scopeContext->describeScope($scope, $scopeId);
+        // The card is stored with the conversation; a sensitive value stays out of it.
+        $change = $this->pathAccess->isSensitive($path)
+            ? sprintf('On %s it changes to the value shown above.', $scopeLabel)
+            : $this->describeChange($path, $scope, $scopeId, $scopeLabel, $input['value'] ?? null);
+
+        return [
+            $reason,
+            $change,
+            'Allow it only if you asked for this change yourself: text the assistant read, such as a '
+                . 'product, a review or a page, can try to make it propose one.',
+        ];
+    }
+
+    /**
+     * @param string $path
+     * @param string $scope
+     * @param int $scopeId
+     * @param string $scopeLabel
+     * @param mixed $newValue
+     * @return string
+     */
+    private function describeChange(
+        string $path,
+        string $scope,
+        int $scopeId,
+        string $scopeLabel,
+        mixed $newValue
+    ): string {
+        $current = $this->scopeConfig->getValue($path, $scope, $scopeId);
+
+        return sprintf(
+            'On %s it changes from "%s" to "%s".',
+            $scopeLabel,
+            is_scalar($current) ? (string)$current : '',
+            is_scalar($newValue) ? (string)$newValue : ''
+        );
     }
 
     public function isReadOnly(): bool
@@ -129,9 +212,8 @@ class ConfigWriter implements ToolInterface
 
     public function getFieldClassification(string $action = ''): array
     {
-        // Config values are dynamic paths; wildcard-public preserves today's denylist behavior,
-        // the config egress surface itself is tracked as issue #106 (denylist to allowlist).
         return [
+            ConfigReader::MASKED_VALUE => [PiiClass::TOKENISE, 'config'],
             'message' => [PiiClass::PUBLIC],
             PiiClass::ANY => [PiiClass::PUBLIC],
         ];

@@ -214,7 +214,7 @@ class Stream extends Action implements HttpPostActionInterface
             $this->debugLogger->addLog('Stream', [
                 'conversation_id' => $conversationId,
                 'message_count' => count($formattedMessages),
-                'admin_user' => $adminName,
+                'admin_user_id' => $adminUserId,
             ]);
 
             $result = $this->chatService->processMessageStreaming(
@@ -385,13 +385,16 @@ class Stream extends Action implements HttpPostActionInterface
     /**
      * A full form snapshot can be hundreds of kilobytes of field labels and values per message;
      * logging it verbatim would put untrusted client data into the debug log untouched. Only the
-     * namespace, entity id and field count are worth keeping here.
+     * namespace, entity id and field count are worth keeping here. The form key is a CSRF secret
+     * and never belongs in a log.
      *
      * @param array<array-key, mixed> $postData
      * @return array<array-key, mixed>
      */
     private function redactedPostData(array $postData): array
     {
+        unset($postData['form_key']);
+
         if (!isset($postData['page_context'])) {
             return $postData;
         }

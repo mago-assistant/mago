@@ -22,7 +22,7 @@ Everything is read from environment variables, no config file to edit:
 | `ADMIN_USERNAME` | `exampleuser` | Admin username |
 | `ADMIN_PASSWORD` | `examplepassword123` | Admin password |
 | `WIREMOCK_ADMIN_URL` | `http://localhost:8080` | WireMock admin API, for request-journal assertions |
-| `MAGO_DEBUG_LOG` | `/var/www/html/var/log/mago-debug.log` | Path of the Mago debug log as seen from the test runner |
+| `MAGO_DEBUG_LOG` | `/var/www/html/var/log/mago-debug.log` | Base path of the Mago debug log as seen from the test runner; the log rotates daily, so the newest `mago-debug-*.log` next to it is read |
 
 ```bash
 BASE_URL="https://your-store.test/" npx playwright test

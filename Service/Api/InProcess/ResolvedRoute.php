@@ -24,7 +24,7 @@ final readonly class ResolvedRoute
 
     public function isServiceMethod(string $serviceClass, string $serviceMethod): bool
     {
-        return ltrim($this->serviceClass, '\\') === ltrim($serviceClass, '\\')
+        return is_a(ltrim($this->serviceClass, '\\'), ltrim($serviceClass, '\\'), true)
             && $this->serviceMethod === $serviceMethod;
     }
 }

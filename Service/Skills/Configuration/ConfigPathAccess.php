@@ -6,8 +6,11 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Configuration;
 
+use Magento\Config\Model\Config\Backend\Encrypted;
 use Magento\Config\Model\Config\Structure;
+use Magento\Config\Model\Config\TypePool;
 use Magento\Framework\AuthorizationInterface;
+use Magento\Framework\ObjectManager\ConfigInterface as ObjectManagerConfig;
 use Magento\Theme\Model\Design\Config\MetadataProviderInterface;
 
 /**
@@ -25,7 +28,11 @@ use Magento\Theme\Model\Design\Config\MetadataProviderInterface;
  * outside any section, resolves to '' and is refused (#200).
  *
  * The blocklist is defense in depth for credential-shaped paths: holding a section is no reason to
- * pass its API keys and secrets through chat.
+ * pass its API keys and secrets through chat. A path is blocked when its name looks like a credential,
+ * when the field that stores it is a password field or saves encrypted, and for Mago's own settings,
+ * which steer the assistant itself. Everything Magento marks sensitive (contact addresses, carrier
+ * accounts, SMTP host: what app:config:dump keeps out of config.php) is readable, but its value only
+ * reaches the model as a vault token (#106).
  */
 final class ConfigPathAccess
 {
@@ -36,14 +43,20 @@ final class ConfigPathAccess
         'payment/*', '*api_key*', '*private*', '*encrypt*',
     ];
 
-    private const BLOCKED_WORDS = ['key', 'secret', 'password', 'token', 'credential', 'private', 'encrypt'];
+    private const BLOCKED_WORDS = [
+        'key', 'secret', 'password', 'pwd', 'passwd', 'token', 'credential', 'private', 'encrypt', 'username',
+    ];
 
-    private const BLOCKED_PREFIX = 'payment/';
+    private const BLOCKED_PREFIXES = ['payment/', 'mago/'];
+
+    private const SECRET_FIELD_TYPES = ['obscure', 'password'];
 
     public function __construct(
         private readonly Structure $structure,
         private readonly AuthorizationInterface $authorization,
-        private readonly MetadataProviderInterface $designConfig
+        private readonly MetadataProviderInterface $designConfig,
+        private readonly TypePool $typePool,
+        private readonly ObjectManagerConfig $objectManagerConfig
     ) {
     }
 
@@ -181,6 +194,65 @@ final class ConfigPathAccess
             }
         }
 
-        return str_starts_with($pathLower, self::BLOCKED_PREFIX);
+        foreach (self::BLOCKED_PREFIXES as $prefix) {
+            if ($pathLower === rtrim($prefix, '/') || str_starts_with($pathLower, $prefix)) {
+                return true;
+            }
+        }
+
+        return $this->isStoredAsSecret($path);
+    }
+
+    /**
+     * Whether Magento marks the path sensitive: readable by the admin, but not for the model to see.
+     *
+     * @param string $path
+     * @return bool
+     */
+    public function isSensitive(string $path): bool
+    {
+        return $this->typePool->isPresent($path, TypePool::TYPE_SENSITIVE);
+    }
+
+    /**
+     * Magento's Encrypted backend, its subclasses and virtual types of either, and a module's own
+     * encrypting backend, which need not extend it (MageOS AiBase's EncryptedServices keeps the AI
+     * provider keys). A backend model that resolves to no class counts as encrypting: what it would
+     * do with the value cannot be told.
+     *
+     * @param string $backendModel
+     * @return bool
+     */
+    private function isEncrypting(string $backendModel): bool
+    {
+        $backendModel = ltrim($backendModel, '\\');
+        if ($backendModel === '') {
+            return false;
+        }
+        $backendClass = ltrim($this->objectManagerConfig->getInstanceType($backendModel), '\\');
+
+        return !class_exists($backendClass)
+            || is_a($backendClass, Encrypted::class, true)
+            || str_contains(strtolower($backendModel . ' ' . $backendClass), 'encrypt');
+    }
+
+    /**
+     * Whether a field storing this path is a password field or saves its value encrypted, whatever
+     * the path is called: a third-party module names its secret as it likes.
+     *
+     * @param string $path
+     * @return bool
+     */
+    private function isStoredAsSecret(string $path): bool
+    {
+        foreach ($this->structure->getFieldPaths()[$path] ?? [] as $structurePath) {
+            $field = $this->structure->getElement($structurePath)?->getData() ?? [];
+            $backendModel = (string)($field['backend_model'] ?? '');
+            if (in_array($field['type'] ?? '', self::SECRET_FIELD_TYPES, true) || $this->isEncrypting($backendModel)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Ai;
 use MageOS\AiBase\Api\AiClientInterface;
 use MagoAssistant\Mago\Api\Tool\ValidatingToolInterface;
 use MagoAssistant\Mago\Api\ChatServiceInterface;
+use MagoAssistant\Mago\Api\Tool\HighImpactToolInterface;
 use MagoAssistant\Mago\Api\Tool\IrreversibleToolInterface;
 use MagoAssistant\Mago\Api\Tool\PresentableToolInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
@@ -562,12 +563,12 @@ class ChatService implements ChatServiceInterface
      * @param ToolInterface $tool
      * @param array<string, mixed> $input
      * @param int|null $adminUserId
-     * @return array{irreversible?: bool, impacts?: string[]}
+     * @return array{irreversible?: bool, caution?: bool, impacts?: string[]}
      */
     private function describeRisk(ToolInterface $tool, array $input, ?int $adminUserId): array
     {
         if (!$tool instanceof IrreversibleToolInterface || !$tool->isIrreversibleAction($input)) {
-            return [];
+            return $this->describeCaution($tool, $input, $adminUserId);
         }
 
         try {
@@ -579,6 +580,32 @@ class ChatService implements ChatServiceInterface
         }
 
         return ['irreversible' => true, 'impacts' => array_values(array_map('strval', $impacts))];
+    }
+
+    /**
+     * Caution flag and lines for a reversible write that changes something the admin should weigh
+     * (#245), empty when the tool names none
+     *
+     * @param ToolInterface $tool
+     * @param array<string, mixed> $input
+     * @param int|null $adminUserId
+     * @return array{caution?: bool, impacts?: string[]}
+     */
+    private function describeCaution(ToolInterface $tool, array $input, ?int $adminUserId): array
+    {
+        if (!$tool instanceof HighImpactToolInterface) {
+            return [];
+        }
+
+        try {
+            $cautions = array_values(array_map('strval', $tool->getCautions($input, (int)$adminUserId)));
+        } catch (\Throwable $e) {
+            // A broken lookup must not block the ask, nor drop the acknowledgement it would have asked for
+            $this->errorReporter->log('Tool Cautions ' . $tool->getName(), $e);
+            $cautions = ['Could not work out what this changes. Check it before you allow it.'];
+        }
+
+        return $cautions === [] ? [] : ['caution' => true, 'impacts' => $cautions];
     }
 
     private function logUsage(
@@ -768,12 +795,11 @@ class ChatService implements ChatServiceInterface
         $classes = $tool->getFieldClassification((string)($toolCall['input']['action'] ?? ''));
 
         try {
-            if ($this->configRepository->isDebugEnabled()) {
-                $this->debugLogger->addLog('Tool Execute', [
-                    'tool' => $toolCall['name'],
-                    'input' => $toolCall['input'] ?? [],
-                ]);
-            }
+            $this->debugLogger->addLog('Tool Execute', [
+                'tool' => $toolCall['name'],
+                'action' => $toolCall['input']['action'] ?? null,
+                'input_keys' => array_keys($toolCall['input'] ?? []),
+            ]);
             $input = $toolCall['input'] ?? [];
             // An admin URL token never rehydrates into a write, resolvable or not: it embeds the
             // admin secret key. Nor does text a customer wrote. Other masked values do rehydrate
@@ -812,9 +838,11 @@ class ChatService implements ChatServiceInterface
             // that follows and take it out of what the model sees, so the panel shows the link
             // deterministically instead of relying on the model to copy the token into its prose.
             $result = $this->collectEntityLinks($tool, $input, $result);
-            if ($this->configRepository->isDebugEnabled()) {
-                $this->debugLogger->addLog('Tool Result', ['tool' => $toolCall['name'], 'result' => $result]);
-            }
+            $this->debugLogger->addLog('Tool Result', [
+                'tool' => $toolCall['name'],
+                'is_error' => isset($result['error']),
+                'field_count' => count($result),
+            ]);
             return $this->capToolResult($this->withClientDirective($result, $directive), $toolCall['name']);
         } catch (\Throwable $e) {
             $error = $this->errorReporter->reportToolFailure('Tool Error ' . $toolCall['name'], $e);
@@ -845,13 +873,11 @@ class ChatService implements ChatServiceInterface
             return $this->withClientDirective($result, $directive);
         }
 
-        if ($this->configRepository->isDebugEnabled()) {
-            $this->debugLogger->addLog('Tool Result truncated', [
-                'tool' => $toolName,
-                'bytes' => strlen($json),
-                'max_bytes' => $maxBytes,
-            ]);
-        }
+        $this->debugLogger->addLog('Tool Result truncated', [
+            'tool' => $toolName,
+            'bytes' => strlen($json),
+            'max_bytes' => $maxBytes,
+        ]);
 
         $output = mb_strcut($json, 0, $maxBytes);
 
@@ -983,9 +1009,7 @@ class ChatService implements ChatServiceInterface
                 'role' => 'system',
                 'content' => "[Instructions for {$toolName}]\n{$instructions}",
             ];
-            if ($this->configRepository->isDebugEnabled()) {
-                $this->debugLogger->addLog('JIT Instructions', ['tool' => $toolName]);
-            }
+            $this->debugLogger->addLog('JIT Instructions', ['tool' => $toolName]);
         }
         $instructedTools[$toolName] = true;
     }

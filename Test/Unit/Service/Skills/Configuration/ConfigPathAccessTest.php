@@ -6,10 +6,16 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Configuration;
 
+use Magento\Config\Model\Config\Backend\Encrypted;
+use Magento\Config\Model\Config\TypePool;
+use Magento\Framework\App\Config\Value;
 use MagoAssistant\Mago\Service\Skills\Configuration\ConfigPathAccess;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeConfigStructure;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeDesignConfigMetadata;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeEncryptedBackend;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeEncryptor;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeObjectManagerConfig;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -107,6 +113,10 @@ final class ConfigPathAccessTest extends TestCase
             'a private setting' => ['catalog/review/private_notes'],
             'the encryption section' => ['system/encrypt/key'],
             'any payment method' => ['payment/checkmo/title'],
+            'a login name' => ['system/smtp/username'],
+            'a password spelled short' => ['smile_elasticsuite_core_base_settings/es_client/http_auth_pwd'],
+            'a bare section id' => ['mago'],
+            "Mago's own settings, which steer the assistant" => ['mago/chat/system_prompt'],
         ];
     }
 
@@ -152,7 +162,9 @@ final class ConfigPathAccessTest extends TestCase
         $access = new ConfigPathAccess(
             new FakeConfigStructure(),
             new FakeAuthorization(),
-            new FakeDesignConfigMetadata(['design/footer/copyright'])
+            new FakeDesignConfigMetadata(['design/footer/copyright']),
+            new TypePool(),
+            new FakeObjectManagerConfig()
         );
 
         self::assertTrue($access->isDeclared('design/footer/copyright'));
@@ -168,8 +180,99 @@ final class ConfigPathAccessTest extends TestCase
         self::assertFalse($access->isDeclared('google/gtag/other/any_name'));
     }
 
-    private function accessTo(FakeConfigStructure $structure): ConfigPathAccess
+    /**
+     * #106: a third-party module names its secret as it likes; the field it is stored by tells.
+     */
+    #[Test]
+    public function itBlocksAPathStoredByAPasswordOrEncryptedFieldWhateverItIsCalled(): void
     {
-        return new ConfigPathAccess($structure, new FakeAuthorization(), new FakeDesignConfigMetadata());
+        $access = $this->accessTo(
+            (new FakeConfigStructure())
+                ->withFieldData('acme/connect/login', ['type' => 'obscure'])
+                ->withFieldData('acme/connect/merchant', ['backend_model' => Encrypted::class])
+                ->withFieldData('acme/connect/pin', ['type' => 'password'])
+                ->withFieldData(
+                    'acme/connect/services',
+                    ['backend_model' => 'Acme\\Connect\\Backend\\EncryptedServices']
+                )
+                ->withFieldData('acme/connect/label', ['type' => 'text'])
+        );
+
+        self::assertTrue($access->isBlocked('acme/connect/login'));
+        self::assertTrue($access->isBlocked('acme/connect/merchant'));
+        self::assertTrue($access->isBlocked('acme/connect/pin'));
+        self::assertTrue($access->isBlocked('acme/connect/services'));
+        self::assertFalse($access->isBlocked('acme/connect/label'));
+    }
+
+    #[Test]
+    public function itBlocksAPathStoredByASubclassOrVirtualTypeOfTheEncryptedBackend(): void
+    {
+        $access = $this->accessTo(
+            (new FakeConfigStructure())
+                ->withFieldData('acme/connect/merchant', ['backend_model' => FakeEncryptedBackend::class])
+                ->withFieldData('acme/connect/account', ['backend_model' => 'AcmeConnectAccountBackend'])
+                ->withFieldData('acme/connect/label', ['backend_model' => 'AcmeConnectLabelBackend']),
+            null,
+            new FakeObjectManagerConfig([
+                'AcmeConnectAccountBackend' => Encrypted::class,
+                'AcmeConnectLabelBackend' => Value::class,
+            ])
+        );
+
+        self::assertTrue($access->isBlocked('acme/connect/merchant'));
+        self::assertTrue($access->isBlocked('acme/connect/account'));
+        self::assertFalse($access->isBlocked('acme/connect/label'));
+    }
+
+    #[Test]
+    public function itBlocksAVirtualTypeOfAModulesOwnEncryptingBackend(): void
+    {
+        $access = $this->accessTo(
+            (new FakeConfigStructure())
+                ->withFieldData('acme/connect/vault', ['backend_model' => 'AcmeConnectVaultBackend']),
+            null,
+            new FakeObjectManagerConfig(['AcmeConnectVaultBackend' => FakeEncryptor::class])
+        );
+
+        self::assertTrue($access->isBlocked('acme/connect/vault'));
+    }
+
+    #[Test]
+    public function itBlocksAPathWhoseBackendModelResolvesToNoClass(): void
+    {
+        $access = $this->accessTo(
+            (new FakeConfigStructure())
+                ->withFieldData('acme/connect/merchant', ['backend_model' => 'Acme\\Gone\\Backend'])
+        );
+
+        self::assertTrue($access->isBlocked('acme/connect/merchant'));
+    }
+
+    #[Test]
+    public function aPathMagentoMarksSensitiveIsSensitiveButNotBlocked(): void
+    {
+        $access = $this->accessTo(
+            new FakeConfigStructure(),
+            new TypePool(['trans_email/ident_sales/email' => '1'])
+        );
+
+        self::assertTrue($access->isSensitive('trans_email/ident_sales/email'));
+        self::assertFalse($access->isBlocked('trans_email/ident_sales/email'));
+        self::assertFalse($access->isSensitive('general/store_information/name'));
+    }
+
+    private function accessTo(
+        FakeConfigStructure $structure,
+        ?TypePool $typePool = null,
+        ?FakeObjectManagerConfig $objectManagerConfig = null
+    ): ConfigPathAccess {
+        return new ConfigPathAccess(
+            $structure,
+            new FakeAuthorization(),
+            new FakeDesignConfigMetadata(),
+            $typePool ?? new TypePool(),
+            $objectManagerConfig ?? new FakeObjectManagerConfig()
+        );
     }
 }

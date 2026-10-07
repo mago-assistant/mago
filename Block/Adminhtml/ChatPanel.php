@@ -150,6 +150,8 @@ class ChatPanel extends Template
             'Waiting for the form on %1...',
             'Action rejected. No changes were made.',
             'This writes values that were masked for privacy: personal or customer data, such as a name, an email address or an order number. Check them before you allow it.',
+            'I understand what this changes',
+            'Check these before you run them, and run only what you asked for yourself:',
             'CMS page',
             'CMS block',
             'Delete conversation: %1',

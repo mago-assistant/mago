@@ -76,6 +76,9 @@ Optional interfaces in `MagoAssistant\Mago\Api\Tool`:
 
 - `IrreversibleToolInterface`: `isIrreversibleAction()` and `getImpacts()` show an impact list and
   an acknowledgement checkbox instead of a plain Allow button.
+- `HighImpactToolInterface`: `getCautions()` does the same for a write that can be reverted but
+  changes something to weigh first (security, URLs, mail, storefront scripts), so a write proposed
+  from text the assistant read does not pass on one unread click.
 - `ValidatingToolInterface`: `findRefusal()` rejects a proposed write before the confirmation.
 - `ActionScopedToolInterface`: for tools with an `action` parameter whose read and write actions
   must be exposed separately per permission.

@@ -69,7 +69,7 @@ class DbVaultStorage implements VaultStorageInterface
             // simply does not persist, and reads back as an unresolved one.
             $this->debugLogger->addLog('PII vault persist skipped a duplicate token', [
                 'conversation_id' => $conversationId,
-                'token' => $token,
+                'token_type' => $type,
             ]);
         } catch (\Throwable $e) {
             $this->errorReporter->log('PII vault persist', $e);

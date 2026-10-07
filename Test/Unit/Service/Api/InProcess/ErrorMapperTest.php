@@ -14,6 +14,7 @@ use Magento\Framework\Phrase\RendererInterface;
 use Magento\Framework\Webapi\Exception as WebapiException;
 use MagoAssistant\Mago\Service\Api\InProcess\AccessDeniedException;
 use MagoAssistant\Mago\Service\Api\InProcess\ErrorMapper;
+use MagoAssistant\Mago\Service\Api\InProcess\Guard\DesignChangeRefusedException;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeExceptionMasker;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -44,6 +45,22 @@ final class ErrorMapperTest extends TestCase
         $error = $this->errorMapper->toError(new NoSuchEntityException(__('The product with SKU "%1" does not exist.', 'x')));
 
         self::assertSame(['error' => 'Resource not found'], $error);
+    }
+
+    #[Test]
+    public function itKeepsMagentosDesignRefusalAndNamesThePermissionInsteadOfMaskingIt(): void
+    {
+        $refusal = new AuthorizationException(__('You are not allowed to change CMS pages design settings'));
+
+        $error = $this->errorMapper->toError(
+            DesignChangeRefusedException::fromCoreRefusal($refusal, 'Magento_Cms::save_design')
+        );
+
+        self::assertSame(
+            ['error' => 'You are not allowed to change CMS pages design settings. '
+                . 'This needs the Magento_Cms::save_design permission.'],
+            $error
+        );
     }
 
     #[Test]

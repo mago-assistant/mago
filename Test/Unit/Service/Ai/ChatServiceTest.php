@@ -32,6 +32,7 @@ use MagoAssistant\Mago\Service\Usage\UsageLogger;
 use MagoAssistant\Mago\Test\Unit\Fakes\BuildsStoreLayouts;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAction;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeConfigRepository;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeHighImpactTool;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeIrreversibleAction;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeLogger;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeSkill;
@@ -71,6 +72,8 @@ final class ChatServiceTest extends TestCase
 
     private ChatService $chatService;
 
+    private FakeLogger $debugLog;
+
     protected function setUp(): void
     {
         $this->grants = ['cms_data' => 'read'];
@@ -86,7 +89,8 @@ final class ChatServiceTest extends TestCase
     private function buildChatService(
         array $extraSkills = [],
         ?PrivacyService $privacy = null,
-        bool $answerWidgets = false
+        bool $answerWidgets = false,
+        bool $isDebugEnabled = false
     ): ChatService
     {
         $authorization = $this->createMock(AuthorizationInterface::class);
@@ -127,12 +131,14 @@ final class ChatServiceTest extends TestCase
         );
 
         $json = new Json();
+        $config = (new FakeConfigRepository())->withMaxToolIterations(5)->withMaxResponseTokens(4000)
+            ->withAnswerWidgets($answerWidgets)->withDebugEnabled($isDebugEnabled);
+        $this->debugLog = new FakeLogger();
         return new ChatService(
-            (new FakeConfigRepository())->withMaxToolIterations(5)->withMaxResponseTokens(4000)
-                ->withAnswerWidgets($answerWidgets),
+            $config,
             $client,
             new ToolRegistry($checker, array_merge([$cmsData], $extraSkills)),
-            new DebugLogger(new FakeLogger(), $json),
+            new DebugLogger($this->debugLog, $json, $config),
             new ErrorReporter(new ErrorLogger(new FakeLogger(), $json), new PiiHeuristic()),
             $this->createMock(UsageLogger::class),
             new StoreScopeContext($this->singleStoreManager()),
@@ -165,6 +171,50 @@ final class ChatServiceTest extends TestCase
                 $impactsFailure
             ),
         ]);
+    }
+
+    /**
+     * #245: a reversible write that changes something to weigh comes with its cautions, and a
+     * broken caution lookup still asks with a caution instead of blocking the ask or dropping it.
+     */
+    #[Test]
+    public function confirmationCarriesTheCautionsOfAHighImpactWrite(): void
+    {
+        $this->grants = ['cms_data' => 'write', 'config_writer' => 'write', 'broken_writer' => 'write'];
+        $service = $this->buildChatService([
+            new FakeHighImpactTool('config_writer', ['Adds or changes HTML and scripts on every storefront page.']),
+            new FakeHighImpactTool('broken_writer', [], new \RuntimeException('lookup failed')),
+        ]);
+        $this->responses = [[
+            'content' => '',
+            'tool_calls' => [
+                ['id' => 'call_1', 'name' => 'config_writer', 'input' => ['path' => 'design/head/includes']],
+                ['id' => 'call_2', 'name' => 'broken_writer', 'input' => ['path' => 'x']],
+                ['id' => 'call_3', 'name' => 'cms_data', 'input' => ['action' => 'update_page', 'content' => 'x']],
+            ],
+        ]];
+        $confirm = null;
+        $onChunk = static function (string $type, array $data) use (&$confirm): void {
+            if ($type === 'confirm') {
+                $confirm = $data;
+            }
+        };
+
+        $service->processMessageStreaming([$this->userMessage()], $onChunk, null, self::ADMIN_ID);
+
+        self::assertNotNull($confirm);
+        self::assertTrue($confirm['tools'][0]['caution']);
+        self::assertArrayNotHasKey('irreversible', $confirm['tools'][0]);
+        self::assertSame(
+            ['Adds or changes HTML and scripts on every storefront page.'],
+            $confirm['tools'][0]['impacts']
+        );
+        self::assertTrue($confirm['tools'][1]['caution']);
+        self::assertSame(
+            ['Could not work out what this changes. Check it before you allow it.'],
+            $confirm['tools'][1]['impacts']
+        );
+        self::assertArrayNotHasKey('caution', $confirm['tools'][2]);
     }
 
     #[Test]
@@ -365,6 +415,31 @@ final class ChatServiceTest extends TestCase
         self::assertNotNull($instruction);
         self::assertStringContainsString('Always mention the page count.', $instruction['content']);
         self::assertStringContainsString((new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())))->toToolReminder(), $instruction['content']);
+    }
+
+    #[Test]
+    public function theDebugLogRecordsWhichToolRanButNotItsInputOrOutput(): void
+    {
+        $chatService = $this->buildChatService(isDebugEnabled: true);
+        $this->responses = [$this->toolCallResponse('list_pages', ['query' => 'jane@example.com'])];
+
+        $chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        $log = implode("\n", $this->debugLog->getMessages());
+        self::assertStringContainsString('Tool Execute: {"tool":"cms_data","action":"list_pages","input_keys":["action","query"]}', $log);
+        self::assertStringContainsString('Tool Result: {"tool":"cms_data","is_error":false', $log);
+        self::assertStringNotContainsString('jane@example.com', $log);
+        self::assertStringNotContainsString('admin_user_id', $log);
+    }
+
+    #[Test]
+    public function theDebugLogStaysEmptyWhenDebugModeIsOff(): void
+    {
+        $this->responses = [$this->toolCallResponse('list_pages')];
+
+        $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertSame([], $this->debugLog->getMessages());
     }
 
     #[Test]

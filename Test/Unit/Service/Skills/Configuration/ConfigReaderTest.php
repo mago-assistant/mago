@@ -6,8 +6,12 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Configuration;
 
+use Magento\Config\Model\Config\TypePool;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\AuthorizationInterface;
+use MagoAssistant\Mago\Service\Privacy\ConversationVault;
+use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
+use MagoAssistant\Mago\Service\Privacy\PrivacyFilter;
 use MagoAssistant\Mago\Service\Skills\Configuration\ConfigPathAccess;
 use MagoAssistant\Mago\Service\Skills\Configuration\ConfigReader;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
@@ -16,6 +20,7 @@ use MagoAssistant\Mago\Test\Unit\Fakes\FakeAclAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeConfigStructure;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeDesignConfigMetadata;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeObjectManagerConfig;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -252,14 +257,65 @@ class ConfigReaderTest extends TestCase
         self::assertStringStartsWith('Access denied', $result['error']);
     }
 
-    private function pathAccess(?AuthorizationInterface $authorization = null): ConfigPathAccess
+    /**
+     * #106: a sensitive value goes out under masked_value, which the privacy filter tokenises, on
+     * the default value and on every override alike.
+     */
+    #[Test]
+    public function itHandsASensitiveValueToTheModelOnlyAsAToken(): void
     {
+        $path = 'trans_email/ident_sales/email';
+        $scopeConfig = $this->createStub(ScopeConfigInterface::class);
+        $scopeConfig->method('getValue')->willReturnCallback(
+            static fn (string $p, string $scope = 'default', int|string|null $id = null): string =>
+                $scope === StoreScopeContext::SCOPE_STORES && (int)$id === 2 ? 'nl@shop.test' : 'sales@shop.test'
+        );
+        $vault = new ConversationVault();
+        $reader = new ConfigReader(
+            $scopeConfig,
+            new StoreScopeContext($this->multiStoreManager()),
+            $this->pathAccess(null, new TypePool([$path => '1']))
+        );
+
+        $result = $reader->execute(['path' => $path]);
+        $filtered = (new PrivacyFilter($vault, new PiiHeuristic()))->filter($reader->getFieldClassification(), $result);
+
+        self::assertArrayNotHasKey('value', $result);
+        self::assertSame('sales@shop.test', $result[ConfigReader::MASKED_VALUE]);
+        self::assertSame('mago://config_1', $filtered[ConfigReader::MASKED_VALUE]);
+        self::assertStringNotContainsString('@shop.test', (string)json_encode($filtered));
+        self::assertSame('sales@shop.test', $vault->valueOf('mago://config_1'));
+        self::assertContains('mago://config_2', array_column($filtered['overrides'], ConfigReader::MASKED_VALUE));
+        self::assertSame('nl@shop.test', $vault->valueOf('mago://config_2'));
+    }
+
+    #[Test]
+    public function itRefusesMagosOwnSettings(): void
+    {
+        $reader = new ConfigReader(
+            $this->createStub(ScopeConfigInterface::class),
+            new StoreScopeContext($this->multiStoreManager()),
+            $this->pathAccess()
+        );
+
+        $result = $reader->execute(['path' => 'mago/chat/system_prompt']);
+
+        self::assertStringContainsString('restricted', $result['error']);
+    }
+
+    private function pathAccess(
+        ?AuthorizationInterface $authorization = null,
+        ?TypePool $typePool = null
+    ): ConfigPathAccess {
         return new ConfigPathAccess(
             (new FakeConfigStructure())
                 ->withSection('general', 'Magento_Config::config_general')
-                ->withSection('web', 'Magento_Config::web'),
+                ->withSection('web', 'Magento_Config::web')
+                ->withSection('trans_email', 'Magento_Config::trans_email'),
             $authorization ?? new FakeAuthorization(),
-            new FakeDesignConfigMetadata()
+            new FakeDesignConfigMetadata(),
+            $typePool ?? new TypePool(),
+            new FakeObjectManagerConfig()
         );
     }
 }
