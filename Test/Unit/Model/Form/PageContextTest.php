@@ -12,48 +12,23 @@ use PHPUnit\Framework\TestCase;
 
 final class PageContextTest extends TestCase
 {
-    #[Test]
-    public function itReportsTheFieldCountOnAFormItCanSeeInFull(): void
-    {
-        $line = $this->context(fieldCount: 12, truncated: false)->toPromptLine();
-
-        $this->assertStringContainsString('12 field(s) visible', $line);
-    }
-
-    #[Test]
-    public function itSaysNothingAboutTruncationWhenTheWholeFormFits(): void
-    {
-        $line = $this->context(fieldCount: 12, truncated: false)->toPromptLine();
-
-        $this->assertStringNotContainsString('cut short', $line);
-    }
-
     /**
-     * Without this the count reads as the whole form, which is what let the assistant tell an
-     * administrator the Description field did not exist when it had simply been cut from the list.
+     * The guidance sits at the top of the system prompt. If it ever depended on the page, the
+     * start of every request would change on each navigation and a provider that caches a prompt
+     * prefix would have nothing stable to reuse.
      */
     #[Test]
-    public function itWarnsThatFieldsAreMissingWhenTheListWasCutShort(): void
+    public function theGuidanceDoesNotDependOnThePage(): void
     {
-        $line = $this->context(fieldCount: 600, truncated: true)->toPromptLine();
-
-        $this->assertStringContainsString('cut short', $line);
+        $this->assertSame(PageContext::promptGuidance(), PageContext::promptGuidance());
+        $this->assertStringNotContainsString('/admin/', PageContext::promptGuidance());
+        $this->assertDoesNotMatchRegularExpression('/\d+ field\(s\)/', PageContext::promptGuidance());
     }
 
     #[Test]
-    public function itTellsTheModelNotToClaimAFieldIsMissingWhenTheListWasCutShort(): void
+    public function theGuidanceOpensWithItsMarker(): void
     {
-        $line = $this->context(fieldCount: 600, truncated: true)->toPromptLine();
-
-        $this->assertStringContainsString('do not tell the administrator a field is missing', $line);
-    }
-
-    #[Test]
-    public function itStillNamesThePageAndEntityWhenTheListWasCutShort(): void
-    {
-        $line = $this->context(fieldCount: 600, truncated: true)->toPromptLine();
-
-        $this->assertStringContainsString('/admin/catalog/product/edit/id/1/', $line);
+        $this->assertStringStartsWith(PageContext::GUIDANCE_MARKER, PageContext::promptGuidance());
     }
 
     /**
@@ -64,40 +39,50 @@ final class PageContextTest extends TestCase
     #[Test]
     public function itPrefersTheFormToolWhileAFormIsOpen(): void
     {
-        $line = $this->context(fieldCount: 12, truncated: false)->toPromptLine();
-
-        $this->assertStringContainsString('prefer page_form', $line);
+        $this->assertStringContainsString('prefer page_form', PageContext::promptGuidance());
     }
 
     #[Test]
     public function itSaysThatATextOnlyToolLeavesTheFormUntouched(): void
     {
-        $line = $this->context(fieldCount: 12, truncated: false)->toPromptLine();
+        $this->assertStringContainsString('leaves the form untouched', PageContext::promptGuidance());
+    }
 
-        $this->assertStringContainsString('leaves the form untouched', $line);
+    /**
+     * Without this a field missing only because the list was cut is indistinguishable from one the
+     * form does not have, which invited telling the administrator the Description field did not
+     * exist when it had simply been cut from the list.
+     */
+    #[Test]
+    public function itTellsTheModelNotToClaimAFieldIsMissingWhenTheListWasTruncated(): void
+    {
+        $guidance = PageContext::promptGuidance();
+
+        $this->assertStringContainsString('truncated', $guidance);
+        $this->assertStringContainsString('do not tell the administrator a field is missing', $guidance);
     }
 
     #[Test]
-    public function itKeepsTheToolPreferenceWhenTheFieldListWasCutShort(): void
+    public function itExplainsThatANoteOnlyAppearsWhenThePageChanges(): void
     {
-        $line = $this->context(fieldCount: 600, truncated: true)->toPromptLine();
-
-        $this->assertStringContainsString('cut short', $line);
-        $this->assertStringContainsString('prefer page_form', $line);
+        $this->assertStringContainsString('only when the page changes', PageContext::promptGuidance());
     }
 
-    private function context(int $fieldCount, bool $truncated): PageContext
+    #[Test]
+    public function itConvertsToALocationWithoutTheFields(): void
     {
-        return new PageContext(
+        $location = (new PageContext(
             route: '/admin/catalog/product/edit/id/1/',
             namespace: 'product_form',
             entityType: 'product',
             entityId: '1',
             isNewEntity: false,
             storeId: null,
-            fields: [],
-            fieldCount: $fieldCount,
-            isFieldListTruncated: $truncated
-        );
+            fields: [['path' => 'name']],
+            fieldCount: 1
+        ))->toLocation();
+
+        $this->assertSame('product', $location->entityType);
+        $this->assertSame('1', $location->entityId);
     }
 }

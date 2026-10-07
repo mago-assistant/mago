@@ -18,8 +18,8 @@ use MagoAssistant\Mago\Service\Ai\AiNotConfiguredException;
 use MagoAssistant\Mago\Service\Ai\AnswerWidgets;
 use MagoAssistant\Mago\Service\Ai\ChatService;
 use MagoAssistant\Mago\Service\Ai\Client;
+use MagoAssistant\Mago\Model\Form\PageContext;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
-use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Privacy\ConversationVault;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
@@ -152,7 +152,6 @@ final class ChatServiceTest extends TestCase
             $this->usageLogger,
             new StoreScopeContext($this->singleStoreManager()),
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
-            new PageContextHolder(),
             $privacy ?? $this->privacyService(),
             new ToolAccess($authorization, $checker)
         );
@@ -426,7 +425,7 @@ final class ChatServiceTest extends TestCase
 
         $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
 
-        self::assertNull($this->instructionMessage($this->requests[1]));
+        self::assertNull($this->instructionIn($this->requests[1]));
     }
 
     #[Test]
@@ -436,10 +435,73 @@ final class ChatServiceTest extends TestCase
 
         $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
 
-        $instruction = $this->instructionMessage($this->requests[1]);
+        $instruction = $this->instructionIn($this->requests[1]);
         self::assertNotNull($instruction);
-        self::assertStringContainsString('Always mention the page count.', $instruction['content']);
-        self::assertStringNotContainsString(AnswerWidgets::MARKER, $instruction['content']);
+        self::assertStringContainsString('Always mention the page count.', $instruction);
+    }
+
+    /**
+     * A system message added after the first tool call is folded into the system block at the top
+     * of the request, which rewrites the start of the prompt and throws away a provider's cached
+     * prefix. The instructions ride on the tool result instead.
+     */
+    #[Test]
+    public function instructionsTravelWithTheToolResultNotAsASystemMessage(): void
+    {
+        $this->responses = [$this->toolCallResponse('list_pages')];
+
+        $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        $systemTexts = array_column(
+            array_filter($this->requests[1], static fn (array $m): bool => $m['role'] === 'system'),
+            'content'
+        );
+        foreach ($systemTexts as $text) {
+            self::assertStringNotContainsString('[Instructions for', $text);
+        }
+        self::assertSame('tool', $this->requests[1][count($this->requests[1]) - 1]['role']);
+    }
+
+    #[Test]
+    public function theSystemPromptIsTheSameBeforeAndAfterAToolCall(): void
+    {
+        $this->responses = [$this->toolCallResponse('list_pages')];
+
+        $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertSame($this->requests[0], array_slice($this->requests[1], 0, count($this->requests[0])));
+    }
+
+    #[Test]
+    public function theSystemPromptCarriesThePageGuidanceButNoPageSpecificLine(): void
+    {
+        $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        $system = $this->requests[0][0]['content'] . ($this->requests[0][1]['content'] ?? '');
+        self::assertStringContainsString(PageContext::GUIDANCE_MARKER, $system);
+        self::assertStringNotContainsString('is currently on the', $system);
+    }
+
+    #[Test]
+    public function thePageGuidanceIsNeverInjectedTwice(): void
+    {
+        $this->chatService->processMessage([
+            ['role' => 'system', 'content' => PageContext::promptGuidance()],
+            $this->userMessage(),
+        ], null, self::ADMIN_ID);
+
+        $all = implode("\n", array_column($this->requests[0], 'content'));
+        self::assertSame(1, substr_count($all, PageContext::GUIDANCE_MARKER));
+    }
+
+    #[Test]
+    public function instructionsDoNotCarryTheWidgetReminderWhenAnswerWidgetsAreOff(): void
+    {
+        $this->responses = [$this->toolCallResponse('list_pages')];
+
+        $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertStringNotContainsString(AnswerWidgets::MARKER, (string)$this->instructionIn($this->requests[1]));
     }
 
     #[Test]
@@ -450,10 +512,10 @@ final class ChatServiceTest extends TestCase
 
         $chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
 
-        $instruction = $this->instructionMessage($this->requests[1]);
+        $instruction = $this->instructionIn($this->requests[1]);
         self::assertNotNull($instruction);
-        self::assertStringContainsString('Always mention the page count.', $instruction['content']);
-        self::assertStringContainsString((new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())))->toToolReminder(), $instruction['content']);
+        self::assertStringContainsString('Always mention the page count.', $instruction);
+        self::assertStringContainsString((new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())))->toToolReminder(), $instruction);
     }
 
     /**
@@ -555,7 +617,8 @@ final class ChatServiceTest extends TestCase
 
         self::assertTrue($result['pending_confirmation']);
         self::assertCount(2, $this->requests);
-        self::assertCount(1, $this->instructionMessages($this->requests[1]));
+        self::assertNotNull($this->instructionIn($this->requests[1]));
+        self::assertSame([], $this->instructionMessages($this->requests[1]));
     }
 
     #[Test]
@@ -778,7 +841,8 @@ final class ChatServiceTest extends TestCase
             ['role' => 'user', 'content' => 'Hi'],
         ]);
 
-        self::assertSame(['system', 'user'], array_column($this->sentMessages, 'role'));
+        $all = implode("\n", array_column($this->sentMessages, 'content'));
+        self::assertSame(1, substr_count($all, '[Store scope]'));
     }
 
     #[Test]
@@ -807,7 +871,8 @@ final class ChatServiceTest extends TestCase
             ->processMessage([['role' => 'user', 'content' => 'Hi']]);
 
         self::assertSame('ok', $response['content']);
-        self::assertSame(self::SYSTEM_PROMPT, $this->sentMessages[0]['content']);
+        self::assertStringStartsWith(self::SYSTEM_PROMPT, $this->sentMessages[0]['content']);
+        self::assertStringNotContainsString('[Store scope]', $this->sentMessages[0]['content']);
     }
 
     #[Test]
@@ -844,7 +909,8 @@ final class ChatServiceTest extends TestCase
             ['role' => 'user', 'content' => 'Hi'],
         ]);
 
-        self::assertSame(['system', 'user'], array_column($this->sentMessages, 'role'));
+        $all = implode("\n", array_column($this->sentMessages, 'content'));
+        self::assertSame(1, substr_count($all, '[Answer widgets]'));
     }
 
     /**
@@ -937,7 +1003,6 @@ final class ChatServiceTest extends TestCase
             $this->createMock(UsageLogger::class),
             new StoreScopeContext($storeManager),
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
-            new PageContextHolder(),
             $this->privacyService(),
             new ToolAccess(new FakeAuthorization(), new FakePermissionChecker())
         );
@@ -1200,7 +1265,6 @@ final class ChatServiceTest extends TestCase
             $this->createMock(UsageLogger::class),
             new StoreScopeContext($this->createMock(StoreManagerInterface::class)),
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
-            new PageContextHolder(),
             $this->privacyService(),
             new ToolAccess(new FakeAuthorization(), new FakePermissionChecker())
         );
@@ -1836,14 +1900,27 @@ final class ChatServiceTest extends TestCase
     }
 
     /**
+    /**
+     * The instruction system message added outside a tool result, if any.
+     *
      * @param list<array<string, mixed>> $messages
      * @return array<string, mixed>|null
      */
     private function instructionMessage(array $messages): ?array
     {
+        return $this->instructionMessages($messages)[0] ?? null;
+    }
+
+    /**
+     * The usage instructions a tool result carries, if any.
+     *
+     * @param list<array<string, mixed>> $messages
+     */
+    private function instructionIn(array $messages): ?string
+    {
         foreach ($messages as $message) {
-            if (($message['role'] ?? '') === 'system' && str_starts_with($message['content'], '[Instructions for')) {
-                return $message;
+            if (($message['role'] ?? '') === 'tool' && str_contains((string)$message['content'], '[Instructions for')) {
+                return (string)$message['content'];
             }
         }
 
