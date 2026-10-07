@@ -97,7 +97,7 @@ module.
 | W10 | `stackedColumns` | `label`, `series: [{label, color}]`, `points: [{label, values}]` |
 | W11 | `heatmap` | `label`, `rows: [label]`, `values: [[n, ...]]`, `scale: [low, high]` |
 | W12 | `funnel` | `label`, `steps: [{label, value, valueText}]` |
-| W13 | `entityList` | `items: [{title, meta, thumb, href, onClick, action: {label, href, onClick}}]`, `more: {count, label, href, onClick}` |
+| W13 | `entityList` | `items: [{title, meta, thumb, href, onClick, action: {label, href, onClick}}]` (five shown, the rest in a `<details>` behind "Show N more", labels `showMore` / `showLess`), `more: {count, label, href, onClick}` (a bare `count`, or any `more` from an answer, renders as a note) |
 | W14 | `table` | `columns: [{key, label, align, width, num}]`, `rows: [{key: value \| {text, badge, tone, strong, num}}]`, `onRowClick` |
 | W15 | `record` | `title`, `badge: {text, tone}`, `rows: [{label, value, strong, num}]` |
 | W16 | `confirmWrite` | `title`, `text`, `diff: {from, to, delta}`, `onConfirm`, `onCancel` |

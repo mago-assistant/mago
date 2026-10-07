@@ -258,11 +258,16 @@ body.is-capture details { display: none; }
         return U.entityList({
             items: [
                 {title: 'Brass Wall Sconce, Small', meta: 'SKU LT-2201 · 1.240 views / 30d', onClick: log, action: {label: 'Upload', onClick: log}},
-                {title: 'Leather Card Holder, Tan', meta: 'SKU AC-1044 · 980 views / 30d', href: '#', action: {label: 'Upload', href: '#'}}
+                {title: 'Leather Card Holder, Tan', meta: 'SKU AC-1044 · 980 views / 30d', href: '#', action: {label: 'Upload', href: '#'}},
+                {title: 'Oak Side Table', meta: 'SKU FN-3310 · 870 views / 30d', href: '#'},
+                {title: 'Linen Cushion, Sand', meta: 'SKU HT-0412 · 760 views / 30d', href: '#'},
+                {title: 'Ceramic Vase, Tall', meta: 'SKU HT-0988 · 655 views / 30d', href: '#'},
+                {title: 'Wool Throw, Grey', meta: 'SKU HT-1201 · 590 views / 30d', href: '#'},
+                {title: 'Walnut Tray', meta: 'SKU HT-0730 · 512 views / 30d', href: '#'}
             ],
             more: {count: 126, onClick: log}
         });
-    }, 'Never more than five in the panel; the rest behind "show more" or a grid link.');
+    }, 'Five in the panel; the rest fold behind "Show N more", which opens without script.');
 
     ex('data', 'W14', 'Compact table', function () {
         return U.table({

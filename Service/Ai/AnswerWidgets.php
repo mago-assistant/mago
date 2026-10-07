@@ -62,7 +62,9 @@ class AnswerWidgets
             . '{"label":"Paid","value":2334}]} — steps with their drop-off.',
         'entityList' => '{"type":"entityList","items":[{"title":"Brass Wall Sconce",'
             . '"meta":"SKU LT-2201 · 1,240 views","href":"mago://url_1"}],"more":{"count":126}} — records the '
-            . 'user can open, at most 5; the rest behind "more".',
+            . 'user can open. Put every record the tool returned in "items", up to 20: the panel shows five and '
+            . 'folds the rest behind "Show N more". "more" only counts the records you left out and never has an '
+            . '"href".',
         'table' => '{"type":"table","columns":[{"key":"order","label":"Order"},{"key":"status","label":"Status"},'
             . '{"key":"total","label":"Total","align":"right"}],"rows":[{"order":"#100241",'
             . '"status":{"badge":"Hold","tone":"warn"},"total":{"text":"€248.00","strong":true}}]} — at most 3 '
