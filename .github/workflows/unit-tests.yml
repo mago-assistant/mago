@@ -58,14 +58,11 @@ jobs:
           # mirror.mage-os.org, the action's default, carries magento/* but no mage-os/* at all.
           magento_repository: ${{ startsWith(matrix.magento, 'mage-os/') && 'https://repo.mage-os.org/' || 'https://mirror.mage-os.org/' }}
 
-      # MageOS_AiBase has no tagged release yet, so it comes off Packagist's dev-main under an
-      # inline alias, same workaround Test/End-2-end's CI already needs. Drop the alias once it
-      # is tagged.
-      - name: Add the extension and its unreleased AI base dependency
+      - name: Add the extension
         working-directory: ${{ steps.setup-magento.outputs.path }}
         run: |
           composer config repositories.local path "$GITHUB_WORKSPACE"
-          composer require --no-install "mago-assistant/magento2-mago:@dev" "mage-os/module-ai-base:dev-main as 1.0.0"
+          composer require --no-install "mago-assistant/magento2-mago:@dev"
 
       - uses: graycoreio/github-actions-magento2/cache-magento@v8.10.0
         with:
