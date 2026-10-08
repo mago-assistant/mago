@@ -15,6 +15,7 @@ use Magento\Framework\Escaper;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Service\Usage\CacheShare;
+use MagoAssistant\Mago\Service\Url\AdminPath;
 
 class ConversationView extends Template
 {
@@ -34,9 +35,15 @@ class ConversationView extends Template
         private readonly ConfigRepository $configRepository,
         private readonly AdminSession $adminSession,
         private readonly CacheShare $cacheShare,
+        private readonly AdminPath $adminPath,
         array $data = []
     ) {
         parent::__construct($context, $data);
+    }
+
+    public function getAdminPath(): string
+    {
+        return $this->adminPath->get();
     }
 
     public function getConversationId(): int

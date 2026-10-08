@@ -16,6 +16,7 @@ use MagoAssistant\Mago\Service\Command\CommandRegistry;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
+use MagoAssistant\Mago\Service\Url\AdminPath;
 use MagoAssistant\Mago\Service\Welcome\ExampleQuestions;
 
 class ChatPanel extends Template
@@ -59,6 +60,7 @@ class ChatPanel extends Template
         private readonly CommandRunner $commandRunner,
         private readonly FormPolicy $formPolicy,
         private readonly ExampleQuestions $exampleQuestions,
+        private readonly AdminPath $adminPath,
         array $data = []
     ) {
         parent::__construct($context, $data);
@@ -98,6 +100,7 @@ class ChatPanel extends Template
             'flagUrl' => $this->getUrl('mago/chat/flag'),
             'statusUrl' => $this->getUrl('mago/chat/status'),
             'apiBaseUrl' => $this->getUrl('rest/V1/assistant'),
+            'adminPath' => $this->adminPath->get(),
             'isStreamingEnabled' => $this->configRepository->isStreamingEnabled(),
             'formFieldCap' => self::FORM_FIELD_CAP,
             'formValueLengthCap' => self::FORM_VALUE_LENGTH_CAP,

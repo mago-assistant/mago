@@ -50,14 +50,16 @@ define([
         return title ? ' title="' + escapeHtml(decodeEntities(title)) + '"' : '';
     }
 
-    function applyLinkPolicy(node) {
+    // An admin page opens in the same tab, where the panel picks the conversation up again from
+    // sessionStorage. Anything else, the storefront included, has no panel and opens in a new tab.
+    function applyLinkPolicy(node, adminPath) {
         var href = node.getAttribute('href');
         if (!safeUrl.isSafeLink(href)) {
             node.removeAttribute('href');
             node.removeAttribute('target');
             return;
         }
-        if (safeUrl.isSameOrigin(href)) {
+        if (safeUrl.isUnderPath(href, adminPath)) {
             node.setAttribute('target', '_self');
             return;
         }
@@ -65,7 +67,7 @@ define([
         node.setAttribute('rel', 'noopener noreferrer');
     }
 
-    function enforceUrlPolicy(node) {
+    function enforceUrlPolicy(node, adminPath) {
         if (node.nodeType !== ELEMENT_NODE) {
             return;
         }
@@ -78,21 +80,25 @@ define([
             node.removeAttribute('style');
         }
         if (node.hasAttribute('href')) {
-            applyLinkPolicy(node);
+            applyLinkPolicy(node, adminPath);
             return;
         }
         node.removeAttribute('target');
     }
 
-    function createSanitizer() {
+    function createSanitizer(adminPath) {
         var purifier = createPurifier(window);
-        purifier.addHook('afterSanitizeAttributes', enforceUrlPolicy);
+        purifier.addHook('afterSanitizeAttributes', function (node) {
+            enforceUrlPolicy(node, adminPath);
+        });
         return function (html) {
             return purifier.sanitize(html, PURIFY_CONFIG);
         };
     }
 
     /**
+     * options.adminPath         path every admin page lives under (Service\Url\AdminPath), with
+     *                           a trailing slash; links below it open in the same tab
      * options.tableLabel        accessible name of the scrollable wrapper around a table
      * options.renderFencedBlock (lang, code, resolveUrls) => html string, or null for the default
      *                           code block; resolveUrls(spec) swaps the admin URL tokens in a parsed
@@ -140,7 +146,7 @@ define([
                 }
             }
         });
-        var sanitize = createSanitizer();
+        var sanitize = createSanitizer(options.adminPath || '');
 
         function renderMarkup(markdown, tokens) {
             currentTokens = tokens || null;
