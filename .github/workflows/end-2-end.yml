@@ -14,14 +14,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - PHP_VERSION: php83-fpm
-            MAGEOS_VERSION: 3.3.0
-          - PHP_VERSION: php85-fpm
-            MAGEOS_VERSION: 3.4.0
+          - IMAGE: mage-os-community-edition
+            IMAGE_TAG: php83-fpm-mage-os1.1.0-sample-data
+          - IMAGE: mage-os-community-edition
+            IMAGE_TAG: latest-sample-data
+          - IMAGE: magento-project-community-edition
+            IMAGE_TAG: php83-fpm-magento2.4.8-sample-data
+          - IMAGE: magento-project-community-edition
+            IMAGE_TAG: latest-sample-data
+    name: ${{ matrix.IMAGE }} - ${{ matrix.IMAGE_TAG }}
     runs-on: ubuntu-latest
     env:
-      PHP_VERSION: ${{ matrix.PHP_VERSION }}
-      MAGEOS_VERSION: ${{ matrix.MAGEOS_VERSION }}
+      IMAGE: ${{ matrix.IMAGE }}
+      IMAGE_TAG: ${{ matrix.IMAGE_TAG }}
       BASE_URL: http://magento.test/
       COMPOSE_FILE: .github/workflows/templates/docker-compose.yml
     steps:
@@ -113,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: E2E report - ${{ matrix.PHP_VERSION }} - mage-os ${{ matrix.MAGEOS_VERSION }}
+          name: E2E report - ${{ matrix.IMAGE }} - ${{ matrix.IMAGE_TAG }}
           retention-days: 7
           path: |
             Test/End-2-end/playwright-report
@@ -129,7 +134,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: E2E logs - ${{ matrix.PHP_VERSION }} - mage-os ${{ matrix.MAGEOS_VERSION }}
+          name: E2E logs - ${{ matrix.IMAGE }} - ${{ matrix.IMAGE_TAG }}
           retention-days: 7
           path: |
             mage-os-logs

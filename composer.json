@@ -7,7 +7,7 @@
         "php": ">=8.2",
         "composer-runtime-api": "^2.1",
         "mage-os/module-ai-base": "^1.0",
-        "magento/framework": ">=103.0.9",
+        "magento/framework": ">=103.0.8",
         "magento/module-backend": "*",
         "magento/module-sales": "*",
         "magento/module-catalog": "*",
