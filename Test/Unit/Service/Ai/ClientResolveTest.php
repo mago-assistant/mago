@@ -7,7 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Ai;
 
 use MageOS\AiBase\Api\AiClientFactoryInterface;
-use MageOS\AiBase\Model\Client\AiRequestNotSentException;
+use MageOS\AiBase\Exceptions\AiRequestNotSentException;
 use Magento\Framework\Exception\LocalizedException;
 use MagoAssistant\Mago\Service\Ai\AiNotConfiguredException;
 use MagoAssistant\Mago\Service\Ai\Client;

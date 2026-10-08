@@ -38,15 +38,12 @@ jobs:
           docker compose -f $COMPOSE_FILE up -d --quiet-pull
           timeout 90 bash -c 'until docker exec wiremock curl -sf http://localhost:8080/__admin/health > /dev/null; do sleep 2; done'
 
-      # MageOS_AiBase has no tagged release yet, so it comes off its branch under an inline alias
-      # that satisfies this module's ^1.0. Drop both lines once it is on Packagist.
-      # Its Symfony AI bridges are a `suggest`, which composer never installs on its own, and
-      # without one there is no client to call a provider with at all. The bridge takes any
-      # version so composer picks the one that matches the symfony/ai-platform AiBase requires.
+      # MageOS_AiBase's Symfony AI bridges are a `suggest`, which composer never installs on its
+      # own, and without one there is no client to call a provider with at all. The bridge takes
+      # any version so composer picks the one that matches the symfony/ai-platform AiBase requires.
       - name: Install the AI base module and a provider bridge
         run: |
-          docker exec mage-os-community-edition composer config repositories.mage-os-ai-base vcs https://github.com/mage-os-lab/module-ai-base
-          docker exec mage-os-community-edition ./retry "composer require --no-update mage-os/module-ai-base:'dev-main as 1.0.0'"
+          docker exec mage-os-community-edition ./retry "composer require --no-update mage-os/module-ai-base:'^1.0'"
           docker exec mage-os-community-edition ./retry "composer require --no-update symfony/ai-lm-studio-platform:'*'"
 
       - name: Upload the module into the Mage-OS container
