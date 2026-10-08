@@ -67,6 +67,7 @@ define([
     // still streaming in, the JSON is incomplete and a skeleton holds its place;
     // a block that is still invalid once the answer is complete renders nothing.
     var markdown = markdownRenderer.create({
+        adminPath: config.adminPath,
         tableLabel: t('Table'),
         renderFencedBlock: function(lang, code, resolveUrls) {
             if (lang !== 'mago' || !UI) return null;

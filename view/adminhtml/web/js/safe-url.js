@@ -35,6 +35,14 @@ define([], function () {
         }
     }
 
+    // A path given as "/admin/" also covers the bare "/admin" it starts with.
+    function isUnderPath(url, path) {
+        if (!path || !isSameOrigin(url)) {
+            return false;
+        }
+        return (new URL(normalize(url), window.location.href).pathname + '/').indexOf(path) === 0;
+    }
+
     function safeHref(url) {
         return isSafeLink(url) ? normalize(url) : null;
     }
@@ -42,6 +50,7 @@ define([], function () {
     return {
         isSafeLink: isSafeLink,
         isSameOrigin: isSameOrigin,
+        isUnderPath: isUnderPath,
         safeHref: safeHref
     };
 });

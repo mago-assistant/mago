@@ -251,7 +251,10 @@ if (!$conversation) {
 
 <script>
 require(['MagoAssistant_Mago/js/markdown'], function(markdown) {
-    var renderer = markdown.create({tableLabel: '<?= $escaper->escapeJs(__('Table')) ?>'});
+    var renderer = markdown.create({
+        adminPath: '<?= $escaper->escapeJs($block->getAdminPath()) ?>',
+        tableLabel: '<?= $escaper->escapeJs(__('Table')) ?>'
+    });
 
     // Re-render all assistant bodies the same way the chat panel does: sanitized, links and
     // images held to the panel's rules, because a stored answer is model output too.
