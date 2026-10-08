@@ -9,9 +9,11 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Sales\OrderManager\Documen
 use ArrayIterator;
 use Magento\Framework\Data\Collection\AbstractDb;
 use Magento\Framework\DataObject;
+use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\OrderDocument;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\VatNumber;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -67,11 +69,15 @@ final class OrderDocumentTest extends TestCase
             }
         };
 
-        return (function (AbstractDb $orders, SecureAdminUrl $adminUrl): array {
+        $timezone = $this->createStub(TimezoneInterface::class);
+        $timezone->method('getConfigTimezone')->willReturn('UTC');
+
+        return (function (AbstractDb $orders, SecureAdminUrl $adminUrl, TimezoneInterface $timezone): array {
             $this->vatNumber = new VatNumber();
             $this->secureAdminUrl = $adminUrl;
+            $this->storeTime = new StoreTime($timezone);
 
             return $this->describe($orders);
-        })->call($document, $orders, $adminUrl);
+        })->call($document, $orders, $adminUrl, $timezone);
     }
 }

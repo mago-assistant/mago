@@ -7,8 +7,10 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Sales\OrderManager;
 
 use Magento\Framework\DB\Select;
+use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\ListDocumentsAction;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAclAuthorization;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -44,7 +46,7 @@ class ListDocumentsActionTest extends TestCase
     private function action(array $allowedResources = self::ACL_RESOURCES): ListDocumentsAction
     {
         return new ListDocumentsAction(
-            new PeriodParser(),
+            new PeriodParser(new StoreTime($this->createStub(TimezoneInterface::class))),
             new FakeAclAuthorization($allowedResources),
             $this->documentTypes
         );

@@ -12,6 +12,7 @@ use Magento\Sales\Model\ResourceModel\Order\Creditmemo\Collection as CreditmemoC
 use Magento\Sales\Model\ResourceModel\Order\Creditmemo\CollectionFactory as CreditmemoCollectionFactory;
 use Magento\Sales\Model\ResourceModel\Order\Creditmemo\Item\CollectionFactory as ItemCollectionFactory;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 
 class CreditmemoDocument extends AbstractDocument
 {
@@ -24,7 +25,8 @@ class CreditmemoDocument extends AbstractDocument
     public function __construct(
         private readonly CreditmemoCollectionFactory $creditmemoCollectionFactory,
         private readonly ItemCollectionFactory $itemCollectionFactory,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -97,7 +99,7 @@ class CreditmemoDocument extends AbstractDocument
 
             $documents[] = [
                 'number' => $document['increment_id'] ?? '',
-                'date' => $document['created_at'] ?? '',
+                'date' => $this->storeTime->toLocal((string)($document['created_at'] ?? '')),
                 'order_id' => (int)($document['order_id'] ?? 0),
                 'state' => $state === false ? 'unknown' : $state,
                 'total' => (float)($document['grand_total'] ?? 0),

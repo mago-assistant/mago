@@ -6,7 +6,9 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills;
 
+use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -16,7 +18,73 @@ class PeriodParserTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->periodParser = new PeriodParser();
+        $this->periodParser = $this->parserIn('UTC');
+    }
+
+    #[Test]
+    public function aDayIsTheStoresDayConvertedToUtcForTheQuery(): void
+    {
+        $parser = $this->parserIn('Europe/Amsterdam');
+
+        self::assertSame(['2026-10-06 22:00:00', '2026-10-07 21:59:59'], $parser->parse('2026-10-07'));
+        self::assertSame(['2026-11-30 23:00:00', '2026-12-01 22:59:59'], $parser->parse('2026-12-01'));
+        self::assertSame(['2026-10-07 00:00:00', '2026-10-07 23:59:59'], $parser->parseLocal('2026-10-07'));
+    }
+
+    #[Test]
+    public function theDayDaylightSavingEndsHasTwentyFiveHours(): void
+    {
+        $parser = $this->parserIn('Europe/Amsterdam');
+
+        self::assertSame(['2026-10-24 22:00:00', '2026-10-25 22:59:59'], $parser->parse('2026-10-25'));
+        self::assertSame('2026-10-25 23:00:00', $parser->parse('2026-10-26')[0]);
+    }
+
+    #[Test]
+    public function consecutiveDaysLeaveNoGapWhereDaylightSavingEndsAtMidnight(): void
+    {
+        $parser = $this->parserIn('America/Santiago');
+
+        $end = new \DateTimeImmutable($parser->parse('2026-04-04')[1], new \DateTimeZone('UTC'));
+        $nextStart = new \DateTimeImmutable($parser->parse('2026-04-05')[0], new \DateTimeZone('UTC'));
+
+        self::assertSame(1, $nextStart->getTimestamp() - $end->getTimestamp());
+    }
+
+    #[Test]
+    public function aMonthAndARangeConvertBothBounds(): void
+    {
+        $parser = $this->parserIn('Europe/Amsterdam');
+
+        self::assertSame(['2026-09-30 22:00:00', '2026-10-31 22:59:59'], $parser->parse('2026-10'));
+        self::assertSame(['2026-10-04 22:00:00', '2026-10-07 21:59:59'], $parser->parse('2026-10-05:2026-10-07'));
+        self::assertSame('2026-09-30 22:00:00', $parser->getFromDate('2026-10'));
+    }
+
+    #[Test]
+    public function todayIsTheStoresToday(): void
+    {
+        $zone = new \DateTimeZone('Pacific/Kiritimati');
+        $today = (new \DateTimeImmutable('now', $zone))->format('Y-m-d');
+
+        [$from, $to] = $this->parserIn('Pacific/Kiritimati')->parseLocal('today');
+
+        self::assertSame($today . ' 00:00:00', $from);
+        self::assertSame($today . ' 23:59:59', $to);
+    }
+
+    #[Test]
+    public function allKeepsItsLowerBoundInAnyTimezone(): void
+    {
+        self::assertSame('1970-01-01 00:00:00', $this->parserIn('Europe/Amsterdam')->parse('all')[0]);
+    }
+
+    private function parserIn(string $timezone): PeriodParser
+    {
+        $config = $this->createStub(TimezoneInterface::class);
+        $config->method('getConfigTimezone')->willReturn($timezone);
+
+        return new PeriodParser(new StoreTime($config));
     }
 
     #[Test]

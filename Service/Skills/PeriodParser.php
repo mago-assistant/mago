@@ -6,6 +6,14 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills;
 
+use MagoAssistant\Mago\Service\Time\StoreTime;
+
+/**
+ * A period is read on the store's clock ("today", "2026-10-07" mean that day in the configured
+ * timezone) and parse() hands back its bounds in UTC, the timezone Magento stores timestamps in, so
+ * a query compares like with like (issue #255). parseLocal() gives the same bounds on the store's
+ * clock, for showing to the administrator.
+ */
 class PeriodParser
 {
     /**
@@ -14,14 +22,50 @@ class PeriodParser
      */
     private const BEGINNING_OF_TIME = '1970-01-01 00:00:00';
 
+    public function __construct(
+        private readonly StoreTime $storeTime
+    ) {
+    }
+
     /**
-     * Parse period string into [from, to] date strings
+     * Parse period string into [from, to] date strings in UTC, for a query on a stored timestamp
      *
+     * @param string $period
      * @return string[] [from, to]
      */
     public function parse(string $period): array
     {
-        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        [$from, $to] = $this->parseLocal($period);
+
+        return [
+            $from === self::BEGINNING_OF_TIME ? $from : $this->storeTime->toUtc($from),
+            $this->utcEndOfDay($to),
+        ];
+    }
+
+    /**
+     * One second before the next local day starts, in UTC. Converting the local 23:59:59 instead
+     * drops the repeated hour where daylight saving ends at midnight (America/Santiago), so that
+     * hour belonged to neither day.
+     */
+    private function utcEndOfDay(string $localEnd): string
+    {
+        $utc = new \DateTimeZone('UTC');
+        $nextDay = (new \DateTimeImmutable(substr($localEnd, 0, 10), $utc))->modify('+1 day')->format('Y-m-d');
+        $nextDayStart = new \DateTimeImmutable($this->storeTime->toUtc($nextDay . ' 00:00:00'), $utc);
+
+        return $nextDayStart->modify('-1 second')->format('Y-m-d H:i:s');
+    }
+
+    /**
+     * Parse period string into [from, to] date strings on the store's clock
+     *
+     * @param string $period
+     * @return string[] [from, to]
+     */
+    public function parseLocal(string $period): array
+    {
+        $now = $this->storeTime->now();
 
         return match ($period) {
             'today' => [$now->format('Y-m-d 00:00:00'), $now->format('Y-m-d 23:59:59')],

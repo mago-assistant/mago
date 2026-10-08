@@ -86,6 +86,7 @@ class RevenueAction implements ActionInterface
         $connection = $this->resourceConnection->getConnection();
         $table = $this->resourceConnection->getTableName('sales_order');
         [$from, $to] = $this->periodParser->parse($period);
+        [$localFrom, $localTo] = $this->periodParser->parseLocal($period);
         $netSalesAmount = $this->netSalesAmountInGlobalCurrency($connection);
 
         $select = $connection->select()
@@ -114,8 +115,8 @@ class RevenueAction implements ActionInterface
 
         return [
             'period' => $period,
-            'from' => $from,
-            'to' => $to,
+            'from' => $localFrom,
+            'to' => $localTo,
             'currency' => $this->globalCurrencyCode(),
             'total_revenue' => round((float)($result['total_revenue'] ?? 0), 2),
             'orders_excluded_from_revenue' => $excludedCount,
