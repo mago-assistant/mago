@@ -159,8 +159,18 @@ class DocsSyncService
         } catch (\Throwable $e) {
             // The CLI and cron answer the server operator with the message; the stored flag only
             // points at the log entry.
-            $reference = $this->errorReporter->log('DocsSync', $e);
-            $this->flagManager->saveFlag(self::FLAG_ERROR, 'See var/log/mago-error.log, reference ' . $reference);
+            // The failure that got us here (out of file handles, a lost connection) can take the log
+            // and flag writes down too; the caller still gets the original message.
+            try {
+                $reference = $this->errorReporter->log('DocsSync', $e);
+                $this->flagManager->saveFlag(self::FLAG_ERROR, 'See var/log/mago-error.log, reference ' . $reference);
+            } catch (\Throwable $recordError) {
+                try {
+                    $this->errorReporter->log('DocsSync: could not record the error', $recordError);
+                } catch (\Throwable) {
+                    // Nothing left to record it with.
+                }
+            }
             return ['error' => $e->getMessage()];
         }
     }

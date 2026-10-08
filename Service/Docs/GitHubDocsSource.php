@@ -6,20 +6,24 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Docs;
 
-use Magento\Framework\HTTP\Client\CurlFactory;
+use Magento\Framework\HTTP\AsyncClient\HttpException;
+use Magento\Framework\HTTP\AsyncClient\Request;
+use Magento\Framework\HTTP\AsyncClientInterface;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
+use Psr\Http\Client\ClientExceptionInterface;
 
 class GitHubDocsSource
 {
     private const TREES_URL = 'https://api.github.com/repos/%s/git/trees/%s?recursive=1';
     private const RAW_URL = 'https://raw.githubusercontent.com/%s/%s/%s';
     private const USER_AGENT = 'MagoAssistant-Mago';
+    private const HTTP_OK = 200;
 
     public function __construct(
-        private readonly CurlFactory $curlFactory,
         private readonly Json $json,
+        private readonly AsyncClientInterface $httpClient,
         private readonly ErrorLogger $errorLogger,
         private readonly ErrorReporter $errorReporter
     ) {
@@ -35,6 +39,8 @@ class GitHubDocsSource
     /**
      * Returns ['sha' => <tree sha>, 'paths' => <help/**.md paths>] or null on failure.
      *
+     * @param string $repo
+     * @param string $ref
      * @return array{sha: string, paths: string[]}|null
      */
     public function fetchTree(string $repo, string $ref): ?array
@@ -91,33 +97,31 @@ class GitHubDocsSource
     }
 
     /**
-     * @param array<string, string> $headers
+     * Goes through the docs HTTP client from di.xml, which holds the timeouts and redirect rules.
+     * Magento's Curl client is avoided on purpose: it never closes its handle and references
+     * itself from its header callback, so a sync of several hundred files kept as many sockets
+     * open until the cycle collector ran and hit "Too many open files" (#248). Guzzle reuses a
+     * small pool of handles instead.
+     *
+     * @param string $url
+     * @param array<string,string> $headers
      */
-    private function get(string $url, array $headers = []): ?string
+    private function get(string $url, array $headers): ?string
     {
         try {
-            $curl = $this->curlFactory->create();
-            $curl->setOptions([
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_CONNECTTIMEOUT => 10,
-            ]);
-            $curl->addHeader('User-Agent', self::USER_AGENT);
-            foreach ($headers as $name => $value) {
-                $curl->addHeader($name, $value);
-            }
-            $curl->get($url);
-
-            $status = $curl->getStatus();
-            if ($status !== 200) {
-                $this->errorLogger->addLog('DocsSource', 'HTTP ' . $status . ' for ' . $url);
-                return null;
-            }
-
-            return $curl->getBody();
-        } catch (\Throwable $e) {
+            $response = $this->httpClient->request(
+                new Request($url, Request::METHOD_GET, ['User-Agent' => self::USER_AGENT] + $headers, null)
+            )->get();
+        } catch (HttpException | ClientExceptionInterface $e) {
             $this->errorReporter->log('DocsSource: ' . $url, $e);
             return null;
         }
+
+        if ($response->getStatusCode() !== self::HTTP_OK) {
+            $this->errorLogger->addLog('DocsSource', 'HTTP ' . $response->getStatusCode() . ' for ' . $url);
+            return null;
+        }
+
+        return $response->getBody();
     }
 }
