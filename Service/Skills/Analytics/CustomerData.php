@@ -38,9 +38,9 @@ class CustomerData extends AbstractSkill
     {
         return 'Query customer data, read only: counts, recent signups, top spenders, customer lookup. '
             . 'The assistant cannot create, edit or delete customers or their addresses, since customer '
-            . 'forms hold personal data and are kept out of it. When asked to, say so in your first '
-            . 'reply, before asking for any details, and point the administrator to Customers > All '
-            . 'Customers > Add New Customer.';
+            . 'forms hold personal data and are kept out of the assistant. When asked to, say so in your '
+            . 'first reply, before asking for any details, and point the administrator to the customer\'s own '
+            . 'page under Customers > All Customers, or to Add New Customer for a new one.';
     }
 
     protected function getBaseInstructions(): string

@@ -60,6 +60,7 @@ final class WriteFieldsDeniedEntityTest extends TestCase
     public function itStillNavigatesToANewProductForm(): void
     {
         self::assertNull($this->action(null)->findRefusal($this->params('product', '')));
+        self::assertNull($this->action(null)->findRefusal($this->params('Product', '')));
     }
 
     /**

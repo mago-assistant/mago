@@ -199,12 +199,11 @@ namespace (`customer_form`, `customer_address_form`, `sales_order_view`, `sales_
 - `Service/Form/PageContextNormalizer.php` re-applies `FormPolicy` on the server, because a denied
   form's data never being collected in the browser only holds for an unmodified client; a forged
   or tampered request bypasses that entirely.
-- `WriteFieldsAction::isDeniedEntityType()` runs first in `findRefusal()`, whatever form is open: it
-  checks the requested `entity_type` (its `<type>_form` namespace and its edit route) against
-  `FormPolicy`, so "create a customer", which has no New route to navigate to, gets the privacy
-  refusal instead of falling through to "no form open" (issue #256).
-- `WriteFieldsAction::isDeniedNavigationTarget()` checks the same `FormPolicy` again, against
-  the *target* of navigate-then-act (below), before a `form_navigate` directive is ever built - the
+- `WriteFieldsAction::isDeniedEntityType()` checks the same `FormPolicy` a third time, first in
+  `findRefusal()` and whatever form is open, against the requested `entity_type`: the *target* of
+  navigate-then-act (below), before a `form_navigate` directive is ever built, and also a target
+  with nothing to navigate to ("create a customer" has no New route, and used to fall through to
+  "no form open", issue #256). That is the
   one path with no open form's namespace or route to check yet, since the point of navigate-then-act
   is that nothing is open. Without this, an entity type `EntityRouteMap` can reach but `FormPolicy`
   denies (`customer`, `order` today) would send the administrator's browser there anyway, on the
@@ -214,8 +213,8 @@ This third check is keyed on two independent values, checked together through th
 `FormPolicy::isDenied(string $namespace, string $route)` the other two calls already use - neither
 alone catches everything `EntityRouteMap` can reach today:
 
-- The resolved admin route (`customer/index/edit`, `sales/order/view`, ...) catches `customer` and
-  `order` directly, both already matching a route pattern.
+- The entity type's admin routes, edit and New (`customer/index/edit`, `sales/order/view`, ...),
+  catch `customer` and `order` directly, both already matching a route pattern.
 - The entity type's own form namespace, built as `"{$entityType}_form"` - the same convention
   `form-bridge.js`'s `applyStoredNavigateIntent()` already relies on to replay a stored navigate
   intent - catches a namespace-only denial that the route never would. Concretely: if an integrator

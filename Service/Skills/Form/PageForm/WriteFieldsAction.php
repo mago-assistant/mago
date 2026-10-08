@@ -201,7 +201,7 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
         }
 
         $route = $this->routeFor($params);
-        if ($route === null || $this->isDeniedNavigationTarget($this->entityTypeParam($params), $route)) {
+        if ($route === null) {
             return $this->deniedFormResult();
         }
 
@@ -277,7 +277,10 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
     }
 
     /**
-     * Checked before a form_navigate directive is ever built, against the same FormPolicy the
+     * Checked first in findRefusal(), whatever form is open, so before a form_navigate directive is
+     * ever built and also when there is nothing to navigate to: "create a customer" has no New route,
+     * and without this it fell through to "no form open" and the model told the administrator about
+     * a technical issue instead of the privacy refusal (issue #256). It runs against the same FormPolicy the
      * open-form path already enforces (PageContextNormalizer, form-bridge.js), rather than a second
      * list or a second notion of what "denied" means. Two independent inputs are checked, because
      * either alone misses one of today's two denied, navigable entity types:
@@ -292,25 +295,27 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
      *   additionalDeniedNamespacePatterns (the commented example there shows the shape), checking the
      *   route alone would silently let navigate-then-act bypass that denial.
      *
+     * Both the edit route and the New route are checked, since routeFor() navigates to either.
+     *
      * Checking both, through FormPolicy::isDenied() itself, is what keeps this correct without
      * editing whenever a pattern is added via di.xml's additionalDeniedNamespacePatterns or
      * additionalDeniedRoutePatterns - a new pattern is denied here the same instant it is denied
      * everywhere else, because there is only ever the one list.
      */
-    private function isDeniedNavigationTarget(string $entityType, string $route): bool
-    {
-        return $this->formPolicy->isDenied($entityType . '_form', $route);
-    }
-
-    /**
-     * Checked before anything else, whatever form is open: "create a customer" has no New route to
-     * navigate to, so without this it fell through to "no form open" and the model told the
-     * administrator about a technical issue instead of the privacy refusal (issue #256).
-     */
     private function isDeniedEntityType(string $entityType): bool
     {
-        return $entityType !== ''
-            && $this->formPolicy->isDenied($entityType . '_form', (string)$this->entityRouteMap->getRoute($entityType));
+        if ($entityType === '') {
+            return false;
+        }
+
+        $routes = [$this->entityRouteMap->getRoute($entityType), $this->entityRouteMap->getNewRoute($entityType)];
+        foreach ($routes as $route) {
+            if ($this->formPolicy->isDenied($entityType . '_form', (string)$route)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
