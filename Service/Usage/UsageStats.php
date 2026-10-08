@@ -30,6 +30,7 @@ class UsageStats
                 'total_tokens' => new Expression('SUM(total_tokens)'),
                 'total_cache_read_tokens' => new Expression('SUM(cache_read_tokens)'),
                 'total_cache_write_tokens' => new Expression('SUM(cache_write_tokens)'),
+                'total_cache_reported_input_tokens' => new Expression(CacheShare::REPORTED_INPUT_TOKENS_SUM),
                 'unique_users' => new Expression('COUNT(DISTINCT admin_user_id)'),
             ]);
 
@@ -54,6 +55,7 @@ class UsageStats
             'total_cache_write_tokens' => isset($result['total_cache_write_tokens'])
                 ? (int)$result['total_cache_write_tokens']
                 : null,
+            'total_cache_reported_input_tokens' => (int)($result['total_cache_reported_input_tokens'] ?? 0),
             'unique_users' => (int)($result['unique_users'] ?? 0),
             'estimated_cost' => $this->estimateCost($inputTokens, $outputTokens),
         ];

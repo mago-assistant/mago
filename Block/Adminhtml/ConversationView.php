@@ -14,6 +14,7 @@ use Magento\Framework\DB\Sql\Expression;
 use Magento\Framework\Escaper;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
+use MagoAssistant\Mago\Service\Usage\CacheShare;
 
 class ConversationView extends Template
 {
@@ -32,6 +33,7 @@ class ConversationView extends Template
         private readonly TimezoneInterface $timezone,
         private readonly ConfigRepository $configRepository,
         private readonly AdminSession $adminSession,
+        private readonly CacheShare $cacheShare,
         array $data = []
     ) {
         parent::__construct($context, $data);
@@ -128,6 +130,7 @@ class ConversationView extends Template
                 'input_tokens' => new Expression('SUM(input_tokens)'),
                 'output_tokens' => new Expression('SUM(output_tokens)'),
                 'cache_read_tokens' => new Expression('SUM(cache_read_tokens)'),
+                'cache_reported_input_tokens' => new Expression(CacheShare::REPORTED_INPUT_TOKENS_SUM),
                 'api_calls' => new Expression('COUNT(*)'),
             ])
             ->where('conversation_id = ?', $this->getConversationId());
@@ -212,21 +215,22 @@ class ConversationView extends Template
         return $this->configRepository->getAssistantName();
     }
 
-    /**
-     * Share of prompt tokens served from the provider's cache, as "NN%", or '' when not reported.
-     *
-     * @param array<string, mixed> $row Row with input_tokens and cache_read_tokens
-     */
-    public function formatCacheShare(array $row): string
+    public function getCacheShare(): string
     {
-        if (!isset($row['cache_read_tokens'])) {
-            return '';
-        }
-        $input = (int)($row['input_tokens'] ?? 0);
-        if ($input <= 0) {
-            return '';
-        }
-        return round(min(100, (int)$row['cache_read_tokens'] / $input * 100)) . '%';
+        $usage = $this->getUsageData();
+
+        return $this->cacheShare->format(
+            $usage['cache_read_tokens'] ?? null,
+            $usage['cache_reported_input_tokens'] ?? null
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $call Row from mago_usage_log
+     */
+    public function formatCallCacheShare(array $call): string
+    {
+        return $this->cacheShare->format($call['cache_read_tokens'] ?? null, $call['input_tokens'] ?? null);
     }
 
     public function getEstimatedCost(): string
