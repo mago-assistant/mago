@@ -1,6 +1,6 @@
 services:
   mage-os:
-    image: ghcr.io/controlaltdelete-nl/magento2-in-a-box/mage-os-community-edition:${IMAGE_TAG}
+    image: ghcr.io/controlaltdelete-nl/magento2-in-a-box/${IMAGE}:${IMAGE_TAG}
     container_name: mage-os-community-edition
     volumes:
       - ../../../mage-os-logs:/data/var/log
