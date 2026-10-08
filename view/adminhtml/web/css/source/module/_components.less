@@ -951,6 +951,52 @@
         background: var(--mago-panel, #FFFFFF);
         color: var(--mago-accent-ink, #B84000);
     }
+
+    // A count of records that are not in the widget: text, not a control.
+    &.is-note {
+        background: none;
+        border-color: transparent;
+        padding-top: @mago-size__2;
+        padding-bottom: @mago-size__2;
+    }
+}
+
+// Entities past the first five, opened by their summary without script
+.mago-entities-fold {
+    > .mago-entities {
+        margin-top: @mago-size__10;
+    }
+
+    > summary {
+        cursor: pointer;
+        list-style: none;
+
+        &::-webkit-details-marker {
+            display: none;
+        }
+
+        &:hover {
+            color: var(--mago-accent-ink, #B84000);
+        }
+    }
+
+    .mago-fold-open {
+        display: none;
+    }
+
+    &[open] {
+        > summary .mago-fold-closed {
+            display: none;
+        }
+
+        > summary .mago-fold-open {
+            display: inline;
+        }
+
+        > summary svg {
+            transform: rotate(180deg);
+        }
+    }
 }
 
 .mago-table-row {

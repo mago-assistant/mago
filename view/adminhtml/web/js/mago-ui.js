@@ -92,6 +92,8 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         menuHint: '↑↓ choose · ⏎ insert',
         risk: {read: 'read', write: 'writes', irreversible: 'irreversible'},
         showMore: 'Show %1 more',
+        moreNotShown: '%1 more not shown',
+        showLess: 'Show less',
         nothingFound: 'Nothing found',
         confirmChange: 'Confirm change',
         cannotUndo: 'Cannot be undone',
@@ -666,11 +668,17 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
     /* W13–W15 Data                                                         */
     /* ------------------------------------------------------------------ */
 
-    // W13 Entity list: thumb, two lines, one action. Never more than five in the panel.
+    // W13 Entity list: thumb, two lines, one action. The panel shows five; further items fold behind
+    // "Show N more" in a <details>, so it opens without script: an answer widget reaches the panel as
+    // scrubbed HTML and loses its listeners (#249). A spec from an answer has no working url or
+    // handler for "the rest", so its more.count is a note, never a link.
     // {items: [{title, meta, thumb, href, onClick, action: {label, href, onClick}}], more: {count, label, onClick, href}}
+    var ENTITIES_SHOWN = 5;
+
     function entityList(opts) {
         var items = opts.items || [];
-        var list = el('div', 'mago-entities', items.map(function (it) {
+        var more = opts.more || null;
+        function entity(it) {
             var thumb;
             // A thumb loads by itself, so an off-site one would tell that site the admin looked.
             if (safeUrl.isSameOrigin(it.thumb)) {
@@ -704,17 +712,37 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
                 row.href = rowHref;
             }
             return clickable(row, it.onClick ? function (e) { it.onClick(e, it); } : null);
-        }));
-        if (opts.more) {
-            var moreHref = safeHref(opts.more.href);
-            var more = el(moreHref ? 'a' : 'div', 'mago-entity-more', [
-                opts.more.label || tpl(labels(opts).showMore, opts.more.count),
+        }
+        var L = labels(opts);
+        var list = el('div', 'mago-entities', items.slice(0, ENTITIES_SHOWN).map(entity));
+        var folded = items.slice(ENTITIES_SHOWN);
+        if (folded.length) {
+            list.appendChild(el('details', 'mago-entities-fold', [
+                el('summary', 'mago-entity-more', [
+                    el('span', 'mago-fold-closed', tpl(L.showMore, folded.length)),
+                    el('span', 'mago-fold-open', L.showLess),
+                    icon('chevronDown', 14, 2.2)
+                ]),
+                el('div', 'mago-entities', folded.map(entity))
+            ]));
+        }
+        var moreCount = Math.floor(Number(more && more.count));
+        moreCount = isFinite(moreCount) && moreCount > 0 ? moreCount : 0;
+        var moreHref = more && allowHtml ? safeHref(more.href) : null;
+        var moreClick = more && allowHtml && typeof more.onClick === 'function' ? more.onClick : null;
+        if (moreHref || moreClick) {
+            var link = el(moreHref ? 'a' : 'div', 'mago-entity-more', [
+                more.label || (moreCount ? tpl(L.showMore, moreCount) : L.showMore.replace(' %1', '')),
                 icon('chevronDown', 14, 2.2)
             ]);
             if (moreHref) {
-                more.href = moreHref;
+                link.href = moreHref;
             }
-            list.appendChild(clickable(more, opts.more.onClick));
+            list.appendChild(clickable(link, moreClick));
+            return list;
+        }
+        if (moreCount) {
+            list.appendChild(el('div', 'mago-entity-more is-note', tpl(L.moreNotShown, moreCount)));
         }
         return list;
     }
