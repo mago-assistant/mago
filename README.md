@@ -19,8 +19,8 @@
 <p align="center">
   <img alt="Free for merchants" src="https://img.shields.io/badge/price-free-FF7A33">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-373330">
-  <img alt="Magento 2.4.9+" src="https://img.shields.io/badge/Magento-2.4.9%2B-373330">
-  <img alt="Mage-OS 3+" src="https://img.shields.io/badge/Mage--OS-3.0%2B-373330">
+  <img alt="Magento 2.4.8+" src="https://img.shields.io/badge/Magento-2.4.8%2B-373330">
+  <img alt="Mage-OS 1.1+" src="https://img.shields.io/badge/Mage--OS-1.1%2B-373330">
   <img alt="PHP 8.2+" src="https://img.shields.io/badge/PHP-8.2%2B-373330">
 </p>
 
@@ -86,7 +86,7 @@ See [docs/skills-examples.md](docs/skills-examples.md) for more example prompts 
 ## Requirements
 
 - PHP >= 8.2
-- Magento >= 2.4.9 or Mage-OS >= 3.0 (Symfony 7.3+ required by the AI bridges)
+- Magento >= 2.4.8 or Mage-OS >= 1.1
 - An API key for one of the supported providers
 
 ## Installation

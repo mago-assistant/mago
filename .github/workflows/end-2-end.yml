@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - IMAGE_TAG: php83-fpm-mage-os3.3.0-sample-data
+          - IMAGE_TAG: php83-fpm-mage-os1.1.0-sample-data
           - IMAGE_TAG: latest-sample-data
     runs-on: ubuntu-latest
     env:
