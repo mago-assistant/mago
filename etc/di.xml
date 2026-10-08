@@ -292,6 +292,32 @@
         </arguments>
     </type>
 
+    <!-- Docs downloads: a shared Guzzle client reuses a few handles across hundreds of files (#248) -->
+    <virtualType name="MagoAssistant\Mago\Service\Docs\GitHubGuzzleClient" type="GuzzleHttp\Client">
+        <arguments>
+            <argument name="config" xsi:type="array">
+                <item name="timeout" xsi:type="number">30</item>
+                <item name="connect_timeout" xsi:type="number">10</item>
+                <item name="allow_redirects" xsi:type="array">
+                    <item name="max" xsi:type="number">5</item>
+                    <item name="protocols" xsi:type="array">
+                        <item name="https" xsi:type="string">https</item>
+                    </item>
+                </item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MagoAssistant\Mago\Service\Docs\GitHubHttpClient" type="Magento\Framework\HTTP\AsyncClient\GuzzleAsyncClient">
+        <arguments>
+            <argument name="client" xsi:type="object">MagoAssistant\Mago\Service\Docs\GitHubGuzzleClient</argument>
+        </arguments>
+    </virtualType>
+    <type name="MagoAssistant\Mago\Service\Docs\GitHubDocsSource">
+        <arguments>
+            <argument name="httpClient" xsi:type="object">MagoAssistant\Mago\Service\Docs\GitHubHttpClient</argument>
+        </arguments>
+    </type>
+
     <!-- Docs indexing CLI command -->
     <type name="Magento\Framework\Console\CommandListInterface">
         <arguments>

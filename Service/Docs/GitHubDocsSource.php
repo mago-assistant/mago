@@ -6,21 +6,24 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Docs;
 
+use Magento\Framework\HTTP\AsyncClient\HttpException;
+use Magento\Framework\HTTP\AsyncClient\Request;
+use Magento\Framework\HTTP\AsyncClientInterface;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
+use Psr\Http\Client\ClientExceptionInterface;
 
 class GitHubDocsSource
 {
     private const TREES_URL = 'https://api.github.com/repos/%s/git/trees/%s?recursive=1';
     private const RAW_URL = 'https://raw.githubusercontent.com/%s/%s/%s';
     private const USER_AGENT = 'MagoAssistant-Mago';
-    private const TIMEOUT = 30;
-    private const CONNECT_TIMEOUT = 10;
-    private const MAX_REDIRECTS = 5;
+    private const HTTP_OK = 200;
 
     public function __construct(
         private readonly Json $json,
+        private readonly AsyncClientInterface $httpClient,
         private readonly ErrorLogger $errorLogger,
         private readonly ErrorReporter $errorReporter
     ) {
@@ -36,6 +39,8 @@ class GitHubDocsSource
     /**
      * Returns ['sha' => <tree sha>, 'paths' => <help/**.md paths>] or null on failure.
      *
+     * @param string $repo
+     * @param string $ref
      * @return array{sha: string, paths: string[]}|null
      */
     public function fetchTree(string $repo, string $ref): ?array
@@ -92,51 +97,31 @@ class GitHubDocsSource
     }
 
     /**
-     * A plain curl handle, freed when the call returns. Magento's HTTP client never closes its
-     * handle and references itself from its header callback, so a sync of several hundred files
-     * kept as many sockets open until the cycle collector ran and hit "Too many open files" (#248).
+     * Goes through the docs HTTP client from di.xml, which holds the timeouts and redirect rules.
+     * Magento's Curl client is avoided on purpose: it never closes its handle and references
+     * itself from its header callback, so a sync of several hundred files kept as many sockets
+     * open until the cycle collector ran and hit "Too many open files" (#248). Guzzle reuses a
+     * small pool of handles instead.
      *
-     * @param array<string, string> $headers
+     * @param string $url
+     * @param array<string,string> $headers
      */
-    private function get(string $url, array $headers = []): ?string
+    private function get(string $url, array $headers): ?string
     {
-        $httpHeaders = ['User-Agent: ' . self::USER_AGENT];
-        foreach ($headers as $name => $value) {
-            $httpHeaders[] = $name . ': ' . $value;
-        }
-
-        $ch = curl_init($url);
-        if ($ch === false) {
-            $this->errorLogger->addLog('DocsSource', 'Could not start a request for ' . $url);
-            return null;
-        }
         try {
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_MAXREDIRS => self::MAX_REDIRECTS,
-                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
-                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
-                CURLOPT_TIMEOUT => self::TIMEOUT,
-                CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
-                CURLOPT_HTTPHEADER => $httpHeaders,
-            ]);
-            $body = curl_exec($ch);
-            $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $error = curl_error($ch);
-        } finally {
-            curl_close($ch);
-        }
-
-        if ($body === false) {
-            $this->errorLogger->addLog('DocsSource', $error . ' for ' . $url);
-            return null;
-        }
-        if ($status !== 200) {
-            $this->errorLogger->addLog('DocsSource', 'HTTP ' . $status . ' for ' . $url);
+            $response = $this->httpClient->request(
+                new Request($url, Request::METHOD_GET, ['User-Agent' => self::USER_AGENT] + $headers, null)
+            )->get();
+        } catch (HttpException | ClientExceptionInterface $e) {
+            $this->errorReporter->log('DocsSource: ' . $url, $e);
             return null;
         }
 
-        return (string)$body;
+        if ($response->getStatusCode() !== self::HTTP_OK) {
+            $this->errorLogger->addLog('DocsSource', 'HTTP ' . $response->getStatusCode() . ' for ' . $url);
+            return null;
+        }
+
+        return $response->getBody();
     }
 }
