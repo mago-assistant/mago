@@ -9,12 +9,12 @@ namespace MagoAssistant\Mago\Test\Unit\Fakes;
 use MagoAssistant\Mago\Service\Usage\UsageLogger;
 
 /**
- * Usage logger that counts the turns it was told about instead of writing them to the database
+ * Usage logger that records the turns it was told about instead of writing them to the database
  */
 final class FakeUsageLogger extends UsageLogger
 {
-    /** @var int Turns log() was called for */
-    private int $loggedTurns = 0;
+    /** @var list<array<string, mixed>> Logged rows, in order */
+    public array $rows = [];
 
     public function __construct()
     {
@@ -29,13 +29,20 @@ final class FakeUsageLogger extends UsageLogger
         int $outputTokens,
         array $skillNames = [],
         ?array $requestPayload = null,
-        ?array $responsePayload = null
+        ?array $responsePayload = null,
+        ?int $cacheReadTokens = null,
+        ?int $cacheWriteTokens = null
     ): void {
-        $this->loggedTurns++;
+        $this->rows[] = [
+            'input_tokens' => $inputTokens,
+            'output_tokens' => $outputTokens,
+            'cache_read_tokens' => $cacheReadTokens,
+            'cache_write_tokens' => $cacheWriteTokens,
+        ];
     }
 
     public function getLoggedTurns(): int
     {
-        return $this->loggedTurns;
+        return count($this->rows);
     }
 }

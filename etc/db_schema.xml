@@ -108,6 +108,8 @@
         <column xsi:type="int" name="input_tokens" unsigned="true" nullable="false" default="0" comment="Input Tokens"/>
         <column xsi:type="int" name="output_tokens" unsigned="true" nullable="false" default="0" comment="Output Tokens"/>
         <column xsi:type="int" name="total_tokens" unsigned="true" nullable="false" default="0" comment="Total Tokens"/>
+        <column xsi:type="int" name="cache_read_tokens" unsigned="true" nullable="true" comment="Prompt tokens served from the provider cache (NULL = not reported)"/>
+        <column xsi:type="int" name="cache_write_tokens" unsigned="true" nullable="true" comment="Prompt tokens written to the provider cache (NULL = not reported)"/>
         <column xsi:type="varchar" name="skill_names" nullable="true" length="255" comment="Comma-separated skill names"/>
         <column xsi:type="mediumtext" name="request_payload" nullable="true" comment="API Request Payload JSON"/>
         <column xsi:type="mediumtext" name="response_payload" nullable="true" comment="API Response Payload JSON"/>

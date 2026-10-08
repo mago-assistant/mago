@@ -43,6 +43,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use MagoAssistant\Mago\Service\Acl\ToolAccess;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakePermissionChecker;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeUsageLogger;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeValidatingTool;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -70,6 +71,8 @@ final class ChatServiceTest extends TestCase
     /** @var array<string, string> skill name => read|write|disabled */
     private array $grants = [];
 
+    private FakeUsageLogger $usageLogger;
+
     private ChatService $chatService;
 
     private FakeLogger $debugLog;
@@ -77,6 +80,7 @@ final class ChatServiceTest extends TestCase
     protected function setUp(): void
     {
         $this->grants = ['cms_data' => 'read'];
+        $this->usageLogger = new FakeUsageLogger();
         $this->chatService = $this->buildChatService();
     }
 
@@ -140,7 +144,7 @@ final class ChatServiceTest extends TestCase
             new ToolRegistry($checker, array_merge([$cmsData], $extraSkills)),
             new DebugLogger($this->debugLog, $json, $config),
             new ErrorReporter(new ErrorLogger(new FakeLogger(), $json), new PiiHeuristic()),
-            $this->createMock(UsageLogger::class),
+            $this->usageLogger,
             new StoreScopeContext($this->singleStoreManager()),
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
             new PageContextHolder(),
@@ -215,6 +219,36 @@ final class ChatServiceTest extends TestCase
             $confirm['tools'][1]['impacts']
         );
         self::assertArrayNotHasKey('caution', $confirm['tools'][2]);
+    }
+
+    #[Test]
+    public function itLogsThePromptCacheFiguresTheProviderReported(): void
+    {
+        $this->responses = [[
+            'content' => 'done',
+            'tool_calls' => [],
+            'usage' => ['input_tokens' => 1000, 'output_tokens' => 50, 'cache_read_tokens' => 800, 'cache_write_tokens' => 100],
+        ]];
+
+        $this->chatService->processMessage([['role' => 'user', 'content' => 'Hi']]);
+
+        self::assertSame(800, $this->usageLogger->rows[0]['cache_read_tokens']);
+        self::assertSame(100, $this->usageLogger->rows[0]['cache_write_tokens']);
+    }
+
+    #[Test]
+    public function itLogsMissingPromptCacheFiguresAsNotReportedInsteadOfZero(): void
+    {
+        $this->responses = [[
+            'content' => 'done',
+            'tool_calls' => [],
+            'usage' => ['input_tokens' => 1000, 'output_tokens' => 50, 'cache_read_tokens' => null, 'cache_write_tokens' => null],
+        ]];
+
+        $this->chatService->processMessage([['role' => 'user', 'content' => 'Hi']]);
+
+        self::assertNull($this->usageLogger->rows[0]['cache_read_tokens']);
+        self::assertNull($this->usageLogger->rows[0]['cache_write_tokens']);
     }
 
     #[Test]

@@ -14,6 +14,7 @@ use Magento\Framework\DB\Sql\Expression;
 use Magento\Framework\Escaper;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
+use MagoAssistant\Mago\Service\Usage\CacheShare;
 
 class ConversationView extends Template
 {
@@ -32,6 +33,7 @@ class ConversationView extends Template
         private readonly TimezoneInterface $timezone,
         private readonly ConfigRepository $configRepository,
         private readonly AdminSession $adminSession,
+        private readonly CacheShare $cacheShare,
         array $data = []
     ) {
         parent::__construct($context, $data);
@@ -127,6 +129,8 @@ class ConversationView extends Template
                 'total_tokens' => new Expression('SUM(total_tokens)'),
                 'input_tokens' => new Expression('SUM(input_tokens)'),
                 'output_tokens' => new Expression('SUM(output_tokens)'),
+                'cache_read_tokens' => new Expression('SUM(cache_read_tokens)'),
+                'cache_reported_input_tokens' => new Expression(CacheShare::REPORTED_INPUT_TOKENS_SUM),
                 'api_calls' => new Expression('COUNT(*)'),
             ])
             ->where('conversation_id = ?', $this->getConversationId());
@@ -209,6 +213,24 @@ class ConversationView extends Template
     public function getAssistantName(): string
     {
         return $this->configRepository->getAssistantName();
+    }
+
+    public function getCacheShare(): string
+    {
+        $usage = $this->getUsageData();
+
+        return $this->cacheShare->format(
+            $usage['cache_read_tokens'] ?? null,
+            $usage['cache_reported_input_tokens'] ?? null
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $call Row from mago_usage_log
+     */
+    public function formatCallCacheShare(array $call): string
+    {
+        return $this->cacheShare->format($call['cache_read_tokens'] ?? null, $call['input_tokens'] ?? null);
     }
 
     public function getEstimatedCost(): string

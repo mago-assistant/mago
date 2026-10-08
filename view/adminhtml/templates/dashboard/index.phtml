@@ -15,6 +15,7 @@ $accentRgb = "$ar,$ag,$ab";
 
 $stats = $block->getStats();
 $todayStats = $stats['today'];
+$todayCacheShare = $block->formatCacheShare($todayStats);
 $userStats = $block->getUserStats();
 $skillStats = $block->getSkillStats();
 $dailyTrend = $block->getDailyTrend();
@@ -34,7 +35,7 @@ $dashboardUrl = $block->getUrl('mago/statistics/index');
     .mago-period-btn.active, .mago-period-btn:hover {
         background: <?= /* @noEscape */ $accentColor ?>; color: #fff; border-color: <?= /* @noEscape */ $accentColor ?>;
     }
-    .mago-stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .mago-stat-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
     .mago-stat-card {
         background: #fff; border: 1px solid #e3e3e3; border-radius: 6px; padding: 20px;
         text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
@@ -110,6 +111,10 @@ $dashboardUrl = $block->getUrl('mago/statistics/index');
         <div class="mago-stat-card">
             <div class="mago-stat-card-value"><?= (int)$todayStats['unique_users'] ?></div>
             <div class="mago-stat-card-label"><?= $escaper->escapeHtml(__('Active Users Today')) ?></div>
+        </div>
+        <div class="mago-stat-card">
+            <div class="mago-stat-card-value"><?= $escaper->escapeHtml($todayCacheShare !== '' ? $todayCacheShare : __('n/a')) ?></div>
+            <div class="mago-stat-card-label"><?= $escaper->escapeHtml(__('Cached Today')) ?></div>
         </div>
     </div>
 
