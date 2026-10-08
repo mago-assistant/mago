@@ -28,8 +28,7 @@ jobs:
 
       - name: Install AI base module
         run: |
-          docker exec magento composer config repositories.mage-os-ai-base vcs https://github.com/mage-os-lab/module-ai-base
-          docker exec magento ./retry "composer require --no-update mage-os/module-ai-base:'dev-main as 1.0.0'"
+          docker exec magento ./retry "composer require --no-update mage-os/module-ai-base:'^1.0'"
           docker exec magento ./retry "composer require --no-update symfony/ai-lm-studio-platform:'*'"
 
       - name: Upload module into container
