@@ -53,6 +53,17 @@ class LookupCustomerActionTest extends TestCase
     }
 
     #[Test]
+    public function itSplitsOnCommasAndDropsTheDotAfterAnInitial(): void
+    {
+        $this->lookup('Dekker, H.');
+
+        $payload = $this->onlyCall();
+        self::assertSame('%Dekker%', $payload['searchCriteria[filter_groups][0][filters][0][value]']);
+        self::assertSame('%H%', $payload['searchCriteria[filter_groups][1][filters][0][value]']);
+        self::assertArrayNotHasKey('searchCriteria[filter_groups][2][filters][0][field]', $payload);
+    }
+
+    #[Test]
     public function itSearchesASingleNameInOneCall(): void
     {
         $this->lookup('Vries');

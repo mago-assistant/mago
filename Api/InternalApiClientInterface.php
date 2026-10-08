@@ -62,9 +62,10 @@ interface InternalApiClientInterface
     public function delete(string $endpoint, int $adminUserId, ?string $storeCode = null): array;
 
     /**
-     * Build searchCriteria query params from filter arrays
+     * Build searchCriteria query params from filter arrays. Each entry is one filter group (groups
+     * are ANDed); an entry that is a list of filters ORs them within its group.
      *
-     * @param array<int, array<string, mixed>> $filters [['field' => 'name', 'value' => '%a%', 'condition_type' => 'like']]
+     * @param array<int, array<string, mixed>|list<array<string, mixed>>> $filters [['field' => 'name', 'value' => '%a%', 'condition_type' => 'like']]
      * @param int $pageSize
      * @param int $currentPage
      * @param array<int, array<string, mixed>>|null $sortOrders [['field' => 'created_at', 'direction' => 'DESC']]

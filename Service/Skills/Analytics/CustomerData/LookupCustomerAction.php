@@ -43,8 +43,8 @@ class LookupCustomerAction implements ActionInterface
         return [
             'search' => [
                 'type' => 'string',
-                'description' => 'Customer name, email address or customer id to search for; when the '
-                    . 'administrator gives a customer id, pass just that number. Required by lookup_customer '
+                'description' => 'Customer name, email address or customer id to search for; for an id, pass the '
+                    . 'customer id token as it came back, or the number when the administrator typed one. Required by lookup_customer '
                     . 'and used by no other action, so do not pick lookup_customer when the question '
                     . 'names nobody to search for.',
             ],
@@ -170,7 +170,8 @@ class LookupCustomerAction implements ActionInterface
      * Every word has to match the first, middle or last name: one filter group per word (groups
      * are ANDed) holding one filter per name field (filters in a group are ORed). Matching the
      * whole string against one field at a time never found "Jan Jansen" or "Sanne de Vries"
-     * (issue #257), and this also finds a name typed last name first.
+     * (issue #257), and this also finds a name typed last name first. Commas and the dot after an
+     * initial separate words, so "Dekker, Haimanti" and "H. Dekker" match too.
      *
      * @param string $search
      * @param int $limit
@@ -178,19 +179,24 @@ class LookupCustomerAction implements ActionInterface
      */
     private function nameSearch(string $search, int $limit): array
     {
-        $words = preg_split('/\s+/', trim($search), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $words = array_slice($words, 0, self::MAX_NAME_WORDS);
-        $params = $this->apiClient->buildSearchCriteria([], $limit, 1, self::NEWEST_FIRST);
-        foreach ($words as $group => $word) {
-            foreach (self::NAME_FIELDS as $index => $field) {
-                $prefix = "searchCriteria[filter_groups][$group][filters][$index]";
-                $params[$prefix . '[field]'] = $field;
-                $params[$prefix . '[value]'] = '%' . $this->likeLiteral($word) . '%';
-                $params[$prefix . '[conditionType]'] = 'like';
-            }
-        }
+        $words = preg_split('/[\s,]+/', trim($search), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $words = array_values(array_filter(
+            array_map(static fn (string $word): string => trim($word, '.'), $words),
+            static fn (string $word): bool => $word !== ''
+        ));
+        $groups = array_map(
+            fn (string $word): array => array_map(
+                fn (string $field): array => [
+                    'field' => $field,
+                    'value' => '%' . $this->likeLiteral($word) . '%',
+                    'condition_type' => 'like',
+                ],
+                self::NAME_FIELDS
+            ),
+            array_slice($words, 0, self::MAX_NAME_WORDS)
+        );
 
-        return $params;
+        return $this->apiClient->buildSearchCriteria($groups, $limit, 1, self::NEWEST_FIRST);
     }
 
     /**
