@@ -36,7 +36,11 @@ class CustomerData extends AbstractSkill
 
     protected function getBaseDescription(): string
     {
-        return 'Query customer data: counts, recent signups, top spenders, customer lookup.';
+        return 'Query customer data, read only: counts, recent signups, top spenders, customer lookup. '
+            . 'The assistant cannot create, edit or delete customers or their addresses, since customer '
+            . 'forms hold personal data and are kept out of it. When asked to, say so in your first '
+            . 'reply, before asking for any details, and point the administrator to Customers > All '
+            . 'Customers > Add New Customer.';
     }
 
     protected function getBaseInstructions(): string

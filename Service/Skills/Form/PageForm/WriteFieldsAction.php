@@ -88,7 +88,8 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
             . 'pass entity_type (and entity_id, or an empty entity_id to create a new one) and the '
             . 'browser navigates to that form, the New form for a new entity, and stages the values '
             . 'there. Use this to create a product, category, CMS page or CMS block from the chat. '
-            . 'Does not save the form.';
+            . 'Customers, customer addresses, orders and admin users cannot be created or edited '
+            . 'this way. Does not save the form.';
     }
 
     public function isReadOnly(): bool
@@ -165,6 +166,10 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
      */
     public function findRefusal(array $params): ?array
     {
+        if ($this->isDeniedEntityType($this->entityTypeParam($params))) {
+            return $this->deniedFormResult();
+        }
+
         $pageContext = $this->getPageContext();
         if ($pageContext === null) {
             return $this->findNavigationRefusal($params, $this->routeFor($params) === null);
@@ -237,7 +242,7 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
 
     private function entityTypeParam(array $params): string
     {
-        return trim((string)($params[self::PARAM_ENTITY_TYPE] ?? ''));
+        return strtolower(trim((string)($params[self::PARAM_ENTITY_TYPE] ?? '')));
     }
 
     private function entityIdParam(array $params): string
@@ -295,6 +300,17 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
     private function isDeniedNavigationTarget(string $entityType, string $route): bool
     {
         return $this->formPolicy->isDenied($entityType . '_form', $route);
+    }
+
+    /**
+     * Checked before anything else, whatever form is open: "create a customer" has no New route to
+     * navigate to, so without this it fell through to "no form open" and the model told the
+     * administrator about a technical issue instead of the privacy refusal (issue #256).
+     */
+    private function isDeniedEntityType(string $entityType): bool
+    {
+        return $entityType !== ''
+            && $this->formPolicy->isDenied($entityType . '_form', (string)$this->entityRouteMap->getRoute($entityType));
     }
 
     /**

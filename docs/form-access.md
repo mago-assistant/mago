@@ -199,7 +199,11 @@ namespace (`customer_form`, `customer_address_form`, `sales_order_view`, `sales_
 - `Service/Form/PageContextNormalizer.php` re-applies `FormPolicy` on the server, because a denied
   form's data never being collected in the browser only holds for an unmodified client; a forged
   or tampered request bypasses that entirely.
-- `WriteFieldsAction::isDeniedNavigationTarget()` checks the same `FormPolicy` a third time, against
+- `WriteFieldsAction::isDeniedEntityType()` runs first in `findRefusal()`, whatever form is open: it
+  checks the requested `entity_type` (its `<type>_form` namespace and its edit route) against
+  `FormPolicy`, so "create a customer", which has no New route to navigate to, gets the privacy
+  refusal instead of falling through to "no form open" (issue #256).
+- `WriteFieldsAction::isDeniedNavigationTarget()` checks the same `FormPolicy` again, against
   the *target* of navigate-then-act (below), before a `form_navigate` directive is ever built - the
   one path with no open form's namespace or route to check yet, since the point of navigate-then-act
   is that nothing is open. Without this, an entity type `EntityRouteMap` can reach but `FormPolicy`
