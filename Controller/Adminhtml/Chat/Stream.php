@@ -29,6 +29,7 @@ use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 class Stream extends Action implements HttpPostActionInterface
 {
     use FormKeyJsonValidation;
+    use FinishesStreamedResponse;
     use ReleasesSessionLock;
 
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::assistant_read';
@@ -53,7 +54,7 @@ class Stream extends Action implements HttpPostActionInterface
         parent::__construct($context);
     }
 
-    public function execute(): ResultInterface|HttpResponse
+    public function execute(): ResultInterface
     {
         /** @var HttpResponse $response */
         $response = $this->getResponse();
@@ -264,7 +265,7 @@ class Stream extends Action implements HttpPostActionInterface
      * Answer a slash command: persist the exchange like a normal turn, then stream the reply as one
      * text chunk. The command's tool_status events pass straight through to the panel.
      */
-    private function runCommand(string $message, ?int $conversationId, int $adminUserId, string $adminName): HttpResponse
+    private function runCommand(string $message, ?int $conversationId, int $adminUserId, string $adminName): ResultInterface
     {
         $isNewConversation = $conversationId === null;
         $conversationId = $this->resolveConversation($conversationId, $adminUserId);
@@ -318,7 +319,7 @@ class Stream extends Action implements HttpPostActionInterface
     /**
      * Stream a slash command's reply as one text chunk, store it, and finish the response
      */
-    private function answerCommand(string $content, int $conversationId): HttpResponse
+    private function answerCommand(string $content, int $conversationId): ResultInterface
     {
         $this->sendSse('text', ['text' => $content]);
         $messageId = $this->conversationRepository->addMessage($conversationId, 'assistant', $content);
@@ -338,7 +339,7 @@ class Stream extends Action implements HttpPostActionInterface
      *
      * @param array<int, array{id: string, name: string, input: array<string, mixed>}> $toolCalls
      */
-    private function confirmCommand(array $toolCalls, int $conversationId): HttpResponse
+    private function confirmCommand(array $toolCalls, int $conversationId): ResultInterface
     {
         $adminUserId = (int)($this->_auth->getUser()?->getId() ?? 0);
         $result = $this->chatService->prepareToolConfirmation(
@@ -447,19 +448,5 @@ class Stream extends Action implements HttpPostActionInterface
         }
         echo $payload;
         flush();
-    }
-
-    /**
-     * End the controller after the SSE output, without exit(). The stream is already on the wire and
-     * the headers are sent, so Magento's own send of this (empty) response writes nothing more. Not
-     * calling exit() lets everything above this controller finish normally: the plugins' finally
-     * blocks (tracing spans, for one) and the after-dispatch events.
-     */
-    private function finishResponse(): HttpResponse
-    {
-        /** @var HttpResponse $response */
-        $response = $this->getResponse();
-
-        return $response;
     }
 }

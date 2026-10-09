@@ -24,6 +24,7 @@ use MagoAssistant\Mago\Service\Form\PageContextNormalizer;
 class Confirm extends Action implements HttpPostActionInterface
 {
     use FormKeyJsonValidation;
+    use FinishesStreamedResponse;
     use ReleasesSessionLock;
 
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::assistant_write';
@@ -43,7 +44,7 @@ class Confirm extends Action implements HttpPostActionInterface
         parent::__construct($context);
     }
 
-    public function execute(): ResultInterface|HttpResponse
+    public function execute(): ResultInterface
     {
         /** @var HttpResponse $response */
         $response = $this->getResponse();
@@ -280,19 +281,5 @@ class Confirm extends Action implements HttpPostActionInterface
         }
         echo $payload;
         flush();
-    }
-
-    /**
-     * End the controller after the SSE output, without exit(). The stream is already on the wire and
-     * the headers are sent, so Magento's own send of this (empty) response writes nothing more. Not
-     * calling exit() lets everything above this controller finish normally: the plugins' finally
-     * blocks (tracing spans, for one) and the after-dispatch events.
-     */
-    private function finishResponse(): HttpResponse
-    {
-        /** @var HttpResponse $response */
-        $response = $this->getResponse();
-
-        return $response;
     }
 }
