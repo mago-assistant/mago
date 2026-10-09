@@ -93,7 +93,7 @@ class Stream extends Action implements HttpPostActionInterface
             if (!$message) {
                 $this->sendSse('error', ['error' => 'Message is required']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             $user = $this->_auth->getUser();
@@ -101,13 +101,13 @@ class Stream extends Action implements HttpPostActionInterface
                 $this->debugLogger->addLog('Stream', 'No admin user in session');
                 $this->sendSse('error', ['error' => 'Admin user session not found']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             if (!$this->configRepository->isEnabled()) {
                 $this->sendSse('error', ['error' => 'The assistant is currently disabled. Enable it in Stores > Configuration > Mago Assistant.']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             $adminUserId = (int)$user->getId();
@@ -115,7 +115,7 @@ class Stream extends Action implements HttpPostActionInterface
 
             // Slash commands run against Magento directly and need no AI provider
             if ($this->commandRunner->isCommand($message)) {
-                $this->runCommand($message, $conversationId, $adminUserId, $adminName);
+                return $this->runCommand($message, $conversationId, $adminUserId, $adminName);
             }
 
             // Before the conversation row exists: an unconfigured store would otherwise persist the
@@ -125,7 +125,7 @@ class Stream extends Action implements HttpPostActionInterface
             } catch (\Throwable $e) {
                 $this->sendSse('error', ['error' => $this->errorReporter->report('Stream Controller', $e)]);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             $isNewConversation = $conversationId === null;
@@ -257,14 +257,14 @@ class Stream extends Action implements HttpPostActionInterface
             $this->sendSse('done', [], true);
         }
 
-        $this->terminateResponse();
+        return $this->finishResponse();
     }
 
     /**
      * Answer a slash command: persist the exchange like a normal turn, then stream the reply as one
      * text chunk. The command's tool_status events pass straight through to the panel.
      */
-    private function runCommand(string $message, ?int $conversationId, int $adminUserId, string $adminName): never
+    private function runCommand(string $message, ?int $conversationId, int $adminUserId, string $adminName): HttpResponse
     {
         $isNewConversation = $conversationId === null;
         $conversationId = $this->resolveConversation($conversationId, $adminUserId);
@@ -293,9 +293,9 @@ class Stream extends Action implements HttpPostActionInterface
         if ($confirmableToolCalls !== []) {
             $refusal = $this->commandRunner->findRefusal($confirmableToolCalls, $adminUserId);
             if ($refusal !== null) {
-                $this->answerCommand($refusal, $conversationId);
+                return $this->answerCommand($refusal, $conversationId);
             }
-            $this->confirmCommand($confirmableToolCalls, $conversationId);
+            return $this->confirmCommand($confirmableToolCalls, $conversationId);
         }
 
         $content = $this->commandRunner->run(
@@ -312,13 +312,13 @@ class Stream extends Action implements HttpPostActionInterface
             ]);
         }
 
-        $this->answerCommand($content, $conversationId);
+        return $this->answerCommand($content, $conversationId);
     }
 
     /**
-     * Stream a slash command's reply as one text chunk, store it, and stop
+     * Stream a slash command's reply as one text chunk, store it, and finish the response
      */
-    private function answerCommand(string $content, int $conversationId): never
+    private function answerCommand(string $content, int $conversationId): HttpResponse
     {
         $this->sendSse('text', ['text' => $content]);
         $messageId = $this->conversationRepository->addMessage($conversationId, 'assistant', $content);
@@ -327,7 +327,7 @@ class Stream extends Action implements HttpPostActionInterface
             'conversation_id' => $conversationId,
             'pending_confirmation' => false,
         ], true);
-        $this->terminateResponse();
+        return $this->finishResponse();
     }
 
     /**
@@ -338,7 +338,7 @@ class Stream extends Action implements HttpPostActionInterface
      *
      * @param array<int, array{id: string, name: string, input: array<string, mixed>}> $toolCalls
      */
-    private function confirmCommand(array $toolCalls, int $conversationId): never
+    private function confirmCommand(array $toolCalls, int $conversationId): HttpResponse
     {
         $adminUserId = (int)($this->_auth->getUser()?->getId() ?? 0);
         $result = $this->chatService->prepareToolConfirmation(
@@ -362,7 +362,7 @@ class Stream extends Action implements HttpPostActionInterface
             'conversation_id' => $conversationId,
             'pending_confirmation' => true,
         ], true);
-        $this->terminateResponse();
+        return $this->finishResponse();
     }
 
     /**
@@ -450,14 +450,16 @@ class Stream extends Action implements HttpPostActionInterface
     }
 
     /**
-     * Terminate response to prevent Magento from sending its own HTML response.
-     * SSE requires direct output, Magento's response object would override our headers.
-     *
-     * @SuppressWarnings("PHPMD.ExitExpression")
+     * End the controller after the SSE output, without exit(). The stream is already on the wire and
+     * the headers are sent, so Magento's own send of this (empty) response writes nothing more. Not
+     * calling exit() lets everything above this controller finish normally: the plugins' finally
+     * blocks (tracing spans, for one) and the after-dispatch events.
      */
-    private function terminateResponse(): never
+    private function finishResponse(): HttpResponse
     {
-        // phpcs:ignore Magento2.Security.LanguageConstruct.ExitUsage
-        exit(0);
+        /** @var HttpResponse $response */
+        $response = $this->getResponse();
+
+        return $response;
     }
 }

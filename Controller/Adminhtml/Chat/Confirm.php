@@ -71,7 +71,7 @@ class Confirm extends Action implements HttpPostActionInterface
             if (!$messageId) {
                 $this->sendSse('error', ['error' => 'message_id is required']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             $user = $this->_auth->getUser();
@@ -79,7 +79,7 @@ class Confirm extends Action implements HttpPostActionInterface
             if (!$adminUserId) {
                 $this->sendSse('error', ['error' => 'Not authorized']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             // Claimed before anything runs, so a second click or a parallel REST confirm gets an
@@ -232,7 +232,7 @@ class Confirm extends Action implements HttpPostActionInterface
             $this->sendSse('done', [], true);
         }
 
-        $this->terminateResponse();
+        return $this->finishResponse();
     }
 
     /**
@@ -283,10 +283,16 @@ class Confirm extends Action implements HttpPostActionInterface
     }
 
     /**
-     * @SuppressWarnings("PHPMD.ExitExpression")
+     * End the controller after the SSE output, without exit(). The stream is already on the wire and
+     * the headers are sent, so Magento's own send of this (empty) response writes nothing more. Not
+     * calling exit() lets everything above this controller finish normally: the plugins' finally
+     * blocks (tracing spans, for one) and the after-dispatch events.
      */
-    private function terminateResponse(): never
+    private function finishResponse(): HttpResponse
     {
-        exit(0);
+        /** @var HttpResponse $response */
+        $response = $this->getResponse();
+
+        return $response;
     }
 }
