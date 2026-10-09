@@ -16,9 +16,9 @@ use MagoAssistant\Mago\Api\Tool\ToolInterface;
 use MagoAssistant\Mago\Api\Tool\UpfrontGuidanceToolInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Logger\DebugLogger;
+use MagoAssistant\Mago\Model\Form\PageContext;
 use MagoAssistant\Mago\Service\Acl\ToolAccess;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
-use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
@@ -52,7 +52,6 @@ class ChatService implements ChatServiceInterface
         private readonly UsageLogger $usageLogger,
         private readonly StoreScopeContext $storeScopeContext,
         private readonly AnswerWidgets $answerWidgets,
-        private readonly PageContextHolder $pageContextHolder,
         private readonly PrivacyService $privacyService,
         private readonly ToolAccess $toolAccess
     ) {
@@ -166,13 +165,16 @@ class ChatService implements ChatServiceInterface
                 $messages[] = [
                     'role' => 'tool',
                     'tool_call_id' => $toolCall['id'],
-                    'content' => json_encode(
-                        $this->withoutClientDirective($result),
-                        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+                    'content' => $this->withToolInstructions(
+                        (string)json_encode(
+                            $this->withoutClientDirective($result),
+                            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+                        ),
+                        $toolCall,
+                        $adminUserId,
+                        $instructedTools
                     ),
                 ];
-
-                $this->injectToolInstructions($toolCall, $adminUserId, $messages, $instructedTools);
             }
         }
 
@@ -348,13 +350,16 @@ class ChatService implements ChatServiceInterface
                 $messages[] = [
                     'role' => 'tool',
                     'tool_call_id' => $toolCall['id'],
-                    'content' => json_encode(
-                        $this->withoutClientDirective($result),
-                        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+                    'content' => $this->withToolInstructions(
+                        (string)json_encode(
+                            $this->withoutClientDirective($result),
+                            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+                        ),
+                        $toolCall,
+                        $adminUserId,
+                        $instructedTools
                     ),
                 ];
-
-                $this->injectToolInstructions($toolCall, $adminUserId, $messages, $instructedTools);
             }
         }
 
@@ -1003,12 +1008,41 @@ class ChatService implements ChatServiceInterface
     }
 
     /**
-     * Inject tool instructions once per tool per turn (JIT).
+     * Append a tool's usage instructions to its result, once per tool per turn (JIT).
      * Skipped when the call was denied: the tool did not run, so its usage
      * instructions would only add prompt text the model cannot act on.
      *
+     * They travel with the tool result, not as a system message. The provider bridges fold every
+     * system message into the one system block at the very top of the request, so a system message
+     * added after the first tool call rewrote the start of the prompt and made a provider that
+     * caches a prompt prefix throw away everything it had cached for the turn. Appended to the
+     * result, the messages before it stay exactly as they were.
+     *
+     * @param string $content The encoded tool result
      * @param array<string, mixed> $toolCall
      * @param int|null $adminUserId
+     * @param array<string, bool> $instructedTools
+     */
+    private function withToolInstructions(
+        string $content,
+        array $toolCall,
+        ?int $adminUserId,
+        array &$instructedTools
+    ): string {
+        $instructions = $this->takeToolInstructions($toolCall, $adminUserId, $instructedTools);
+        if ($instructions === null) {
+            return $content;
+        }
+
+        return $content . "\n\n[Instructions for {$toolCall['name']}]\n{$instructions}";
+    }
+
+    /**
+     * Add a tool's instructions as a system message. Only for the two places with no tool result
+     * to carry them: a write proposed before its tool was instructed (the proposal is dropped), and
+     * the follow-up to writes that ran outside this loop.
+     *
+     * @param array<string, mixed> $toolCall
      * @param array<int, array<string, mixed>> $messages
      * @param array<string, bool> $instructedTools
      */
@@ -1018,34 +1052,46 @@ class ChatService implements ChatServiceInterface
         array &$messages,
         array &$instructedTools
     ): void {
-        $toolName = (string)$toolCall['name'];
-        if (isset($instructedTools[$toolName])) {
-            return;
+        $instructions = $this->takeToolInstructions($toolCall, $adminUserId, $instructedTools);
+        if ($instructions !== null) {
+            $messages[] = [
+                'role' => 'system',
+                'content' => "[Instructions for {$toolCall['name']}]\n{$instructions}",
+            ];
         }
+    }
 
-        if ($this->isToolCallDenied($toolCall, $adminUserId)) {
-            return;
+    /**
+     * The instructions to give for this call, or null when there are none or they were given already
+     *
+     * @param array<string, mixed> $toolCall
+     * @param array<string, bool> $instructedTools
+     */
+    private function takeToolInstructions(array $toolCall, ?int $adminUserId, array &$instructedTools): ?string
+    {
+        $toolName = (string)$toolCall['name'];
+        if (isset($instructedTools[$toolName]) || $this->isToolCallDenied($toolCall, $adminUserId)) {
+            return null;
         }
 
         $tool = $this->toolRegistry->getTool($toolName, $adminUserId);
         if ($tool === null) {
-            return;
+            return null;
         }
 
+        $instructedTools[$toolName] = true;
         $instructions = $tool->getInstructions();
-        if ($instructions && $this->configRepository->isAnswerWidgetsEnabled()) {
+        if (!$instructions) {
+            return null;
+        }
+        if ($this->configRepository->isAnswerWidgetsEnabled()) {
             // A tool's instructions describe its results in words; without this line the model
             // tends to follow that wording and answer with a markdown list instead of a widget.
             $instructions .= "\n" . $this->answerWidgets->toToolReminder();
         }
-        if ($instructions) {
-            $messages[] = [
-                'role' => 'system',
-                'content' => "[Instructions for {$toolName}]\n{$instructions}",
-            ];
-            $this->debugLogger->addLog('JIT Instructions', ['tool' => $toolName]);
-        }
-        $instructedTools[$toolName] = true;
+        $this->debugLogger->addLog('JIT Instructions', ['tool' => $toolName]);
+
+        return $instructions;
     }
 
     /**
@@ -1219,21 +1265,22 @@ class ChatService implements ChatServiceInterface
     }
 
     /**
-     * Put the configured system prompt first and make sure the store scope summary and the answer
-     * widget guide are in it.
+     * Put the configured system prompt first and make sure the store scope summary, the answer
+     * widget guide and the page context guide are in it.
      *
      * The scope summary is rebuilt on every request, so the assistant always checks a request
      * against the current website / store view layout before it decides whether an action belongs
      * on the default scope or on a specific website or store view. The widget guide tells it which
-     * ```mago blocks the panel can render; it is skipped when answer widgets are switched off.
+     * ```mago blocks the panel can render; it is skipped when answer widgets are switched off. The
+     * page context guide is constant text: which page is open travels on the user message instead.
      */
     private function prependSystemMessage(array $messages, ?int $adminUserId = null): array
     {
         $systemPrompt = $this->configRepository->getSystemPrompt();
-        $pageContextLine = $this->pageContextHolder->get()?->toPromptLine();
         $firstSystemIndex = null;
         $hasStoreScope = false;
         $hasWidgetGuide = false;
+        $hasPageGuide = false;
         $hasToolGuidance = false;
         foreach ($messages as $index => $msg) {
             if (($msg['role'] ?? '') !== 'system') {
@@ -1247,17 +1294,27 @@ class ChatService implements ChatServiceInterface
             if (str_contains($content, AnswerWidgets::MARKER)) {
                 $hasWidgetGuide = true;
             }
+            if (str_contains($content, PageContext::GUIDANCE_MARKER)) {
+                $hasPageGuide = true;
+            }
             if (str_contains($content, self::TOOL_GUIDANCE_MARKER)) {
                 $hasToolGuidance = true;
             }
         }
 
+        // Every section below depends on configuration only, never on the page or the request, so
+        // the system prompt is the same text on every request of a conversation and a provider
+        // that caches a prompt prefix can reuse it. What does vary with the page travels as a note
+        // on the user message that was sent from it (see NavigationNoteInjector).
         $sections = [];
         if (!$hasStoreScope) {
             $sections[] = $this->getStoreScopeSection();
         }
         if (!$hasWidgetGuide && $this->configRepository->isAnswerWidgetsEnabled()) {
             $sections[] = $this->answerWidgets->toPromptSection();
+        }
+        if (!$hasPageGuide) {
+            $sections[] = PageContext::promptGuidance();
         }
         if (!$hasToolGuidance) {
             $sections[] = $this->getToolGuidanceSection($adminUserId);
@@ -1266,20 +1323,12 @@ class ChatService implements ChatServiceInterface
 
         if ($firstSystemIndex === null) {
             $content = $systemPrompt;
-            if ($pageContextLine !== null) {
-                $content .= "\n\n" . $pageContextLine;
-            }
             if ($extra !== '') {
                 $content .= "\n\n" . $extra;
             }
             array_unshift($messages, ['role' => 'system', 'content' => $content]);
 
             return $messages;
-        }
-
-        if ($pageContextLine !== null) {
-            $messages[$firstSystemIndex]['content'] = rtrim((string)$messages[$firstSystemIndex]['content'])
-                . "\n\n" . $pageContextLine;
         }
 
         if ($extra !== '') {

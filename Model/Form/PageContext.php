@@ -30,53 +30,45 @@ class PageContext
     }
 
     /**
-     * A short, value-free line for the system prompt: page label, route, entity type, entity id,
-     * store scope and field count. Field values and labels are deliberately left out; they cost
-     * tokens and belong in a dedicated read tool rather than every turn of every conversation.
-     *
-     * A truncated list says so. Without it the count reads as the whole form, and a field missing
-     * only because the list was cut is indistinguishable from one the form does not have - which
-     * invites telling the administrator a field does not exist when it is simply not in view.
+     * Marker the guidance section carries, so a caller-supplied system message that already holds
+     * it is not given a second copy.
      */
-    public function toPromptLine(): string
-    {
-        return sprintf(
-            'The administrator is currently on the %s page (%s), viewing %s%s, with %d field(s) visible.%s',
-            $this->label(),
-            $this->route,
-            $this->entityDescriptor(),
-            $this->storeDescriptor(),
-            $this->fieldCount,
-            $this->truncationWarning() . $this->toolPreference()
-        );
-    }
+    public const GUIDANCE_MARKER = '[Page context guide]';
 
     /**
-     * Which tool to reach for while a form is open.
+     * The standing instructions for working with the page the administrator has open.
      *
-     * Several skills can answer "update the description": one drafts copy, another puts a value on
-     * the page. Without this the model picks by name and hands the administrator prose about a form
-     * it is already looking at, having changed nothing. Only page_form stages a value, so while a
-     * form is open it is the one that finishes the job - drafting first with another tool is fine,
-     * staging the result through page_form is what makes it land.
+     * Deliberately constant: nothing here depends on the page, the entity, the store or the number
+     * of fields. It sits in the system prompt, ahead of the whole conversation, so a provider that
+     * caches a prompt prefix can reuse it on every request. Anything that does vary with the page
+     * (which page, which entity) travels as a note on the user message that was sent from it, see
+     * {@see \MagoAssistant\Mago\Service\Conversation\NavigationNoteInjector}, and the field
+     * count and truncation come from the page_form tool rather than from the prompt.
+     *
+     * Which tool to reach for while a form is open matters. Several skills can answer "update the
+     * description": one drafts copy, another puts a value on the page. Without this the model picks
+     * by name and hands the administrator prose about a form it is already looking at, having
+     * changed nothing. Only page_form stages a value, so while a form is open it is the one that
+     * finishes the job - drafting first with another tool is fine, staging the result through
+     * page_form is what makes it land.
+     *
+     * A truncated list gets its own sentence. Without it a field missing only because the list was
+     * cut is indistinguishable from one the form does not have, which invites telling the
+     * administrator a field does not exist when it is simply not in view.
      */
-    private function toolPreference(): string
+    public static function promptGuidance(): string
     {
-        return ' Because a form is open, prefer page_form for anything that is one of its fields:'
-            . ' it is the only tool that puts a value on the page. A tool that just returns text'
-            . ' leaves the form untouched, so draft with it if you like, then stage the result'
-            . ' with page_form rather than replying with the text alone.';
-    }
-
-    private function truncationWarning(): string
-    {
-        if (!$this->isFieldListTruncated) {
-            return '';
-        }
-
-        return ' That list was cut short, so the form has fields you cannot see: do not tell the'
-            . ' administrator a field is missing, say you cannot see all of them and ask which one'
-            . ' they mean.';
+        return self::GUIDANCE_MARKER . "\n"
+            . 'Some user messages start with a note in square brackets, such as "[Page context: ...]" or'
+            . ' "[Context update: ...]", saying which admin page the administrator is on. A note appears'
+            . ' only when the page changes, so the latest note describes the page that is open now.'
+            . ' While a form is open, prefer page_form for anything that is one of its fields: it is the'
+            . ' only tool that puts a value on the page. A tool that just returns text leaves the form'
+            . ' untouched, so draft with it if you like, then stage the result with page_form rather than'
+            . ' replying with the text alone. Use page_form to see the current fields before describing or'
+            . ' changing the form. If it reports that the field list was truncated, the form has fields you'
+            . ' cannot see: do not tell the administrator a field is missing, say you cannot see all of them'
+            . ' and ask which one they mean.';
     }
 
     public function toLocation(): PageLocation
@@ -89,20 +81,5 @@ class PageContext
             isNewEntity: $this->isNewEntity,
             storeId: $this->storeId
         );
-    }
-
-    private function label(): string
-    {
-        return ucwords(str_replace('_', ' ', $this->entityType));
-    }
-
-    private function entityDescriptor(): string
-    {
-        return $this->toLocation()->entityDescriptor();
-    }
-
-    private function storeDescriptor(): string
-    {
-        return $this->toLocation()->storeDescriptor();
     }
 }
