@@ -15,6 +15,7 @@ use Magento\Framework\Escaper;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Service\Usage\CacheShare;
+use MagoAssistant\Mago\Service\Usage\CostEstimator;
 use MagoAssistant\Mago\Service\Url\AdminPath;
 
 class ConversationView extends Template
@@ -36,6 +37,7 @@ class ConversationView extends Template
         private readonly AdminSession $adminSession,
         private readonly CacheShare $cacheShare,
         private readonly AdminPath $adminPath,
+        private readonly CostEstimator $costEstimator,
         array $data = []
     ) {
         parent::__construct($context, $data);
@@ -248,7 +250,7 @@ class ConversationView extends Template
         if ($input === 0 && $output === 0) {
             return '';
         }
-        $cost = ($input / 1000000) * 3.0 + ($output / 1000000) * 15.0;
+        $cost = $this->costEstimator->estimateRows($this->getApiCalls());
         return '$' . number_format($cost, 4);
     }
 
