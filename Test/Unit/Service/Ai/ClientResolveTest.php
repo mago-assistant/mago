@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Ai;
 
 use MageOS\AiBase\Api\AiClientFactoryInterface;
+use MageOS\AiBase\Api\AiClientInterface;
 use MageOS\AiBase\Exceptions\AiRequestNotSentException;
 use Magento\Framework\Exception\LocalizedException;
 use MagoAssistant\Mago\Service\Ai\AiNotConfiguredException;
@@ -55,6 +56,18 @@ final class ClientResolveTest extends TestCase
         $factory->method('create')->willThrowException(new AiRequestNotSentException(__('Request to %1 failed', 'x')));
 
         $this->expectException(AiRequestNotSentException::class);
+
+        $this->client($factory)->resolve();
+    }
+
+    #[Test]
+    public function callsAreAttributedToThisModuleInAiBaseUsageTracking(): void
+    {
+        $factory = $this->createMock(AiClientFactoryInterface::class);
+        $factory->expects($this->once())
+            ->method('create')
+            ->with(null, 'mago_assistant')
+            ->willReturn($this->createStub(AiClientInterface::class));
 
         $this->client($factory)->resolve();
     }
