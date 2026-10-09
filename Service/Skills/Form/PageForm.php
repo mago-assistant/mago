@@ -30,6 +30,8 @@ class PageForm extends AbstractSkill
             . 'unsaved edits the administrator has made, and stage new field values for the '
             . 'administrator to confirm. Reading only sees the page on screen right now; writing can '
             . 'also send the browser to another entity\'s form, or to the New form of a product, '
-            . 'category, CMS page or CMS block to create one, and stage the values there.';
+            . 'category, CMS page or CMS block to create one, and stage the values there. Customer, '
+            . 'customer address, order and admin user forms hold personal data and are off limits: '
+            . 'this cannot create or edit a customer, order or admin user.';
     }
 }

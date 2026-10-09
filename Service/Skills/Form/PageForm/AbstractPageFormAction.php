@@ -91,7 +91,9 @@ abstract class AbstractPageFormAction implements ActionInterface
             'denied' => true,
             'message' => 'This admin form cannot be read or written to by the assistant because it '
                 . 'may contain personal data (customer, order or admin user details). Ask about '
-                . 'customers through customer_data instead.',
+                . 'customers through customer_data instead. The assistant cannot create or edit a '
+                . 'customer, order or admin user: tell the administrator so and point them to that '
+                . 'page in the admin, do not call it a technical issue.',
         ];
     }
 }
