@@ -17,7 +17,7 @@ use Magento\Framework\Controller\ResultInterface;
  * exit() lets everything above the controller finish normally (plugin finally blocks, tracing
  * spans, after-dispatch events).
  */
-final class StreamSent implements ResultInterface
+class StreamSent implements ResultInterface
 {
     /**
      * @param int $httpCode
