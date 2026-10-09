@@ -24,6 +24,7 @@ use MagoAssistant\Mago\Service\Form\PageContextNormalizer;
 class Confirm extends Action implements HttpPostActionInterface
 {
     use FormKeyJsonValidation;
+    use FinishesStreamedResponse;
     use ReleasesSessionLock;
 
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::assistant_write';
@@ -43,7 +44,7 @@ class Confirm extends Action implements HttpPostActionInterface
         parent::__construct($context);
     }
 
-    public function execute(): ResultInterface|HttpResponse
+    public function execute(): ResultInterface
     {
         /** @var HttpResponse $response */
         $response = $this->getResponse();
@@ -71,7 +72,7 @@ class Confirm extends Action implements HttpPostActionInterface
             if (!$messageId) {
                 $this->sendSse('error', ['error' => 'message_id is required']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             $user = $this->_auth->getUser();
@@ -79,7 +80,7 @@ class Confirm extends Action implements HttpPostActionInterface
             if (!$adminUserId) {
                 $this->sendSse('error', ['error' => 'Not authorized']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             // Claimed before anything runs, so a second click or a parallel REST confirm gets an
@@ -232,7 +233,7 @@ class Confirm extends Action implements HttpPostActionInterface
             $this->sendSse('done', [], true);
         }
 
-        $this->terminateResponse();
+        return $this->finishResponse();
     }
 
     /**
@@ -280,13 +281,5 @@ class Confirm extends Action implements HttpPostActionInterface
         }
         echo $payload;
         flush();
-    }
-
-    /**
-     * @SuppressWarnings("PHPMD.ExitExpression")
-     */
-    private function terminateResponse(): never
-    {
-        exit(0);
     }
 }
