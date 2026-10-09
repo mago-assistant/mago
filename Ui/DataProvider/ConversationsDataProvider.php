@@ -16,6 +16,7 @@ use Magento\Framework\Api\Search\DocumentFactory;
 use Magento\Framework\Api\FilterBuilder;
 use Magento\Framework\Api\AttributeValueFactory;
 use Magento\Framework\App\RequestInterface;
+use MagoAssistant\Mago\Service\Usage\CostEstimator;
 
 class ConversationsDataProvider extends DataProvider
 {
@@ -31,6 +32,7 @@ class ConversationsDataProvider extends DataProvider
         private readonly SearchResultFactory $searchResultFactory,
         private readonly DocumentFactory $documentFactory,
         private readonly AttributeValueFactory $attributeValueFactory,
+        private readonly CostEstimator $costEstimator,
         array $meta = [],
         array $data = []
     ) {
@@ -79,16 +81,13 @@ class ConversationsDataProvider extends DataProvider
                 'model' => new \Zend_Db_Expr(
                     '(SELECT MAX(model) FROM ' . $usageTable . ' WHERE conversation_id = c.entity_id)'
                 ),
-                'estimated_cost' => new \Zend_Db_Expr(
-                    '(SELECT ROUND(COALESCE(SUM(input_tokens), 0) / 1000000 * 3.0 + COALESCE(SUM(output_tokens), 0) / 1000000 * 15.0, 4) FROM ' . $usageTable . ' WHERE conversation_id = c.entity_id)'
-                ),
                 'skills_used' => new \Zend_Db_Expr(
                     '(SELECT GROUP_CONCAT(DISTINCT skill_names) FROM ' . $usageTable . ' WHERE conversation_id = c.entity_id AND skill_names IS NOT NULL AND skill_names != \'\')'
                 ),
             ])
             ->order('c.updated_at DESC');
 
-        $rows = $connection->fetchAll($select);
+        $rows = $this->withEstimatedCosts($connection->fetchAll($select));
 
         $documents = [];
         foreach ($rows as $row) {
@@ -145,20 +144,59 @@ class ConversationsDataProvider extends DataProvider
                 'model' => new \Zend_Db_Expr(
                     '(SELECT MAX(model) FROM ' . $usageTable . ' WHERE conversation_id = c.entity_id)'
                 ),
-                'estimated_cost' => new \Zend_Db_Expr(
-                    '(SELECT ROUND(COALESCE(SUM(input_tokens), 0) / 1000000 * 3.0 + COALESCE(SUM(output_tokens), 0) / 1000000 * 15.0, 4) FROM ' . $usageTable . ' WHERE conversation_id = c.entity_id)'
-                ),
                 'skills_used' => new \Zend_Db_Expr(
                     '(SELECT GROUP_CONCAT(DISTINCT skill_names) FROM ' . $usageTable . ' WHERE conversation_id = c.entity_id AND skill_names IS NOT NULL AND skill_names != \'\')'
                 ),
             ])
             ->order('c.updated_at DESC');
 
-        $rows = $connection->fetchAll($select);
+        $rows = $this->withEstimatedCosts($connection->fetchAll($select));
 
         return [
             'totalRecords' => count($rows),
             'items' => $rows,
         ];
+    }
+
+    /**
+     * Add the cache-aware cost estimate to each conversation row.
+     *
+     * The estimate needs the token sums per model, because every model has its own prices, so it is
+     * worked out here and not in the SQL.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function withEstimatedCosts(array $rows): array
+    {
+        if ($rows === []) {
+            return $rows;
+        }
+
+        $connection = $this->resourceConnection->getConnection();
+        $select = $connection->select()
+            ->from($this->resourceConnection->getTableName('mago_usage_log'), [
+                'conversation_id',
+                'model',
+                'input_tokens' => new \Zend_Db_Expr('SUM(input_tokens)'),
+                'output_tokens' => new \Zend_Db_Expr('SUM(output_tokens)'),
+                'cache_read_tokens' => new \Zend_Db_Expr('SUM(cache_read_tokens)'),
+                'cache_write_tokens' => new \Zend_Db_Expr('SUM(cache_write_tokens)'),
+            ])
+            ->where('conversation_id IN (?)', array_column($rows, 'entity_id'))
+            ->group(['conversation_id', 'model']);
+
+        $sumsByConversation = [];
+        foreach ($connection->fetchAll($select) as $sums) {
+            $sumsByConversation[(int)$sums['conversation_id']][] = $sums;
+        }
+        foreach ($rows as &$row) {
+            $row['estimated_cost'] = $this->costEstimator->estimateRows(
+                $sumsByConversation[(int)$row['entity_id']] ?? []
+            );
+        }
+        unset($row);
+
+        return $rows;
     }
 }

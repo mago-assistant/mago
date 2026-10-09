@@ -92,6 +92,7 @@ class Dashboard extends Template
 
     public function formatCost(float $cost): string
     {
-        return '$' . number_format($cost, 2);
+        // Cache-aware costs of a few calls are fractions of a cent; two decimals would show $0.00
+        return '$' . number_format($cost, $cost > 0 && $cost < 0.01 ? 4 : 2);
     }
 }
