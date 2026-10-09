@@ -11,13 +11,15 @@ use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 
 class RecentSignupsAction implements ActionInterface
 {
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
         private readonly PeriodParser $periodParser,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -130,7 +132,7 @@ class RecentSignupsAction implements ActionInterface
                 'country' => $address['country_id'] ?? null,
                 'city' => $address['city'] ?? null,
                 'group_id' => (int)($customer['group_id'] ?? 0),
-                'registered' => $customer['created_at'] ?? '',
+                'registered' => $this->storeTime->toLocal((string)($customer['created_at'] ?? '')),
                 'store_id' => (int)($customer['store_id'] ?? 0),
                 'admin_url' => $this->secureAdminUrl->getUrl('customer/index/edit', ['id' => $customerId]),
             ];

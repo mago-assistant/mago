@@ -10,6 +10,7 @@ use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 
 class LookupCustomerAction implements ActionInterface
 {
@@ -19,7 +20,8 @@ class LookupCustomerAction implements ActionInterface
 
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -136,7 +138,7 @@ class LookupCustomerAction implements ActionInterface
                 'country' => $address['country_id'] ?? null,
                 'city' => $address['city'] ?? null,
                 'telephone' => $address['telephone'] ?? null,
-                'registered' => $customer['created_at'] ?? '',
+                'registered' => $this->storeTime->toLocal((string)($customer['created_at'] ?? '')),
                 'admin_url' => $this->secureAdminUrl->getUrl('customer/index/edit', ['id' => $customerId]),
             ];
         }
