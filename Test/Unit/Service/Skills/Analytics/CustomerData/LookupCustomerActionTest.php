@@ -6,7 +6,9 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Analytics\CustomerData;
 
+use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use MagoAssistant\Mago\Service\Skills\Analytics\CustomerData\LookupCustomerAction;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
 use PHPUnit\Framework\Attributes\Test;
@@ -124,7 +126,11 @@ class LookupCustomerActionTest extends TestCase
         $adminUrl = $this->createStub(SecureAdminUrl::class);
         $adminUrl->method('getUrl')->willReturn('http://example.test/admin/customer/52');
 
-        return (new LookupCustomerAction($this->apiClient, $adminUrl))
+        return (new LookupCustomerAction(
+            $this->apiClient,
+            $adminUrl,
+            new StoreTime($this->createStub(TimezoneInterface::class))
+        ))
             ->execute(['search' => $search], self::ADMIN_USER_ID);
     }
 
