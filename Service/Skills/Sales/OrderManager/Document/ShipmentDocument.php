@@ -13,6 +13,7 @@ use Magento\Sales\Model\ResourceModel\Order\Shipment\CollectionFactory as Shipme
 use Magento\Sales\Model\ResourceModel\Order\Shipment\Item\CollectionFactory as ItemCollectionFactory;
 use Magento\Sales\Model\ResourceModel\Order\Shipment\Track\CollectionFactory as TrackCollectionFactory;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 
 class ShipmentDocument extends AbstractDocument
 {
@@ -32,7 +33,8 @@ class ShipmentDocument extends AbstractDocument
         private readonly ShipmentCollectionFactory $shipmentCollectionFactory,
         private readonly ItemCollectionFactory $itemCollectionFactory,
         private readonly TrackCollectionFactory $trackCollectionFactory,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -117,7 +119,7 @@ class ShipmentDocument extends AbstractDocument
 
             $documents[] = [
                 'number' => $document['increment_id'] ?? '',
-                'date' => $document['created_at'] ?? '',
+                'date' => $this->storeTime->toLocal((string)($document['created_at'] ?? '')),
                 'order_id' => (int)($document['order_id'] ?? 0),
                 'qty' => (float)($document['total_qty'] ?? 0),
                 'tracking' => $trackNumbers,

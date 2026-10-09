@@ -13,6 +13,7 @@ use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollection
 use Magento\Sales\Model\ResourceModel\Order\Item\CollectionFactory as ItemCollectionFactory;
 use Magento\Sales\Model\ResourceModel\Order\Payment\CollectionFactory as PaymentCollectionFactory;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 
 class OrderDocument extends AbstractDocument
 {
@@ -31,7 +32,8 @@ class OrderDocument extends AbstractDocument
         private readonly ItemCollectionFactory $itemCollectionFactory,
         private readonly PaymentCollectionFactory $paymentCollectionFactory,
         private readonly SecureAdminUrl $secureAdminUrl,
-        private readonly VatNumber $vatNumber
+        private readonly VatNumber $vatNumber,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -155,7 +157,7 @@ class OrderDocument extends AbstractDocument
             $documents[] = [
                 'order_number' => $document['increment_id'] ?? '',
                 'order_id' => $entityId,
-                'date' => $document['created_at'] ?? '',
+                'date' => $this->storeTime->toLocal((string)($document['created_at'] ?? '')),
                 'status' => $document['status'] ?? '',
                 'customer' => $customer,
                 'email' => $document['customer_email'] ?? '',
