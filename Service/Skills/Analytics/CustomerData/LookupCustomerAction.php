@@ -28,7 +28,10 @@ class LookupCustomerAction implements ActionInterface
     {
         return 'Search the customer accounts for a name or email. Registered accounts only: '
             . 'someone who ordered as a guest has no account and will not be found here, so a '
-            . 'question about a named person\'s orders goes to order_manager list_documents with customer instead';
+            . 'question about a named person\'s orders goes to order_manager list_documents with customer instead. '
+            . 'lookup_customer never returns a VAT or KVK number. Asked to check a customer\'s VAT or KVK '
+            . 'number, do not search the customer for it: say right away that you cannot read them from the '
+            . 'customer record for privacy reasons and ask the administrator for the number.';
     }
 
     public function getParameterSchema(): array
