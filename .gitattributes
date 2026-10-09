@@ -1,8 +1,8 @@
 /.github            export-ignore
 /docs/images        export-ignore
 /docs/images/**     export-ignore
-/Test               export-ignore
-/Test/**            export-ignore
+/Test/End-2-end     export-ignore
+/Test/End-2-end/**  export-ignore
 /phpcs.xml          export-ignore
 /phpunit.xml.dist   export-ignore
 /phpstan.neon.dist  export-ignore
