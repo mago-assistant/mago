@@ -1,7 +1,7 @@
 # Form Access (`page_form`)
 
 > **Status:** Implemented — `MagoAssistant_Mago`
-> **Last updated:** 2026-08-13
+> **Last updated:** 2026-10-09
 
 `page_form` lets the assistant read and stage changes on whatever admin form is open in the
 browser right now — a product edit page, a CMS page, a CMS block, and any other admin screen built
@@ -39,27 +39,40 @@ button — Magento's own validation and ACL checks run exactly as they would if 
 value yourself. Reject the assistant's proposal and it stages nothing at all.
 
 If you ask for a change on a page that is not currently open, and the assistant recognizes the
-entity type (product, CMS page, CMS block, category, customer, order, invoice, shipment or credit
-memo), it navigates the browser there for you and stages the change once that page has finished
-loading — still just staged, still waiting on your Save.
+entity type (product, CMS page, CMS block or category), it navigates the browser there for you and
+stages the change once that page has finished loading — still just staged, still waiting on your
+Save. Customer, order, invoice, shipment and credit memo pages are recognized too, but refused (see
+below).
+
+### Your Magento role still decides which forms
+
+The assistant only reads or stages a form on a page **your own Magento role may open**. Before
+`describe_form`, `read_fields` or `write_fields` touches the form on screen, the server works out
+which admin page it is on and checks the same ACL resource Magento checks when you open that page
+(`Magento_Catalog::products` for a product, `Magento_Cms::save` for a CMS page edit screen, and so
+on). If your role lacks it, the assistant tells you it cannot read or write that form and names
+the permission. The same check runs on the page `write_fields` would navigate your browser to,
+before it sends you there. A page the server cannot match to an admin controller is refused too,
+since there is no way to tell what guards it.
 
 ### Which forms are off limits
 
 The assistant never reads or writes to a form that may carry personal data, no matter what you ask
-it: **customer edit, customer address, order view/create, admin user edit, and newsletter
-subscriber forms are refused outright**, both in the browser (so the data is never even collected)
-and again on the server (so a tampered request can't bypass the browser's own refusal). Ask about
-customers through `customer_data` instead — it only ever returns aggregates and ids, never PII.
+it: **customer edit, customer address, order view/create, invoice, shipment and credit memo
+view/new, admin user edit, and newsletter subscriber forms are refused outright**, both in the
+browser (so the data is never even collected) and again on the server (so a tampered request can't
+bypass the browser's own refusal). Ask about customers through `customer_data` instead — it only
+ever returns aggregates and ids, never PII.
 
 A few Magento admin screens (the customer edit page, in this install) don't register a UI
 component form the assistant's detection can see at all, so those are excluded architecturally
 before the deny list is ever consulted; the deny list is what additionally covers a screen that
 does register a form under a name it should never expose.
 
-This also covers asking the assistant to change a customer or order field while neither is open:
-the same deny list is checked against where that request would navigate your browser to, before it
-is ever sent there, so the assistant refuses up front instead of navigating you to a page it was
-never going to be able to write to anyway.
+This also covers asking the assistant to change a customer, order, invoice, shipment or credit memo
+field while none is open: the same deny list is checked against where that request would navigate
+your browser to, before it is ever sent there, so the assistant refuses up front instead of
+navigating you to a page it was never going to be able to write to anyway.
 
 Also out of scope, by design, not as a bug to fix:
 
@@ -99,8 +112,9 @@ something more private just because it came from a form field.
 
 With privacy mode on, a `read_fields` value still crosses, but first passes the PII heuristic: an
 email address, IBAN, phone number, BSN or VAT number in it is replaced by a token before it reaches
-the provider. A name or street without such a signature is not recognised. Customer, address and
-order forms are on the deny list and never send field values at all.
+the provider. A name or street without such a signature is not recognised. Customer, address,
+order, invoice, shipment and credit memo forms are on the deny list and never send field values at
+all.
 
 The one thing that does *not* follow this path is the extra context `write_fields` adds purely for
 the confirmation prompt — a field's current value and label, attached to `client_directive` by the
@@ -189,9 +203,22 @@ the page the model had in mind when it proposed the write.
 
 `Service/Form/FormPolicy.php` is the single source of which forms `page_form` refuses. It denies by
 namespace (`customer_form`, `customer_address_form`, `sales_order_view`, `sales_order_create`,
-`admin_user_form`, `newsletter_subscriber_form`) or by route substring (`customer/`, `sales/order`,
-`admin/user`) — matched as substrings, not exact strings, so `customer/` also denies
-`customer/address/edit`. Both the client and server enforce the same list:
+`invoice_form`, `shipment_form`, `creditmemo_form`, `admin_user_form`, `newsletter_subscriber_form`)
+or by route substring (`customer/`, `sales/order`, `sales/invoice`, `sales/shipment`,
+`sales/creditmemo`, `admin/order_shipment`, `admin/user`) — matched as substrings, not exact
+strings, so `customer/` also denies `customer/address/edit`.
+
+The sales document routes follow how Magento actually reaches those pages. The invoice, shipment
+and credit memo grids open `sales/invoice/view`, `sales/shipment/view` and `sales/creditmemo/view`,
+which forward internally without changing the browser's URL. The order view opens
+`sales/order_invoice/{new,view}` and `sales/order_creditmemo/{new,view}`, already covered by
+`sales/order`, and `adminhtml/order_shipment/{new,view}`, which Magento_Shipping serves under the
+`adminhtml` route's `admin` front name, so its path is `/<backend>/admin/order_shipment/...`. None
+of these pages registers a UI component form today; the `*_form` namespaces follow the
+`"{$entityType}_form"` convention the navigate-then-act check below builds, and catch a third-party
+form for these documents wherever it is reached from.
+
+Both the client and server enforce the same list:
 
 - `form-bridge.js` reads it from `window.MAGO_CONFIG.formDenyNamespaces` /
   `formDenyRoutes`, published by `Block\Adminhtml\ChatPanel::getJsConfig()`, and refuses to
@@ -206,15 +233,17 @@ namespace (`customer_form`, `customer_address_form`, `sales_order_view`, `sales_
   "no form open", issue #256). That is the
   one path with no open form's namespace or route to check yet, since the point of navigate-then-act
   is that nothing is open. Without this, an entity type `EntityRouteMap` can reach but `FormPolicy`
-  denies (`customer`, `order` today) would send the administrator's browser there anyway, on the
-  assistant's own say-so, before finding out the write itself was never going to land.
+  denies (`customer`, `order`, `invoice`, `shipment`, `creditmemo` today) would send the
+  administrator's browser there anyway, on the assistant's own say-so, before finding out the write
+  itself was never going to land.
 
 This third check is keyed on two independent values, checked together through the same
 `FormPolicy::isDenied(string $namespace, string $route)` the other two calls already use - neither
 alone catches everything `EntityRouteMap` can reach today:
 
-- The entity type's admin routes, edit and New (`customer/index/edit`, `sales/order/view`, ...),
-  catch `customer` and `order` directly, both already matching a route pattern.
+- The entity type's admin routes, edit and New (`customer/index/edit`, `sales/order/view`,
+  `sales/invoice/view`, ...), catch `customer`, `order`, `invoice`, `shipment` and `creditmemo`
+  directly, each matching a route pattern.
 - The entity type's own form namespace, built as `"{$entityType}_form"` - the same convention
   `form-bridge.js`'s `applyStoredNavigateIntent()` already relies on to replay a stored navigate
   intent - catches a namespace-only denial that the route never would. Concretely: if an integrator
@@ -246,6 +275,51 @@ This module's own `etc/di.xml` carries exactly this block, commented out, as the
 integrator copies. Nothing extra is denied by default: `FormPolicy`'s built-in patterns already
 cover every form that carries personal data, so the module ships no active `additionalDenied...`
 entry of its own.
+
+### The page's own ACL resource: `PageAccess`
+
+`page_form` declares `Magento_Backend::admin` as its skill resource and no resource per action,
+because what guards a call is not in the call's input: it is the admin page the call acts on,
+which the browser reports. Treating "the form is open, so its controller ACL already passed" as
+proof would trust the client, so `Service/Form/PageAccess.php` checks it on the server (#203):
+
+1. The reported `route` (the browser's `window.location.pathname`) has the admin path
+   (`AdminPath`: base URL path plus the admin front name) stripped, and its first three segments
+   are taken as front name, controller and action, the way the backend router reads them.
+2. `AdminRouteAcl::forRoute()` resolves that route to its controller class through the route
+   config and `ActionList`, and reads `ADMIN_RESOURCE` off it. This is the same resolver
+   `admin_navigator` uses to decide which pages it may link to, and that `EntityRouteMap` uses for
+   per-entity resources, so there is no list of form-to-resource pairs to keep in step.
+3. The admin's `AuthorizationInterface` must allow that resource.
+
+A path outside the admin path, or a route no controller answers, is refused (fail closed). The
+refusal is `{"denied": true, "message": "Access denied: ..."}`, the same shape as the `FormPolicy`
+refusal, so the model relays it instead of reporting a technical fault.
+
+Where it runs: `DescribeFormAction` and `ReadFieldsAction` check the open form before returning
+anything; `WriteFieldsAction::findRefusal()` checks the open form before staging, and the
+navigation target route (`EntityRouteMap`'s edit or New route) before building a `form_navigate`
+directive. `findRefusal()` runs before the confirmation prompt and again inside `execute()` on the
+confirm request, against the page context that request carries.
+
+What a spoofed client gets: the route is the only client value the check uses, and it is resolved
+against Magento's own routing, so a forged route can only name a page that exists and that the
+admin's role may open. The snapshot the actions return is the browser's own data, so a client that
+lies about its route still only gets back what it sent; it cannot make the server read anything.
+Staged values still go through the form's native Save, which runs its own ACL check.
+
+Known limits:
+
+- A controller that overrides `_isAllowed()` with logic beyond `ADMIN_RESOURCE` is checked on its
+  `ADMIN_RESOURCE` only, as in `admin_navigator`: evaluating `_isAllowed()` needs the controller
+  built around a live request.
+- Fields gated more finely inside a form you may open (product design attributes behind
+  `Magento_Catalog::edit_product_design`, for example) rely on Magento's data provider leaving
+  them out of the form, as before.
+- `mago:tool:verify page_form` has no open page to resolve, so it reports the skill's
+  `Magento_Backend::admin` floor; the per-page check is covered by the unit tests in
+  `Test/Unit/Service/Form/PageAccessTest.php` and
+  `Test/Unit/Service/Skills/Form/PageForm/PageFormPageAccessTest.php`.
 
 ### `EntityRouteMap`: the one place per-entity routing knowledge lives
 

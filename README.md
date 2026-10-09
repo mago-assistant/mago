@@ -232,14 +232,6 @@ BASE_URL="https://your-store.test/" npx playwright test
 See [Test/End-2-end/README.md](Test/End-2-end/README.md) for configuration, the WireMock setup
 and how to add scenarios.
 
-## Upgrading
-
-**Next release — ACL is deny-by-default for tools.** A tool call that declares no ACL resource (an empty `getMagentoAcl()` and no action resource) is now refused for everyone; it used to run on the module-wide `assistant_read`/`assistant_write` grant alone. Every built-in skill declares a resource. If you maintain an add-on:
-
-- A tool that reads or changes Magento data declares the resource Magento guards that data with (`Magento_Customer::manage`, `Magento_Sales::sales_order`, ...). A skill is checked on its own resource *and* on the named action's, so an action can only narrow what its skill requires.
-- A tool that touches no Magento data at all — one that talks to an external service — returns `MagoAssistant\Mago\Api\Acl::MAGO_PER_USER`. Such a tool is **refused for every admin until it is granted per user** under Stores › Admin Assistant › Skills & Permissions; holding the assistant is not the same as having been given it. The model still sees the tool and relays the refusal, so the admin learns what to ask for. On upgrade, add-on skills with no row there are refused until granted.
-- `bin/magento mago:tool:verify <tool>` fails on a missing declaration and names the one-line fix.
-
 ## Permissions
 
 | ACL Resource | Grants |

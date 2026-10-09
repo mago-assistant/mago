@@ -12,6 +12,7 @@ use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
+use MagoAssistant\Mago\Service\Time\CalendarBuckets;
 
 class OrderCountAction implements ActionInterface
 {
@@ -23,7 +24,8 @@ class OrderCountAction implements ActionInterface
 
     public function __construct(
         private readonly ResourceConnection $resourceConnection,
-        private readonly PeriodParser $periodParser
+        private readonly PeriodParser $periodParser,
+        private readonly CalendarBuckets $calendarBuckets
     ) {
     }
 
@@ -128,8 +130,8 @@ class OrderCountAction implements ActionInterface
         $countryColumn = $this->countryColumn($address);
 
         $bucket = match ($groupBy) {
-            'year' => new Expression('YEAR(o.created_at)'),
-            'month' => new Expression('DATE_FORMAT(o.created_at, \'%Y-%m\')'),
+            'year' => $this->calendarBucket($this->calendarBuckets->years(...$this->orderSpan($from, $to))),
+            'month' => $this->calendarBucket($this->calendarBuckets->months(...$this->orderSpan($from, $to))),
             'country' => new Expression(sprintf('COALESCE(%s, \'%s\')', $countryColumn, self::UNKNOWN_COUNTRY)),
             default => new Expression('o.status'),
         };
@@ -187,6 +189,46 @@ class OrderCountAction implements ActionInterface
             'total' => $total,
             'counts' => $buckets,
         ];
+    }
+
+    /**
+     * The first and last order in the window, so the buckets cover the orders there are rather than
+     * every month since 1970 for period "all". Without any order the window's end is a single,
+     * empty bucket.
+     *
+     * @return array{0: string, 1: string} UTC
+     */
+    private function orderSpan(string $from, string $to): array
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $span = $connection->fetchRow(
+            $connection->select()
+                ->from($this->resourceConnection->getTableName('sales_order'), [
+                    'first' => new Expression('MIN(created_at)'),
+                    'last' => new Expression('MAX(created_at)'),
+                ])
+                ->where('created_at >= ?', $from)
+                ->where('created_at <= ?', $to)
+        );
+
+        return [(string)($span['first'] ?? $to), (string)($span['last'] ?? $to)];
+    }
+
+    /**
+     * Newest start first, so the first WHEN an order passes is the bucket it belongs to.
+     *
+     * @param list<array{label: string, from: string}> $buckets
+     */
+    private function calendarBucket(array $buckets): Expression
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $cases = array_map(
+            static fn (array $bucket): string => $connection->quoteInto('WHEN o.created_at >= ?', $bucket['from'])
+                . ' THEN ' . $connection->quote($bucket['label']),
+            array_reverse($buckets)
+        );
+
+        return new Expression('CASE ' . implode(' ', $cases) . ' END');
     }
 
     /**

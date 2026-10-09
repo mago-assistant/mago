@@ -48,6 +48,11 @@ class DescribeFormAction extends AbstractPageFormReadAction
             return $this->noFormOpenResult();
         }
 
+        $accessRefusal = $this->findPageAccessRefusal($pageContext);
+        if ($accessRefusal !== null) {
+            return $accessRefusal;
+        }
+
         $filter = mb_strtolower(trim((string)($params['filter'] ?? '')));
         $fields = $this->filterFields($pageContext, $filter);
 

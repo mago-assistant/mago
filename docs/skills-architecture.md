@@ -537,6 +537,8 @@ Magento_Backend::admin
         └── MagoAssistant_Mago::skills_write
 ```
 
+`page_form` declares `Magento_Backend::admin` as its floor, because the resource that matters is the one guarding the admin page the form is on, and that page comes from the request rather than the call's input. Its actions resolve the open page's route (and `write_fields`' navigation target) through `AdminRouteAcl` and refuse when the admin lacks that resource or the route cannot be resolved; see [form-access.md](form-access.md#the-pages-own-acl-resource-pageaccess).
+
 `config_reader` and `config_writer` are not gated by `Magento_Config::config`: every call needs the resource of the section its path belongs to (`Magento_Config::web`, `Magento_Payment::payment`, `Magento_Config::config_admin`, ...), resolved from `system.xml` by `ConfigPathAccess` and checked again on the path `execute()` uses. `Magento_Config::config` only answers a call without a path.
 
 ### How It Works
@@ -545,7 +547,7 @@ Magento_Backend::admin
 2. **Every call also declares what it touches**, through `getMagentoAcl(array $input)` on the tool and, for a skill, `getAclResource()` on the action. Both must allow the call: an action can only narrow what its skill requires, never replace it with something broader. `Service\Acl\ToolAccess` reads that declaration the same way wherever a tool is reached — the chat, the welcome screen's example questions, `mago:tool:verify` — and it is one of three things:
    - **a Magento resource id** (`Magento_Customer::manage`): the admin must hold it, exactly as the admin screen for that data requires. Where the data has an admin screen, derive the resource from it rather than naming it: `EntityRouteMap::getAclResource()` / `getListAclResource()` ask `AdminRouteAcl`, which resolves the route the way Magento's router does and reads `ADMIN_RESOURCE` off the controller — so the tool is gated by whatever Magento enforces on that screen today, and `cms/page/edit` comes out as `Magento_Cms::save` without anyone having to know that;
    - **`Acl::MAGO_PER_USER`**: the tool touches no Magento data (an external tracker, the assistant's own docs). It is gated by the per-user skill permission alone, and only by an explicit grant there — holding the assistant is not the same as having been given this tool;
-   - **nothing** (`''` or `null`): the tool forgot to say. **It is refused for everyone.** An empty resource used to mean "no check", which is how a tool reading customer records came to be reachable by any admin with the chat grant (#148). `mago:tool:verify` fails on it. This is a breaking change for add-ons that returned `''`: see *Upgrading* in the README.
+   - **nothing** (`''` or `null`): the tool forgot to say. **It is refused for everyone.** An empty resource used to mean "no check", which is how a tool reading customer records came to be reachable by any admin with the chat grant (#148). `mago:tool:verify` fails on it.
 3. **Read tools** require `assistant_read` — analytics queries, config reading.
 4. **Write tools** require `assistant_write` — config changes, CMS updates, content generation.
 5. **ACL is checked before execution**, not just at the API level. Even if the AI requests a tool, it won't execute if the admin user's role lacks the required resource.

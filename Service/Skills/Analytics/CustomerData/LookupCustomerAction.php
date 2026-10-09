@@ -17,6 +17,7 @@ class LookupCustomerAction implements ActionInterface
     private const NAME_FIELDS = ['firstname', 'middlename', 'lastname'];
     private const MAX_NAME_WORDS = 5;
     private const NEWEST_FIRST = [['field' => 'created_at', 'direction' => 'DESC']];
+    private const SEARCH_REQUIRED = ['error' => 'search parameter is required for lookup_customer'];
 
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
@@ -95,9 +96,9 @@ class LookupCustomerAction implements ActionInterface
 
     public function execute(array $params, int $adminUserId): array
     {
-        $search = $params['search'] ?? '';
-        if (empty(trim($search))) {
-            return ['error' => 'search parameter is required for lookup_customer'];
+        $search = is_scalar($params['search'] ?? null) ? (string)$params['search'] : '';
+        if (!$this->hasSearchableTerm($search)) {
+            return self::SEARCH_REQUIRED;
         }
 
         if (!$adminUserId) {
@@ -106,7 +107,7 @@ class LookupCustomerAction implements ActionInterface
 
         $limit = max(1, min((int)($params['limit'] ?? 10), 10));
 
-        $searchParams = ctype_digit(trim($search)) || str_contains($search, '@')
+        $searchParams = $this->isSingleFieldSearch($search)
             ? $this->singleFieldSearch($search, $limit)
             : $this->nameSearch($search, $limit);
 
@@ -147,6 +148,35 @@ class LookupCustomerAction implements ActionInterface
     }
 
     /**
+     * A search of only punctuation filters nothing: Magento then returns the newest customers,
+     * which reads as a match. An email search of only "@" and dots matches every address.
+     *
+     * @param string $search
+     * @return bool
+     */
+    private function hasSearchableTerm(string $search): bool
+    {
+        if (ctype_digit(trim($search))) {
+            return true;
+        }
+
+        if (str_contains($search, '@')) {
+            return preg_replace('/[\s,.@]+/', '', $search) !== '';
+        }
+
+        return $this->nameWords($search) !== [];
+    }
+
+    /**
+     * @param string $search
+     * @return bool
+     */
+    private function isSingleFieldSearch(string $search): bool
+    {
+        return ctype_digit(trim($search)) || str_contains($search, '@');
+    }
+
+    /**
      * The assistant refers to a customer by the id it was given, so the admin asks about
      * "customer 32". Searching that as a name finds nobody, which reads as "this customer does not
      * exist" for a customer we just showed them.
@@ -181,11 +211,6 @@ class LookupCustomerAction implements ActionInterface
      */
     private function nameSearch(string $search, int $limit): array
     {
-        $words = preg_split('/[\s,]+/', trim($search), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $words = array_values(array_filter(
-            array_map(static fn (string $word): string => trim($word, '.'), $words),
-            static fn (string $word): bool => $word !== ''
-        ));
         $groups = array_map(
             fn (string $word): array => array_map(
                 fn (string $field): array => [
@@ -195,10 +220,24 @@ class LookupCustomerAction implements ActionInterface
                 ],
                 self::NAME_FIELDS
             ),
-            array_slice($words, 0, self::MAX_NAME_WORDS)
+            array_slice($this->nameWords($search), 0, self::MAX_NAME_WORDS)
         );
 
         return $this->apiClient->buildSearchCriteria($groups, $limit, 1, self::NEWEST_FIRST);
+    }
+
+    /**
+     * @param string $search
+     * @return list<string>
+     */
+    private function nameWords(string $search): array
+    {
+        $words = preg_split('/[\s,]+/', trim($search), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return array_values(array_filter(
+            array_map(static fn (string $word): string => trim($word, '.'), $words),
+            static fn (string $word): bool => $word !== ''
+        ));
     }
 
     /**

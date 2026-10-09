@@ -8,12 +8,17 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Form\PageForm;
 
 use MagoAssistant\Mago\Model\Form\PageContext;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
+use MagoAssistant\Mago\Service\Form\PageAccess;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Skills\Form\PageForm\WriteFieldsAction;
+use MagoAssistant\Mago\Service\Url\AdminPath;
 use MagoAssistant\Mago\Service\Url\AdminRouteAcl;
 use MagoAssistant\Mago\Service\Url\EntityRouteMap;
 use MagoAssistant\Mago\Service\Url\NewEntityUrlBuilder;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeAclAuthorization;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeAdminRouteAcl;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeBackendUrl;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -31,6 +36,10 @@ final class WriteFieldsDeniedEntityTest extends TestCase
             'new customer' => ['customer', ''],
             'existing customer' => ['customer', '12'],
             'existing order' => ['order', '5'],
+            'existing invoice' => ['invoice', '3'],
+            'existing shipment' => ['shipment', '4'],
+            'existing credit memo' => ['creditmemo', '6'],
+            'new invoice' => ['invoice', ''],
             'customer address' => ['customer_address', ''],
             'admin user' => ['admin_user', '3'],
             'capitalised' => ['Customer', ''],
@@ -102,7 +111,12 @@ final class WriteFieldsDeniedEntityTest extends TestCase
             new EntityRouteMap($this->createStub(AdminRouteAcl::class)),
             $this->createStub(SecureAdminUrl::class),
             $this->createStub(NewEntityUrlBuilder::class),
-            new FormPolicy()
+            new FormPolicy(),
+            new PageAccess(
+                new AdminPath(new FakeBackendUrl()),
+                new FakeAdminRouteAcl(['catalog/product/new' => 'Magento_Catalog::products']),
+                new FakeAclAuthorization(['Magento_Catalog::products'])
+            )
         );
     }
 

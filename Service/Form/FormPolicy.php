@@ -8,10 +8,10 @@ namespace MagoAssistant\Mago\Service\Form;
 
 /**
  * The one place that knows which admin forms are off limits to the assistant because they carry
- * personal data: customer, customer address, order and admin user forms. PageContextNormalizer
- * enforces this on the server, form-bridge.js enforces the same list in the browser (published
- * through Block\Adminhtml\ChatPanel::getJsConfig()), and neither keeps its own copy of the
- * patterns - this is the only list.
+ * personal data: customer, customer address, order, invoice, shipment, credit memo and admin user
+ * forms. PageContextNormalizer enforces this on the server, form-bridge.js enforces the same list
+ * in the browser (published through Block\Adminhtml\ChatPanel::getJsConfig()), and neither keeps
+ * its own copy of the patterns - this is the only list.
  *
  * A form is denied by namespace or by route, because either alone has gaps: a namespace catches a
  * form wherever it is reached from, a route catches a form this list has not learned the namespace
@@ -30,6 +30,9 @@ class FormPolicy
         'customer_address_form',
         'sales_order_view',
         'sales_order_create',
+        'invoice_form',
+        'shipment_form',
+        'creditmemo_form',
         'admin_user_form',
         'newsletter_subscriber_form',
     ];
@@ -37,6 +40,10 @@ class FormPolicy
     private const DENIED_ROUTE_PATTERNS = [
         'customer/',
         'sales/order',
+        'sales/invoice',
+        'sales/shipment',
+        'sales/creditmemo',
+        'admin/order_shipment',
         'admin/user',
     ];
 

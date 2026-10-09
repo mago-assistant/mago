@@ -11,6 +11,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Block\Adminhtml\ChatPanel;
 use MagoAssistant\Mago\Model\Form\PageContext;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
+use MagoAssistant\Mago\Service\Form\PageAccess;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Url\EntityRouteMap;
 use MagoAssistant\Mago\Service\Url\NewEntityUrlBuilder;
@@ -55,6 +56,11 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
  * (customer, order, admin user, ...) just because no form happened to be open yet to deny. Denying
  * only once a form_write directive's target no longer matches an open, already-denied form would
  * leave this path uncovered entirely, since there is no open form here to check in the first place.
+ *
+ * The Magento ACL resource of the page is checked the same way (PageAccess, #203): the form open
+ * now before staging on it, the navigation target before sending the browser there. Both run in
+ * findRefusal(), so a denied page is refused before the confirmation prompt and again on the
+ * confirm request, against the page context that request carries.
  */
 class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActionInterface
 {
@@ -69,9 +75,10 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
         private readonly EntityRouteMap $entityRouteMap,
         private readonly SecureAdminUrl $secureAdminUrl,
         private readonly NewEntityUrlBuilder $newEntityUrlBuilder,
-        private readonly FormPolicy $formPolicy
+        private readonly FormPolicy $formPolicy,
+        PageAccess $pageAccess
     ) {
-        parent::__construct($pageContextHolder);
+        parent::__construct($pageContextHolder, $pageAccess);
     }
 
     public function getName(): string
@@ -179,6 +186,11 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
             return $this->findNavigationRefusal($params, false);
         }
 
+        $accessRefusal = $this->findPageAccessRefusal($pageContext);
+        if ($accessRefusal !== null) {
+            return $accessRefusal;
+        }
+
         $targetMismatch = $this->findTargetMismatch($params, $pageContext);
         if ($targetMismatch !== null) {
             return ['error' => $targetMismatch];
@@ -203,6 +215,11 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
         $route = $this->routeFor($params);
         if ($route === null) {
             return $this->deniedFormResult();
+        }
+
+        $accessRefusal = $this->findRouteAccessRefusal($route);
+        if ($accessRefusal !== null) {
+            return $accessRefusal;
         }
 
         return $this->normalizeChanges($params['changes'] ?? null) === [] ? $this->missingChangesResult() : null;

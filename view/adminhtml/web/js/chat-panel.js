@@ -1512,8 +1512,9 @@ define([
                         tokens = vaultTokens.merge(tokens, d.tokens);
                         full+=d.text; content.innerHTML=renderStreamingMd(full, tokens); msgs.scrollTop=msgs.scrollHeight;
                     }
-                    // The server caught a raw JSON/XML dump in the finished reply and is re-presenting it:
-                    // drop what streamed so the corrected answer streams into a clean message.
+                    // The server caught a raw JSON/XML dump in the finished reply and is re-presenting it,
+                    // or dropped a write proposed before its instructions were read: drop what streamed
+                    // so the next answer streams into a clean message.
                     else if (evt==='replace') {
                         if (content) { full=''; content.innerHTML=''; }
                     }
@@ -1848,6 +1849,11 @@ define([
                         if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
                         tokens = vaultTokens.merge(tokens, d.tokens);
                         full+=d.text; content.innerHTML=renderStreamingMd(full, tokens); msgs.scrollTop=msgs.scrollHeight;
+                    }
+                    // The server dropped what streamed (a raw data dump, or a write proposed before its
+                    // instructions were read): the next turn streams into a clean message.
+                    else if (evt==='replace') {
+                        if (content) { full=''; content.innerHTML=''; }
                     }
                     else if (evt==='tool_call') {
                         if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
