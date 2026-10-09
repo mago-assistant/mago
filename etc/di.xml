@@ -2,9 +2,12 @@
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/di.xsd">
 
     <!--
-        Cost estimate: US dollars per million tokens, short-context rates, keyed by model id. The model
-        lists the AI providers return carry no pricing, so each model has to be added here. A model
-        without an entry is priced at the fallback (no cache discount).
+        Cost estimate: US dollars per million tokens, standard short-context rates from OpenAI's pricing
+        page, keyed by model id; "-" in the table (no cached or cache-write rate) is left out, so those
+        tokens are priced at the input rate. Long-context rates and legacy models (gpt-3.5, gpt-4
+        turbo, davinci, babbage) are not listed. The model lists the AI providers return carry no
+        pricing, so each model has to be added here. A model without an entry is priced at the fallback
+        (no cache discount).
     -->
     <type name="MagoAssistant\Mago\Service\Usage\CostEstimator">
         <arguments>
@@ -26,6 +29,144 @@
                     <item name="cached_input" xsi:type="string">0.01</item>
                     <item name="cache_write" xsi:type="string">0.125</item>
                     <item name="output" xsi:type="string">0.50</item>
+                </item>
+                <item name="gpt-6-sol" xsi:type="array">
+                    <item name="input" xsi:type="string">2.00</item>
+                    <item name="cached_input" xsi:type="string">0.20</item>
+                    <item name="cache_write" xsi:type="string">2.50</item>
+                    <item name="output" xsi:type="string">10.00</item>
+                </item>
+                <item name="gpt-5.6-sol" xsi:type="array">
+                    <item name="input" xsi:type="string">4.00</item>
+                    <item name="cached_input" xsi:type="string">0.40</item>
+                    <item name="cache_write" xsi:type="string">5.00</item>
+                    <item name="output" xsi:type="string">20.00</item>
+                </item>
+                <item name="gpt-5.6-terra" xsi:type="array">
+                    <item name="input" xsi:type="string">2.00</item>
+                    <item name="cached_input" xsi:type="string">0.20</item>
+                    <item name="cache_write" xsi:type="string">2.50</item>
+                    <item name="output" xsi:type="string">12.00</item>
+                </item>
+                <item name="gpt-5.6-luna" xsi:type="array">
+                    <item name="input" xsi:type="string">0.20</item>
+                    <item name="cached_input" xsi:type="string">0.02</item>
+                    <item name="cache_write" xsi:type="string">0.25</item>
+                    <item name="output" xsi:type="string">1.20</item>
+                </item>
+                <item name="gpt-5.5" xsi:type="array">
+                    <item name="input" xsi:type="string">5.00</item>
+                    <item name="cached_input" xsi:type="string">0.50</item>
+                    <item name="output" xsi:type="string">30.00</item>
+                </item>
+                <item name="gpt-5.5-pro" xsi:type="array">
+                    <item name="input" xsi:type="string">30.00</item>
+                    <item name="output" xsi:type="string">180.00</item>
+                </item>
+                <item name="gpt-5.4" xsi:type="array">
+                    <item name="input" xsi:type="string">2.50</item>
+                    <item name="cached_input" xsi:type="string">0.25</item>
+                    <item name="output" xsi:type="string">15.00</item>
+                </item>
+                <item name="gpt-5.4-pro" xsi:type="array">
+                    <item name="input" xsi:type="string">30.00</item>
+                    <item name="output" xsi:type="string">180.00</item>
+                </item>
+                <item name="gpt-5.4-mini" xsi:type="array">
+                    <item name="input" xsi:type="string">0.75</item>
+                    <item name="cached_input" xsi:type="string">0.075</item>
+                    <item name="output" xsi:type="string">4.50</item>
+                </item>
+                <item name="gpt-5.4-nano" xsi:type="array">
+                    <item name="input" xsi:type="string">0.20</item>
+                    <item name="cached_input" xsi:type="string">0.02</item>
+                    <item name="output" xsi:type="string">1.25</item>
+                </item>
+                <item name="gpt-5.2" xsi:type="array">
+                    <item name="input" xsi:type="string">1.75</item>
+                    <item name="cached_input" xsi:type="string">0.175</item>
+                    <item name="output" xsi:type="string">14.00</item>
+                </item>
+                <item name="gpt-5.2-pro" xsi:type="array">
+                    <item name="input" xsi:type="string">21.00</item>
+                    <item name="output" xsi:type="string">168.00</item>
+                </item>
+                <item name="gpt-5.1" xsi:type="array">
+                    <item name="input" xsi:type="string">1.25</item>
+                    <item name="cached_input" xsi:type="string">0.125</item>
+                    <item name="output" xsi:type="string">10.00</item>
+                </item>
+                <item name="gpt-5" xsi:type="array">
+                    <item name="input" xsi:type="string">1.25</item>
+                    <item name="cached_input" xsi:type="string">0.125</item>
+                    <item name="output" xsi:type="string">10.00</item>
+                </item>
+                <item name="gpt-5-mini" xsi:type="array">
+                    <item name="input" xsi:type="string">0.25</item>
+                    <item name="cached_input" xsi:type="string">0.025</item>
+                    <item name="output" xsi:type="string">2.00</item>
+                </item>
+                <item name="gpt-5-nano" xsi:type="array">
+                    <item name="input" xsi:type="string">0.05</item>
+                    <item name="cached_input" xsi:type="string">0.005</item>
+                    <item name="output" xsi:type="string">0.40</item>
+                </item>
+                <item name="gpt-5-pro" xsi:type="array">
+                    <item name="input" xsi:type="string">15.00</item>
+                    <item name="output" xsi:type="string">120.00</item>
+                </item>
+                <item name="gpt-4.1" xsi:type="array">
+                    <item name="input" xsi:type="string">2.00</item>
+                    <item name="cached_input" xsi:type="string">0.50</item>
+                    <item name="output" xsi:type="string">8.00</item>
+                </item>
+                <item name="gpt-4.1-mini" xsi:type="array">
+                    <item name="input" xsi:type="string">0.40</item>
+                    <item name="cached_input" xsi:type="string">0.10</item>
+                    <item name="output" xsi:type="string">1.60</item>
+                </item>
+                <item name="gpt-4.1-nano" xsi:type="array">
+                    <item name="input" xsi:type="string">0.10</item>
+                    <item name="cached_input" xsi:type="string">0.025</item>
+                    <item name="output" xsi:type="string">0.40</item>
+                </item>
+                <item name="gpt-4o" xsi:type="array">
+                    <item name="input" xsi:type="string">2.50</item>
+                    <item name="cached_input" xsi:type="string">1.25</item>
+                    <item name="output" xsi:type="string">10.00</item>
+                </item>
+                <item name="gpt-4o-mini" xsi:type="array">
+                    <item name="input" xsi:type="string">0.15</item>
+                    <item name="cached_input" xsi:type="string">0.075</item>
+                    <item name="output" xsi:type="string">0.60</item>
+                </item>
+                <item name="o4-mini" xsi:type="array">
+                    <item name="input" xsi:type="string">1.10</item>
+                    <item name="cached_input" xsi:type="string">0.275</item>
+                    <item name="output" xsi:type="string">4.40</item>
+                </item>
+                <item name="o3" xsi:type="array">
+                    <item name="input" xsi:type="string">2.00</item>
+                    <item name="cached_input" xsi:type="string">0.50</item>
+                    <item name="output" xsi:type="string">8.00</item>
+                </item>
+                <item name="o3-mini" xsi:type="array">
+                    <item name="input" xsi:type="string">1.10</item>
+                    <item name="cached_input" xsi:type="string">0.55</item>
+                    <item name="output" xsi:type="string">4.40</item>
+                </item>
+                <item name="o3-pro" xsi:type="array">
+                    <item name="input" xsi:type="string">20.00</item>
+                    <item name="output" xsi:type="string">80.00</item>
+                </item>
+                <item name="o1" xsi:type="array">
+                    <item name="input" xsi:type="string">15.00</item>
+                    <item name="cached_input" xsi:type="string">7.50</item>
+                    <item name="output" xsi:type="string">60.00</item>
+                </item>
+                <item name="o1-pro" xsi:type="array">
+                    <item name="input" xsi:type="string">150.00</item>
+                    <item name="output" xsi:type="string">600.00</item>
                 </item>
             </argument>
         </arguments>
