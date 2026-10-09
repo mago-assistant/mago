@@ -13,6 +13,10 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class LookupCustomerAction implements ActionInterface
 {
+    private const NAME_FIELDS = ['firstname', 'middlename', 'lastname'];
+    private const MAX_NAME_WORDS = 5;
+    private const NEWEST_FIRST = [['field' => 'created_at', 'direction' => 'DESC']];
+
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl
@@ -39,7 +43,8 @@ class LookupCustomerAction implements ActionInterface
         return [
             'search' => [
                 'type' => 'string',
-                'description' => 'Customer name, email address or customer id to search for. Required by lookup_customer '
+                'description' => 'Customer name, email address or customer id to search for; for an id, pass the '
+                    . 'customer id token as it came back, or the number when the administrator typed one. Required by lookup_customer '
                     . 'and used by no other action, so do not pick lookup_customer when the question '
                     . 'names nobody to search for.',
             ],
@@ -99,31 +104,9 @@ class LookupCustomerAction implements ActionInterface
 
         $limit = max(1, min((int)($params['limit'] ?? 10), 10));
 
-        if (ctype_digit(trim($search))) {
-            // The assistant refers to a customer by the id it was given, so the admin asks about
-            // "customer 32". Searching that as a name finds nobody, which reads as "this customer
-            // does not exist" for a customer we just showed them.
-            $searchParams = $this->apiClient->buildSearchCriteria(
-                [['field' => 'entity_id', 'value' => trim($search), 'condition_type' => 'eq']],
-                $limit,
-                1,
-                [['field' => 'created_at', 'direction' => 'DESC']]
-            );
-        } elseif (str_contains($search, '@')) {
-            $searchParams = $this->apiClient->buildSearchCriteria(
-                [['field' => 'email', 'value' => '%' . trim($search) . '%', 'condition_type' => 'like']],
-                $limit,
-                1,
-                [['field' => 'created_at', 'direction' => 'DESC']]
-            );
-        } else {
-            $searchParams = $this->apiClient->buildSearchCriteria(
-                [['field' => 'firstname', 'value' => '%' . trim($search) . '%', 'condition_type' => 'like']],
-                $limit,
-                1,
-                [['field' => 'created_at', 'direction' => 'DESC']]
-            );
-        }
+        $searchParams = ctype_digit(trim($search)) || str_contains($search, '@')
+            ? $this->singleFieldSearch($search, $limit)
+            : $this->nameSearch($search, $limit);
 
         $result = $this->apiClient->get('customers/search', $searchParams, $adminUserId);
 
@@ -132,17 +115,6 @@ class LookupCustomerAction implements ActionInterface
         }
 
         $items = $result['items'] ?? [];
-
-        if (!str_contains($search, '@') && empty($items)) {
-            $searchParams = $this->apiClient->buildSearchCriteria(
-                [['field' => 'lastname', 'value' => '%' . trim($search) . '%', 'condition_type' => 'like']],
-                $limit,
-                1,
-                [['field' => 'created_at', 'direction' => 'DESC']]
-            );
-            $result = $this->apiClient->get('customers/search', $searchParams, $adminUserId);
-            $items = $result['items'] ?? [];
-        }
 
         if (empty($items)) {
             return ['results' => [], 'message' => 'No customers found matching "' . $search . '"'];
@@ -155,7 +127,11 @@ class LookupCustomerAction implements ActionInterface
 
             $customers[] = [
                 'entity_id' => $customerId,
-                'name' => trim(($customer['firstname'] ?? '') . ' ' . ($customer['lastname'] ?? '')),
+                'name' => implode(' ', array_filter([
+                    $customer['firstname'] ?? '',
+                    $customer['middlename'] ?? '',
+                    $customer['lastname'] ?? '',
+                ], static fn (mixed $part): bool => is_string($part) && trim($part) !== '')),
                 'email' => $customer['email'] ?? '',
                 'country' => $address['country_id'] ?? null,
                 'city' => $address['city'] ?? null,
@@ -166,5 +142,71 @@ class LookupCustomerAction implements ActionInterface
         }
 
         return ['results' => $customers];
+    }
+
+    /**
+     * The assistant refers to a customer by the id it was given, so the admin asks about
+     * "customer 32". Searching that as a name finds nobody, which reads as "this customer does not
+     * exist" for a customer we just showed them.
+     *
+     * @param string $search
+     * @param int $limit
+     * @return array<string, mixed>
+     */
+    private function singleFieldSearch(string $search, int $limit): array
+    {
+        $filter = ctype_digit(trim($search))
+            ? ['field' => 'entity_id', 'value' => trim($search), 'condition_type' => 'eq']
+            : [
+                'field' => 'email',
+                'value' => '%' . $this->likeLiteral(trim($search)) . '%',
+                'condition_type' => 'like',
+            ];
+
+        return $this->apiClient->buildSearchCriteria([$filter], $limit, 1, self::NEWEST_FIRST);
+    }
+
+    /**
+     * Every word has to match the first, middle or last name: one filter group per word (groups
+     * are ANDed) holding one filter per name field (filters in a group are ORed). Matching the
+     * whole string against one field at a time never found "Jan Jansen" or "Sanne de Vries"
+     * (issue #257), and this also finds a name typed last name first. Commas and the dot after an
+     * initial separate words, so "Dekker, Haimanti" and "H. Dekker" match too.
+     *
+     * @param string $search
+     * @param int $limit
+     * @return array<string, mixed>
+     */
+    private function nameSearch(string $search, int $limit): array
+    {
+        $words = preg_split('/[\s,]+/', trim($search), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $words = array_values(array_filter(
+            array_map(static fn (string $word): string => trim($word, '.'), $words),
+            static fn (string $word): bool => $word !== ''
+        ));
+        $groups = array_map(
+            fn (string $word): array => array_map(
+                fn (string $field): array => [
+                    'field' => $field,
+                    'value' => '%' . $this->likeLiteral($word) . '%',
+                    'condition_type' => 'like',
+                ],
+                self::NAME_FIELDS
+            ),
+            array_slice($words, 0, self::MAX_NAME_WORDS)
+        );
+
+        return $this->apiClient->buildSearchCriteria($groups, $limit, 1, self::NEWEST_FIRST);
+    }
+
+    /**
+     * A % or _ the admin typed is part of the name or address, not a wildcard.
+     *
+     * @param string $value
+     * @return string
+     */
+    private function likeLiteral(string $value): string
+    {
+        return addcslashes($value, '%_\\');
     }
 }
