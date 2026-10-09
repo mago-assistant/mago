@@ -11,6 +11,7 @@ use MagoAssistant\Mago\Service\Skills\Analytics\CustomerData\LookupCustomerActio
 use MagoAssistant\Mago\Service\Time\StoreTime;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -97,6 +98,16 @@ class LookupCustomerActionTest extends TestCase
     }
 
     #[Test]
+    public function itLooksUpAnIdSentAsANumberByEntityId(): void
+    {
+        $this->lookup(52);
+
+        $payload = $this->onlyCall();
+        self::assertSame('entity_id', $payload['searchCriteria[filter_groups][0][filters][0][field]']);
+        self::assertSame('52', $payload['searchCriteria[filter_groups][0][filters][0][value]']);
+    }
+
+    #[Test]
     public function itLooksUpAnEmailAddressByEmail(): void
     {
         $this->lookup('s@example.test');
@@ -115,11 +126,46 @@ class LookupCustomerActionTest extends TestCase
         self::assertCount(1, $this->apiClient->callsOf(FakeInternalApiClient::GET));
     }
 
+    #[Test]
+    #[DataProvider('searchesWithoutSearchableTerm')]
+    public function itAsksForASearchWithoutQueryingWhenSearchHasNothingToMatch(string $search): void
+    {
+        $result = $this->lookup($search);
+
+        self::assertSame(['error' => 'search parameter is required for lookup_customer'], $result);
+        self::assertSame([], $this->apiClient->callsOf(FakeInternalApiClient::GET));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function searchesWithoutSearchableTerm(): array
+    {
+        return [
+            'empty' => [''],
+            'whitespace' => ['   '],
+            'dot' => ['.'],
+            'comma' => [','],
+            'dots and commas' => ['., .'],
+            'ellipsis' => ['...'],
+            'at sign' => ['@'],
+            'at sign with dots' => [' @. '],
+        ];
+    }
+
+    #[Test]
+    public function itSearchesAnEmailDomain(): void
+    {
+        $this->lookup('@example.test');
+
+        self::assertSame('%@example.test%', $this->onlyCall()['searchCriteria[filter_groups][0][filters][0][value]']);
+    }
+
     /**
      * @param list<array<string, mixed>> $items
      * @return array<string, mixed>
      */
-    private function lookup(string $search, array $items = [self::CUSTOMER]): array
+    private function lookup(string|int $search, array $items = [self::CUSTOMER]): array
     {
         $this->apiClient = (new FakeInternalApiClient())
             ->withResponseForEvery(FakeInternalApiClient::GET, ['items' => $items, 'total_count' => count($items)]);

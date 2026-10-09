@@ -55,8 +55,8 @@ export default class FlaggedAnswers {
     await page.waitForURL(/\/mago\/flags\/index\//);
   }
 
-  errorMessage(page: Page): Locator {
-    return page.locator('.message-error');
+  errorMessage(page: Page, text: string): Locator {
+    return page.locator('.message-error').filter({hasText: text});
   }
 
   async openFlag(page: Page, flagId: number) {
@@ -77,8 +77,14 @@ export default class FlaggedAnswers {
     return page.locator('.mago-flag-rating');
   }
 
-  successMessage(page: Page): Locator {
-    return page.locator('.message-success');
+  /**
+   * Picked by its text, because the page can show a message that is not the one just added. The CI
+   * images keep sessions in the database, which takes no lock: a request still running from the
+   * previous page (the notification area render) can read the session before the next page took its
+   * message out, and write it back after, so that message shows up again on a later page.
+   */
+  successMessage(page: Page, text: string): Locator {
+    return page.locator('.message-success').filter({hasText: text});
   }
 
   async resolve(page: Page) {

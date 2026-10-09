@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Form\PageForm;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Model\Form\PageContext;
+use MagoAssistant\Mago\Service\Form\PageAccess;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
@@ -18,7 +19,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
 abstract class AbstractPageFormAction implements ActionInterface
 {
     /**
-     * The fields of noFormOpenResult() and deniedFormResult(), which every action can return. Each
+     * The fields of noFormOpenResult(), deniedFormResult() and the page access refusal, which every action can return. Each
      * action adds these after its own classification, so its own rule for a key wins; left out,
      * the privacy filter drops them and the model sees an empty result instead of "no form open" or
      * "this form is denied". The message is a fixed sentence written here, never data from the form.
@@ -30,10 +31,17 @@ abstract class AbstractPageFormAction implements ActionInterface
     ];
 
     public function __construct(
-        private readonly PageContextHolder $pageContextHolder
+        private readonly PageContextHolder $pageContextHolder,
+        private readonly PageAccess $pageAccess
     ) {
     }
 
+    /**
+     * No resource of its own: what guards a call is the resource of the page it acts on, which
+     * comes from the request (the open form) rather than from the call's input, so each action
+     * checks it through PageAccess before it reads or stages anything (#203). The skill's own
+     * Magento_Backend::admin is the floor every call passes first.
+     */
     public function getAclResource(): ?string
     {
         return null;
@@ -53,6 +61,29 @@ abstract class AbstractPageFormAction implements ActionInterface
     protected function getPageContext(): ?PageContext
     {
         return $this->pageContextHolder->get();
+    }
+
+    /**
+     * Refuses a form whose page the admin's role may not open, or whose page cannot be resolved.
+     * Shaped like deniedFormResult(): "denied" and a message the model relays, not an "error" the
+     * model would present as a technical fault.
+     */
+    protected function findPageAccessRefusal(PageContext $pageContext): ?array
+    {
+        return $this->toAccessRefusal($this->pageAccess->findOpenPageDenial($pageContext));
+    }
+
+    /**
+     * The same refusal for a page the call would navigate to rather than the one open now.
+     */
+    protected function findRouteAccessRefusal(string $route): ?array
+    {
+        return $this->toAccessRefusal($this->pageAccess->findRouteDenial($route));
+    }
+
+    private function toAccessRefusal(?string $reason): ?array
+    {
+        return $reason === null ? null : ['denied' => true, 'message' => $reason];
     }
 
     /**

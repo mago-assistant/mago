@@ -47,6 +47,11 @@ class ReadFieldsAction extends AbstractPageFormReadAction
             return $this->noFormOpenResult();
         }
 
+        $accessRefusal = $this->findPageAccessRefusal($pageContext);
+        if ($accessRefusal !== null) {
+            return $accessRefusal;
+        }
+
         $requestedPaths = array_filter((array)($params['field_paths'] ?? []), 'is_string');
         if ($requestedPaths === []) {
             return ['error' => 'field_paths parameter is required'];

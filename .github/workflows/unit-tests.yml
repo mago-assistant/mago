@@ -46,7 +46,11 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.compute_matrix.outputs.matrix) }}
     steps:
+      # Next to the Magento install rather than around it, so Composer can symlink the module
+      # instead of copying it. A copy honours .gitattributes and would leave Test/ out.
       - uses: actions/checkout@v4
+        with:
+          path: mago
 
       - uses: graycoreio/github-actions-magento2/setup-magento@v8.10.0
         id: setup-magento
@@ -61,7 +65,7 @@ jobs:
       - name: Add the extension
         working-directory: ${{ steps.setup-magento.outputs.path }}
         run: |
-          composer config repositories.local path "$GITHUB_WORKSPACE"
+          composer config repositories.local path "$GITHUB_WORKSPACE/mago"
           composer require --no-install "mago-assistant/magento2-mago:@dev"
 
       - uses: graycoreio/github-actions-magento2/cache-magento@v8.10.0
@@ -72,8 +76,6 @@ jobs:
       - name: Composer install
         working-directory: ${{ steps.setup-magento.outputs.path }}
         run: composer install
-        env:
-          COMPOSER_MIRROR_PATH_REPOS: 1
 
       - name: Register the extension's unit tests
         working-directory: ${{ steps.setup-magento.outputs.path }}

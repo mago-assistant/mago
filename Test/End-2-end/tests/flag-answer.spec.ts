@@ -47,12 +47,12 @@ test.describe('Rate an answer', () => {
 
     await flaggedAnswers.resolve(page);
 
-    await expect(flaggedAnswers.successMessage(page)).toContainText('Feedback marked as resolved.');
+    await expect(flaggedAnswers.successMessage(page, 'Feedback marked as resolved.')).toBeVisible();
     await expect(flaggedAnswers.status(page)).toHaveText(/resolved/i);
 
     await flaggedAnswers.reopen(page);
 
-    await expect(flaggedAnswers.successMessage(page)).toContainText('Feedback reopened.');
+    await expect(flaggedAnswers.successMessage(page, 'Feedback reopened.')).toBeVisible();
     await expect(flaggedAnswers.status(page)).toHaveText(/open/i);
 
     const download = await flaggedAnswers.download(page);
@@ -68,11 +68,11 @@ test.describe('Rate an answer', () => {
 
     await flaggedAnswers.delete(page);
 
-    await expect(flaggedAnswers.successMessage(page)).toContainText('The feedback was deleted.');
+    await expect(flaggedAnswers.successMessage(page, 'The feedback was deleted.')).toBeVisible();
 
     await page.goto(flagUrl, {waitUntil: 'load'});
 
-    await expect(flaggedAnswers.errorMessage(page)).toContainText('This feedback no longer exists.');
+    await expect(flaggedAnswers.errorMessage(page, 'This feedback no longer exists.')).toBeVisible();
   });
 
   test('Deletes every flag the grid shows with Select All and the mass action', async ({page}) => {
@@ -88,7 +88,7 @@ test.describe('Rate an answer', () => {
 
     await flaggedAnswers.deleteAllMatching(page);
 
-    await expect(flaggedAnswers.successMessage(page)).toContainText('1 feedback item(s) were deleted.');
+    await expect(flaggedAnswers.successMessage(page, '1 feedback item(s) were deleted.')).toBeVisible();
     await flaggedAnswers.search(page, keyword);
     await expect(flaggedAnswers.gridRows(page)).toHaveCount(0);
     await flaggedAnswers.clearSearch(page);

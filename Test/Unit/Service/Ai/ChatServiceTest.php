@@ -128,7 +128,12 @@ final class ChatServiceTest extends TestCase
                 foreach ($response['streamed'] ?? [] as $text) {
                     $onChunk('text', ['text' => $text]);
                 }
-                unset($response['streamed']);
+                if ($response['streams_tool_calls'] ?? false) {
+                    foreach ($response['tool_calls'] as $toolCall) {
+                        $onChunk('tool_call', $toolCall);
+                    }
+                }
+                unset($response['streamed'], $response['streams_tool_calls']);
 
                 return $response;
             }
@@ -189,14 +194,14 @@ final class ChatServiceTest extends TestCase
             new FakeHighImpactTool('config_writer', ['Adds or changes HTML and scripts on every storefront page.']),
             new FakeHighImpactTool('broken_writer', [], new \RuntimeException('lookup failed')),
         ]);
-        $this->responses = [[
+        $this->responses = $this->proposedTwice([
             'content' => '',
             'tool_calls' => [
                 ['id' => 'call_1', 'name' => 'config_writer', 'input' => ['path' => 'design/head/includes']],
                 ['id' => 'call_2', 'name' => 'broken_writer', 'input' => ['path' => 'x']],
                 ['id' => 'call_3', 'name' => 'cms_data', 'input' => ['action' => 'update_page', 'content' => 'x']],
             ],
-        ]];
+        ]);
         $confirm = null;
         $onChunk = static function (string $type, array $data) use (&$confirm): void {
             if ($type === 'confirm') {
@@ -256,13 +261,13 @@ final class ChatServiceTest extends TestCase
     {
         $this->grants = ['cms_data' => 'write', 'order_manager' => 'write'];
         $service = $this->buildChatService([$this->orderManagerSkill()]);
-        $this->responses = [[
+        $this->responses = $this->proposedTwice([
             'content' => '',
             'tool_calls' => [
                 ['id' => 'call_1', 'name' => 'cms_data', 'input' => ['action' => 'update_page', 'content' => 'x']],
                 ['id' => 'call_2', 'name' => 'order_manager', 'input' => ['action' => 'cancel', 'order_number' => '100']],
             ],
-        ]];
+        ]);
         $confirm = null;
         $onChunk = static function (string $type, array $data) use (&$confirm): void {
             if ($type === 'confirm') {
@@ -287,13 +292,13 @@ final class ChatServiceTest extends TestCase
     {
         $this->grants = ['cms_data' => 'write'];
         $service = $this->buildChatService();
-        $this->responses = [[
+        $this->responses = $this->proposedTwice([
             'content' => '',
             'tool_calls' => [
                 ['id' => 'call_1', 'name' => 'cms_data', 'input' => ['action' => 'update_page', 'content' => 'Mail mago://email_1']],
                 ['id' => 'call_2', 'name' => 'cms_data', 'input' => ['action' => 'update_page', 'content' => 'About us']],
             ],
-        ]];
+        ]);
         $confirm = null;
         $onChunk = static function (string $type, array $data) use (&$confirm): void {
             if ($type === 'confirm') {
@@ -406,12 +411,12 @@ final class ChatServiceTest extends TestCase
     public function permittedWriteActionStillRequiresConfirmation(): void
     {
         $this->grants = ['cms_data' => 'write'];
-        $this->responses = [$this->toolCallResponse('update_page', ['content' => 'x'])];
+        $this->responses = $this->proposedTwice($this->toolCallResponse('update_page', ['content' => 'x']));
 
         $result = $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
 
         self::assertTrue($result['pending_confirmation']);
-        self::assertCount(1, $this->requests);
+        self::assertCount(2, $this->requests);
     }
 
     #[Test]
@@ -449,6 +454,231 @@ final class ChatServiceTest extends TestCase
         self::assertNotNull($instruction);
         self::assertStringContainsString('Always mention the page count.', $instruction['content']);
         self::assertStringContainsString((new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())))->toToolReminder(), $instruction['content']);
+    }
+
+    /**
+     * #173: a write's first call is the action itself, so its tool's instructions must be read
+     * before the call is put to the administrator, not after it ran.
+     */
+    #[Test]
+    public function aWriteIsProposedAgainWithItsInstructionsBeforeItReachesTheCard(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+        $this->responses = [
+            $this->toolCallResponse('update_page', ['content' => 'blind']),
+            $this->toolCallResponse('update_page', ['content' => 'instructed']),
+        ];
+
+        $result = $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertTrue($result['pending_confirmation']);
+        self::assertSame('instructed', $result['tool_calls'][0]['input']['content']);
+        self::assertCount(2, $this->requests);
+        self::assertNull($this->instructionMessage($this->requests[0]));
+        self::assertStringContainsString(
+            'Always mention the page count.',
+            $this->instructionMessage($this->requests[1])['content'] ?? ''
+        );
+        self::assertSame(
+            [],
+            array_filter($this->requests[1], static fn (array $m): bool => ($m['role'] ?? '') === 'assistant'),
+            'the blind proposal is dropped, not replayed to the provider'
+        );
+    }
+
+    #[Test]
+    public function theStreamingCardShowsTheWriteProposedWithTheInstructionsInContext(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+        $this->responses = [
+            $this->toolCallResponse('update_page', ['content' => 'blind']),
+            $this->toolCallResponse('update_page', ['content' => 'instructed']),
+        ];
+        $confirms = [];
+        $onChunk = static function (string $type, array $data) use (&$confirms): void {
+            if ($type === 'confirm') {
+                $confirms[] = $data;
+            }
+        };
+
+        $result = $this->chatService->processMessageStreaming([$this->userMessage()], $onChunk, null, self::ADMIN_ID);
+
+        self::assertCount(1, $confirms);
+        self::assertSame('instructed', $confirms[0]['tools'][0]['input']['content']);
+        self::assertSame('instructed', $result['tool_calls'][0]['input']['content']);
+        self::assertNotNull($this->instructionMessage($this->requests[1]));
+    }
+
+    #[Test]
+    public function aWriteProposedAgainGoesToTheCardInsteadOfLooping(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+        $this->responses = [
+            $this->toolCallResponse('update_page', ['content' => 'x']),
+            $this->toolCallResponse('update_page', ['content' => 'x']),
+            $this->toolCallResponse('update_page', ['content' => 'x']),
+        ];
+
+        $result = $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertTrue($result['pending_confirmation']);
+        self::assertCount(2, $this->requests);
+        self::assertCount(1, $this->instructionMessages($this->requests[1]));
+    }
+
+    #[Test]
+    public function aWriteWhoseToolHasNoInstructionsGoesStraightToTheCard(): void
+    {
+        $this->grants = ['order_manager' => 'write'];
+        $service = $this->buildChatService([$this->orderManagerSkill()]);
+        $this->responses = [[
+            'content' => '',
+            'tool_calls' => [['id' => 'call_1', 'name' => 'order_manager', 'input' => ['action' => 'cancel']]],
+        ]];
+
+        $result = $service->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertTrue($result['pending_confirmation']);
+        self::assertCount(1, $this->requests);
+    }
+
+    #[Test]
+    public function aWriteAfterAReadOfTheSameToolGoesStraightToTheCard(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+        $this->responses = [
+            $this->toolCallResponse('list_pages'),
+            $this->toolCallResponse('update_page', ['content' => 'x']),
+        ];
+
+        $result = $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertTrue($result['pending_confirmation']);
+        self::assertCount(2, $this->requests);
+        self::assertCount(1, $this->instructionMessages($this->requests[1]));
+    }
+
+    #[Test]
+    public function theDroppedProposalNeverReachesThePanel(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+        $this->responses = [
+            $this->toolCallResponse('update_page', ['content' => 'blind'])
+                + ['streamed' => ['I will update it.'], 'streams_tool_calls' => true],
+            $this->toolCallResponse('update_page', ['content' => 'instructed'])
+                + ['streamed' => ['Updating the home page.'], 'streams_tool_calls' => true],
+        ];
+        $events = [];
+        $onChunk = static function (string $type, array $data) use (&$events): void {
+            $events[] = $type . ':' . ($data['text'] ?? $data['name'] ?? '');
+        };
+
+        $this->chatService->processMessageStreaming([$this->userMessage()], $onChunk, null, self::ADMIN_ID);
+
+        self::assertSame(
+            ['text:I will update it.', 'replace:', 'text:Updating the home page.', 'tool_call:cms_data', 'confirm:'],
+            $events
+        );
+    }
+
+    #[Test]
+    public function aDroppedProposalWithoutTextDoesNotClearThePanel(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+        $this->responses = $this->proposedTwice(
+            $this->toolCallResponse('update_page', ['content' => 'x']) + ['streams_tool_calls' => true]
+        );
+        $events = [];
+        $onChunk = static function (string $type, array $data) use (&$events): void {
+            $events[] = $type;
+        };
+
+        $this->chatService->processMessageStreaming([$this->userMessage()], $onChunk, null, self::ADMIN_ID);
+
+        self::assertSame(['tool_call', 'confirm'], $events);
+    }
+
+    #[Test]
+    public function theDroppedProposalStillCountsTowardsUsage(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+        $usage = ['usage' => ['input_tokens' => 100, 'output_tokens' => 10]];
+        $this->responses = $this->proposedTwice($this->toolCallResponse('update_page', ['content' => 'x']) + $usage);
+
+        $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertSame(2, $this->usageLogger->getLoggedTurns());
+    }
+
+    #[Test]
+    public function theAnswerAfterAConfirmedWriteIsGivenWithItsToolsInstructions(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+
+        $this->chatService->processMessageStreaming($this->confirmedWrite(['executed' => 'update_page']), static function (): void {
+        }, null, self::ADMIN_ID);
+
+        $lastMessage = end($this->requests[0]);
+        self::assertSame('system', $lastMessage['role']);
+        self::assertStringContainsString('[Instructions for cms_data]', $lastMessage['content']);
+        self::assertStringContainsString('Always mention the page count.', $lastMessage['content']);
+    }
+
+    #[Test]
+    public function theNonStreamingAnswerAfterAConfirmedWriteIsGivenWithItsToolsInstructions(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+
+        $this->chatService->processMessage($this->confirmedWrite(['executed' => 'update_page']), null, self::ADMIN_ID);
+
+        self::assertCount(1, $this->instructionMessages($this->requests[0]));
+    }
+
+    #[Test]
+    public function aCallLeftUntickedGetsNoInstructionsInTheFollowUp(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+
+        $this->chatService->processMessageStreaming(
+            $this->confirmedWrite(['skipped' => true, 'reason' => 'The user chose not to run this action.']),
+            static function (): void {
+            },
+            null,
+            self::ADMIN_ID
+        );
+
+        self::assertNull($this->instructionMessage($this->requests[0]));
+    }
+
+    #[Test]
+    public function theFollowUpDoesNotInstructTheSameToolTwice(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+        $this->responses = [
+            $this->toolCallResponse('list_pages'),
+            ['content' => 'Updated, and there are 2 pages.', 'tool_calls' => []],
+        ];
+
+        $this->chatService->processMessageStreaming($this->confirmedWrite(['executed' => 'update_page']), static function (): void {
+        }, null, self::ADMIN_ID);
+
+        self::assertCount(1, $this->instructionMessages($this->requests[1]));
+    }
+
+    #[Test]
+    public function anEmptyFollowUpAfterTheInstructionsIsStillNudged(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+        $this->responses = [
+            ['content' => '', 'tool_calls' => []],
+            ['content' => 'The page is updated.', 'tool_calls' => []],
+        ];
+
+        $result = $this->chatService->processMessageStreaming($this->confirmedWrite(['executed' => 'update_page']), static function (): void {
+        }, null, self::ADMIN_ID);
+
+        self::assertSame('The page is updated.', $result['content']);
+        self::assertCount(2, $this->requests);
     }
 
     #[Test]
@@ -1226,14 +1456,14 @@ final class ChatServiceTest extends TestCase
     {
         $this->grants = ['cms_data' => 'write'];
         $service = $this->buildChatService();
-        $this->responses = [[
+        $this->responses = $this->proposedTwice([
             'content' => '',
             'tool_calls' => [
                 ['id' => 'call_1', 'name' => 'cms_data', 'input' => ['action' => 'update_page', 'content' => 'About mago://order_1']],
                 ['id' => 'call_2', 'name' => 'cms_data', 'input' => ['action' => 'update_page', 'content' => 'Shop in mago://city_1']],
                 ['id' => 'call_3', 'name' => 'cms_data', 'input' => ['action' => 'update_page', 'content' => 'See mago://url_1']],
             ],
-        ]];
+        ]);
         $confirm = null;
         $onChunk = static function (string $type, array $data) use (&$confirm): void {
             if ($type === 'confirm') {
@@ -1537,6 +1767,18 @@ final class ChatServiceTest extends TestCase
     }
 
     /**
+     * A write the model proposes before it read its tool's instructions, and the same write made
+     * again once they are in context: only the second one reaches the confirmation card.
+     *
+     * @param array<string, mixed> $response
+     * @return list<array<string, mixed>>
+     */
+    private function proposedTwice(array $response): array
+    {
+        return [$response, $response];
+    }
+
+    /**
      * @return array<string, string>
      */
     private function userMessage(): array
@@ -1554,6 +1796,43 @@ final class ChatServiceTest extends TestCase
         self::assertNotEmpty($matching, "No message with role {$role}");
 
         return end($matching);
+    }
+
+    /**
+     * The conversation as the confirm controller replays it: the request, the confirmed write, and
+     * the result it ended with.
+     *
+     * @param array<string, mixed> $result
+     * @return list<array<string, mixed>>
+     */
+    private function confirmedWrite(array $result): array
+    {
+        return [
+            $this->userMessage(),
+            [
+                'role' => 'assistant',
+                'content' => '',
+                'tool_calls' => [[
+                    'id' => 'call_1',
+                    'name' => 'cms_data',
+                    'input' => ['action' => 'update_page', 'content' => 'x'],
+                ]],
+            ],
+            ['role' => 'tool', 'tool_call_id' => 'call_1', 'content' => (string)json_encode($result)],
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $messages
+     * @return list<array<string, mixed>>
+     */
+    private function instructionMessages(array $messages): array
+    {
+        return array_values(array_filter(
+            $messages,
+            static fn (array $m): bool => ($m['role'] ?? '') === 'system'
+                && str_starts_with((string)$m['content'], '[Instructions for')
+        ));
     }
 
     /**

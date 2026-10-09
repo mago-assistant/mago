@@ -107,6 +107,7 @@ class ChatService implements ChatServiceInterface
         }
         $messages = $this->privacyService->scrubMessages($this->prependSystemMessage($messages, $adminUserId));
         $instructedTools = [];
+        $this->injectFollowUpInstructions($messages, $adminUserId, $instructedTools);
         $nudged = false;
         $rePresented = false;
 
@@ -141,14 +142,16 @@ class ChatService implements ChatServiceInterface
             // Check if any tool call requires confirmation (permitted write action).
             // Denied write actions skip the confirm round-trip: they fall through to
             // executeTool(), which returns the denial as a tool result.
-            foreach ($response['tool_calls'] as $toolCall) {
-                if ($this->requiresConfirmation($toolCall, $adminUserId)) {
-                    return [
-                        'content' => $response['content'],
-                        'tool_calls' => $response['tool_calls'],
-                        'pending_confirmation' => true,
-                    ];
-                }
+            $writes = $this->writesToConfirm($response['tool_calls'], [], $adminUserId);
+            if ($this->injectWriteInstructions($writes, $adminUserId, $messages, $instructedTools)) {
+                continue;
+            }
+            if ($writes !== []) {
+                return [
+                    'content' => $response['content'],
+                    'tool_calls' => $response['tool_calls'],
+                    'pending_confirmation' => true,
+                ];
             }
 
             // Execute read-only tool calls and continue the loop
@@ -189,6 +192,7 @@ class ChatService implements ChatServiceInterface
         }
         $messages = $this->privacyService->scrubMessages($this->prependSystemMessage($messages, $adminUserId));
         $instructedTools = [];
+        $this->injectFollowUpInstructions($messages, $adminUserId, $instructedTools);
         $nudged = false;
         $rePresented = false;
         $allToolCalls = [];
@@ -218,7 +222,23 @@ class ChatService implements ChatServiceInterface
         };
 
         for ($i = 0; $i < $maxIterations; $i++) {
-            $response = $this->client->stream($client, $messages, $tools, $streamOut);
+            // A turn may turn out to be a write proposed before its tool's instructions were read,
+            // which is dropped and made again. Its tool tags are held until that is known, and
+            // whether it streamed text is noted so the panel can be told to drop what it showed.
+            $heldCalls = [];
+            $hasStreamedText = false;
+            $turnOut = function (string $event, array $data) use ($streamOut, &$heldCalls, &$hasStreamedText): void {
+                if ($event === 'tool_call') {
+                    $heldCalls[] = $data;
+
+                    return;
+                }
+                if ($event === 'text' && (string)($data['text'] ?? '') !== '') {
+                    $hasStreamedText = true;
+                }
+                $streamOut($event, $data);
+            };
+            $response = $this->client->stream($client, $messages, $tools, $turnOut);
             $flushCarry();
 
             $this->logUsage($response, $adminUserId, $conversationId, $client, $messages);
@@ -259,26 +279,33 @@ class ChatService implements ChatServiceInterface
 
             // Check for permitted write actions needing confirmation (denied ones are
             // executed below and answered with the denial as a tool result)
-            foreach ($response['tool_calls'] as $toolCall) {
-                if (isset($refusals[$toolCall['id']])) {
-                    continue;
+            $writes = $this->writesToConfirm($response['tool_calls'], $refusals, $adminUserId);
+            if ($this->injectWriteInstructions($writes, $adminUserId, $messages, $instructedTools)) {
+                // The proposal never reaches the card nor the stored row, so nothing of it may
+                // stay on the panel either: the re-proposal streams into a cleared message.
+                if ($hasStreamedText) {
+                    $onChunk('replace', []);
                 }
-                if ($this->requiresConfirmation($toolCall, $adminUserId)) {
-                    // Send confirm event with tool details so frontend can show what will happen.
-                    // The same details go back on the calls themselves: the stored row is what a
-                    // reloaded conversation rebuilds its card from, and the raw call carries
-                    // neither the description nor the impact list the card is made of.
-                    [$confirmTools, $describedCalls] = $this->describedConfirmationCalls(
-                        $response['tool_calls'],
-                        $adminUserId
-                    );
-                    $onChunk('confirm', ['tools' => $confirmTools]);
-                    return [
-                        'content' => $response['content'],
-                        'tool_calls' => $describedCalls,
-                        'pending_confirmation' => true,
-                    ];
-                }
+                continue;
+            }
+            foreach ($heldCalls as $heldCall) {
+                $streamOut('tool_call', $heldCall);
+            }
+            if ($writes !== []) {
+                // Send confirm event with tool details so frontend can show what will happen.
+                // The same details go back on the calls themselves: the stored row is what a
+                // reloaded conversation rebuilds its card from, and the raw call carries
+                // neither the description nor the impact list the card is made of.
+                [$confirmTools, $describedCalls] = $this->describedConfirmationCalls(
+                    $response['tool_calls'],
+                    $adminUserId
+                );
+                $onChunk('confirm', ['tools' => $confirmTools]);
+                return [
+                    'content' => $response['content'],
+                    'tool_calls' => $describedCalls,
+                    'pending_confirmation' => true,
+                ];
             }
 
             // Execute read-only tools and loop
@@ -976,7 +1003,7 @@ class ChatService implements ChatServiceInterface
     }
 
     /**
-     * Inject tool instructions once per tool per conversation (JIT).
+     * Inject tool instructions once per tool per turn (JIT).
      * Skipped when the call was denied: the tool did not run, so its usage
      * instructions would only add prompt text the model cannot act on.
      *
@@ -1019,6 +1046,97 @@ class ChatService implements ChatServiceInterface
             $this->debugLogger->addLog('JIT Instructions', ['tool' => $toolName]);
         }
         $instructedTools[$toolName] = true;
+    }
+
+    /**
+     * The calls of a proposal that go to the confirmation card: permitted writes the action does
+     * not already refuse.
+     *
+     * @param array<int, array<string, mixed>> $toolCalls
+     * @param array<string, array<string, mixed>> $refusals Refusal results keyed by tool call id
+     * @param int|null $adminUserId
+     * @return list<array<string, mixed>>
+     */
+    private function writesToConfirm(array $toolCalls, array $refusals, ?int $adminUserId): array
+    {
+        return array_values(array_filter(
+            $toolCalls,
+            fn (array $toolCall): bool => !isset($refusals[(string)($toolCall['id'] ?? '')])
+                && $this->requiresConfirmation($toolCall, $adminUserId)
+        ));
+    }
+
+    /**
+     * Give the model the instructions of each write it proposed before it had read them (#173).
+     *
+     * For a read the instructions arriving with the result is soon enough, but a write's first call
+     * is the action itself, and it would go to the confirmation card with the parameters those
+     * instructions were meant to shape. When anything is added the proposal is dropped and the
+     * model proposes again. A tool is instructed once per turn, so the next proposal of the same
+     * write adds nothing and goes to the card: at most one extra round trip per write tool.
+     *
+     * @param list<array<string, mixed>> $writes
+     * @param int|null $adminUserId
+     * @param array<int, array<string, mixed>> $messages
+     * @param array<string, bool> $instructedTools
+     * @return bool Whether instructions were added, so the proposal is to be made again
+     */
+    private function injectWriteInstructions(
+        array $writes,
+        ?int $adminUserId,
+        array &$messages,
+        array &$instructedTools
+    ): bool {
+        $messageCount = count($messages);
+        foreach ($writes as $toolCall) {
+            $this->injectToolInstructions($toolCall, $adminUserId, $messages, $instructedTools);
+        }
+
+        return count($messages) > $messageCount;
+    }
+
+    /**
+     * A conversation that ends in tool results is the follow-up to calls that ran outside this
+     * loop: the writes the administrator just confirmed. Their instructions have not reached the
+     * model in this request, so they go in before it answers about them (#173). A call the
+     * administrator left unticked did not run and gets none.
+     *
+     * @param array<int, array<string, mixed>> $messages
+     * @param int|null $adminUserId
+     * @param array<string, bool> $instructedTools
+     */
+    private function injectFollowUpInstructions(array &$messages, ?int $adminUserId, array &$instructedTools): void
+    {
+        $messages = array_values($messages);
+        $results = [];
+        $index = count($messages) - 1;
+        while ($index >= 0 && ($messages[$index]['role'] ?? '') === 'tool') {
+            $results[(string)($messages[$index]['tool_call_id'] ?? '')] = (string)($messages[$index]['content'] ?? '');
+            $index--;
+        }
+
+        $toolCalls = $index >= 0 ? ($messages[$index]['tool_calls'] ?? []) : [];
+        if ($results === [] || !is_array($toolCalls)) {
+            return;
+        }
+
+        foreach ($toolCalls as $toolCall) {
+            $result = $results[(string)($toolCall['id'] ?? '')] ?? null;
+            if ($result === null || $this->isSkippedResult($result)) {
+                continue;
+            }
+            $this->injectToolInstructions($toolCall, $adminUserId, $messages, $instructedTools);
+        }
+    }
+
+    /**
+     * Whether a stored tool result is the "skipped" answer for a call the administrator left unticked
+     */
+    private function isSkippedResult(string $result): bool
+    {
+        $decoded = json_decode($result, true);
+
+        return is_array($decoded) && ($decoded['skipped'] ?? false) === true;
     }
 
     private function getToolStatusMessage(string $toolName, string $action, array $input): string
@@ -1205,7 +1323,13 @@ class ChatService implements ChatServiceInterface
         if ($nudged || trim((string)($response['content'] ?? '')) !== '') {
             return false;
         }
-        $last = end($messages);
+        // Instructions injected after the result are system messages; the result is still what
+        // the empty completion answered.
+        $conversation = array_filter(
+            $messages,
+            static fn (array $message): bool => ($message['role'] ?? '') !== 'system'
+        );
+        $last = end($conversation);
 
         return is_array($last) && ($last['role'] ?? '') === 'tool';
     }
