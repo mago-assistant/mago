@@ -6,16 +6,17 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
-use Magento\CatalogRule\Api\CatalogRuleRepositoryInterface;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class GetRuleAction implements ActionInterface
 {
     public function __construct(
-        private readonly CatalogRuleRepositoryInterface $catalogRuleRepository,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly CatalogRuleServices $catalogRules,
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly ErrorReporter $errorReporter
     ) {
     }
 
@@ -100,7 +101,7 @@ class GetRuleAction implements ActionInterface
         ];
 
         try {
-            $rule = $this->catalogRuleRepository->get($ruleId);
+            $rule = $this->catalogRules->getRepository()->get($ruleId);
 
             $simpleAction = $rule->getData('simple_action') ?? '';
 
@@ -125,7 +126,8 @@ class GetRuleAction implements ActionInterface
                 ],
             ];
         } catch (\Exception $e) {
-            return ['error' => 'Failed to get catalog price rule: ' . $e->getMessage()];
+            $error = $this->errorReporter->reportToolFailure('catalog_price_rules get_rule', $e);
+            return ['error' => 'Failed to get catalog price rule: ' . $error];
         }
     }
 }

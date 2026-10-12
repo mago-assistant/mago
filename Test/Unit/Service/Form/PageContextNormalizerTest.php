@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Form;
 
 use MagoAssistant\Mago\Service\Form\FormPolicy;
 use MagoAssistant\Mago\Service\Form\PageContextNormalizer;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -55,6 +56,42 @@ final class PageContextNormalizerTest extends TestCase
         $context = $this->normalize(['truncated' => ['fields' => 'true']]);
 
         $this->assertFalse($context->isFieldListTruncated);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function salesDocumentRoutes(): array
+    {
+        return [
+            'invoice' => ['/admin/sales/invoice/view/invoice_id/3/'],
+            'shipment' => ['/admin/admin/order_shipment/new/order_id/5/'],
+            'credit memo' => ['/admin/sales/creditmemo/view/creditmemo_id/6/'],
+        ];
+    }
+
+    /**
+     * A tampered request that sends a snapshot from a sales document page anyway, without the
+     * browser's own "denied" flag, so only the server's re-check stands between it and the model.
+     */
+    #[Test]
+    #[DataProvider('salesDocumentRoutes')]
+    public function itRefusesASnapshotFromASalesDocumentPage(string $route): void
+    {
+        $normalizer = new PageContextNormalizer(new FormPolicy());
+        $payload = [
+            'hasForm' => true,
+            'route' => $route,
+            'namespace' => 'vendor_document_form',
+            'entityType' => 'vendor_document',
+            'entityId' => '3',
+            'fields' => [],
+        ];
+
+        $context = $normalizer->normalize($payload);
+
+        $this->assertNull($context);
+        $this->assertTrue($normalizer->isDenied($payload));
     }
 
     private function normalize(array $extra): \MagoAssistant\Mago\Model\Form\PageContext

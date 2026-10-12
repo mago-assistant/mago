@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Block\Adminhtml;
 use Magento\Backend\Block\Template;
 use Magento\Backend\Block\Template\Context;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
+use MagoAssistant\Mago\Service\Usage\CacheShare;
 use MagoAssistant\Mago\Service\Usage\UsageStats;
 
 class Dashboard extends Template
@@ -19,6 +20,7 @@ class Dashboard extends Template
         Context $context,
         private readonly UsageStats $usageStats,
         private readonly ConfigRepository $configRepository,
+        private readonly CacheShare $cacheShare,
         array $data = []
     ) {
         parent::__construct($context, $data);
@@ -75,6 +77,17 @@ class Dashboard extends Template
             return round($tokens / 1000, 1) . 'K';
         }
         return (string)$tokens;
+    }
+
+    /**
+     * @param array<string, mixed> $stats One period from getStats()
+     */
+    public function formatCacheShare(array $stats): string
+    {
+        return $this->cacheShare->format(
+            $stats['total_cache_read_tokens'] ?? null,
+            $stats['total_cache_reported_input_tokens'] ?? null
+        );
     }
 
     public function formatCost(float $cost): string

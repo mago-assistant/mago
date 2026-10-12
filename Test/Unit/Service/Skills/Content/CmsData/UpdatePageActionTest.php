@@ -6,9 +6,10 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Content\CmsData;
 
-use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\GetPageAction;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\UpdatePageAction;
+use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -16,8 +17,7 @@ class UpdatePageActionTest extends TestCase
 {
     private const ADMIN_USER_ID = 7;
 
-    /** @var array<int, array<string, mixed>> */
-    private array $putBodies = [];
+    private FakeInternalApiClient $apiClient;
 
     /**
      * @param array<string, mixed> $page What GetPageAction returns for the looked-up page
@@ -27,14 +27,10 @@ class UpdatePageActionTest extends TestCase
         $getPageAction = $this->createStub(GetPageAction::class);
         $getPageAction->method('execute')->willReturn($page);
 
-        $apiClient = $this->createStub(InternalApiClient::class);
-        $apiClient->method('put')->willReturnCallback(function (string $endpoint, array $body, int $adminUserId): array {
-            $this->putBodies[] = $body;
+        $this->apiClient = (new FakeInternalApiClient())
+            ->withResponseForEvery(FakeInternalApiClient::PUT, ['success' => true]);
 
-            return ['success' => true];
-        });
-
-        return new UpdatePageAction($apiClient, $getPageAction);
+        return new UpdatePageAction($this->apiClient, $getPageAction, $this->createStub(SecureAdminUrl::class));
     }
 
     #[Test]
@@ -44,8 +40,8 @@ class UpdatePageActionTest extends TestCase
             ->execute(['identifier' => 'about-us', 'content' => 'New body'], self::ADMIN_USER_ID);
 
         self::assertTrue($result['success']);
-        self::assertSame('about-us', $this->putBodies[0]['page']['identifier']);
-        self::assertSame('New body', $this->putBodies[0]['page']['content']);
+        self::assertSame('about-us', $this->putBody()['page']['identifier']);
+        self::assertSame('New body', $this->putBody()['page']['content']);
     }
 
     #[Test]
@@ -54,7 +50,15 @@ class UpdatePageActionTest extends TestCase
         $this->action(['id' => 5, 'identifier' => 'about-us'])
             ->execute(['identifier' => 'about-us', 'title' => 'About Our Company'], self::ADMIN_USER_ID);
 
-        self::assertSame('about-us', $this->putBodies[0]['page']['identifier']);
-        self::assertSame('About Our Company', $this->putBodies[0]['page']['title']);
+        self::assertSame('about-us', $this->putBody()['page']['identifier']);
+        self::assertSame('About Our Company', $this->putBody()['page']['title']);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function putBody(): array
+    {
+        return $this->apiClient->callsOf(FakeInternalApiClient::PUT)[0]['payload'];
     }
 }

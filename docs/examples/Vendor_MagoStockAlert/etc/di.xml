@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <!-- Teach the model the widget: the JSON shape, " — ", then when to use it -->
+    <type name="MagoAssistant\Mago\Service\Ai\AnswerWidgets">
+        <arguments>
+            <argument name="widgets" xsi:type="array">
+                <item name="stockAlert" xsi:type="string"><![CDATA[{"type":"stockAlert","title":"Chaz Kangeroo Hoodie","sku":"MH01","qty":2,"href":"/admin/catalog/product/edit/id/67/","ask":"Show the sales of MH01 this month"} — one product that is (almost) out of stock; qty is the salable quantity and href the admin_url from a tool result (leave href out when no tool returned one), "ask" a follow-up question in the user's language.]]></item>
+            </argument>
+        </arguments>
+    </type>
+</config>

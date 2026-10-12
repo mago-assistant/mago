@@ -7,14 +7,14 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CouponManager;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
-use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class CreateCouponAction implements ActionInterface
 {
     public function __construct(
-        private readonly InternalApiClient $apiClient,
+        private readonly InternalApiClientInterface $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl
     ) {
     }

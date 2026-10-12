@@ -4,8 +4,10 @@ define([
     'MagoAssistant_Mago/js/chat/navigate-intent',
     'MagoAssistant_Mago/js/chat/session-log',
     'MagoAssistant_Mago/js/chat/confirm-text',
-    'MagoAssistant_Mago/js/chat/voice-input'
-], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, createVoiceInput) {
+    'MagoAssistant_Mago/js/chat/voice-input',
+    'MagoAssistant_Mago/js/markdown',
+    'MagoAssistant_Mago/js/vault-tokens'
+], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, createVoiceInput, markdownRenderer, vaultTokens) {
     'use strict';
 
     var isPlainObject = text.isPlainObject;
@@ -15,9 +17,8 @@ define([
     var summarizeInput = text.summarizeInput;
     var formatDate = text.formatDate;
     var formatTime = text.formatTime;
-    var escapeForMarkdown = text.escapeForMarkdown;
-    var codeSpan = text.codeSpan;
     var previewValue = text.previewValue;
+    var confirmValuePreviewLength = text.confirmValuePreviewLength;
 
     var config = window.MAGO_CONFIG;
     var storeNavigateIntent = navigateIntent.store;
@@ -38,19 +39,48 @@ define([
     var formatWriteFieldsConfirmMessage = confirmText.formatWriteFieldsConfirmMessage;
     var formatToolConfirmMessage = confirmText.formatToolConfirmMessage;
     var formatConfirmMessage = confirmText.formatConfirmMessage;
+    var describeWriteFieldChanges = confirmText.describeWriteFieldChanges;
+    var formatWriteFieldsIntro = confirmText.formatWriteFieldsIntro;
+    var formatWriteFieldsFooter = confirmText.formatWriteFieldsFooter;
     var formatTargetDescription = confirmText.formatTargetDescription;
     var formatRefusalMessage = confirmText.formatRefusalMessage;
     var failedLabels = confirmText.failedLabels;
     var formatApplyOutcomeMessage = confirmText.formatApplyOutcomeMessage;
     var formKey = config.formKey;
     var skills = config.skills;
+
+    // A tool can name itself (PresentableToolInterface); the rest keep the title derived from the name
+    var toolTitles = {};
+    (skills || []).forEach(function(s) {
+        if (s && s.name && s.title) toolTitles[s.name] = s.title;
+    });
+    skillTitle = function(toolName) {
+        return toolTitles[toolName] || text.skillTitle(toolName);
+    };
+    toolLabel = function(tool) {
+        return skillTitle(tool.name) + (tool.input && tool.input.action ? ' · ' + tool.input.action : '');
+    };
     var commands = config.commands || [];
     // Widget and skill-card builders (js/mago-ui.js); loaded before this file by panel.phtml.
     var UI = window.MagoUI;
+    // A ```mago fenced block holds a widget spec ({"type": "stat", ...} or a
+    // list of them) and renders as the matching widget. While the block is
+    // still streaming in, the JSON is incomplete and a skeleton holds its place;
+    // a block that is still invalid once the answer is complete renders nothing.
+    var markdown = markdownRenderer.create({
+        adminPath: config.adminPath,
+        tableLabel: t('Table'),
+        renderFencedBlock: function(lang, code, resolveUrls) {
+            if (lang !== 'mago' || !UI) return null;
+            return UI.renderJson(code, resolveUrls) || (widgetsStreaming ? UI.skeleton().outerHTML : '');
+        }
+    });
     var conversationId = null;
     var busy = false;
     var showingHistory = false;
     var slashActive = false;
+    var slashMenuNode = null;
+    var announcedSlashCount = null;
     var slashIndex = 0;
     var filteredItems = [];
     var SS_KEY_OPEN = 'mago_open';
@@ -224,7 +254,7 @@ define([
         formBridge.whenFormReady(entityType, NAVIGATE_INTENT_FORM_TIMEOUT_MS, function (found) {
             if (!found) {
                 hideNavigateStatus();
-                addMsg('assistant', renderPanelMd(formatNavigateTimeoutMessage(intent.target)));
+                addTextMsg('assistant', formatNavigateTimeoutMessage(intent.target));
                 return;
             }
 
@@ -253,7 +283,7 @@ define([
         if (!result) return;
         var text = formatApplyOutcomeMessage(result);
         if (!text) return;
-        addMsg('assistant', renderPanelMd(text));
+        addTextMsg('assistant', text);
     }
 
     function saveState() {
@@ -299,8 +329,40 @@ define([
         if (el) el.textContent = text || '';
     }
 
+    /**
+     * Reads a short message out to screen readers through the panel's hidden status region.
+     *
+     * @param {string} message
+     * @returns {void}
+     */
+    function announce(message) {
+        var region = qs('#mago-announcer');
+        if (!region) return;
+        // Cleared first so the same message twice in a row is still announced.
+        region.textContent = '';
+        setTimeout(function() { region.textContent = message; }, 50);
+    }
+
+    /**
+     * Reads a finished reply out to screen readers. Streaming rewrites the message on every
+     * chunk, so the message list itself is not a live region; the reply is announced once, whole.
+     *
+     * @param {HTMLElement|null} msgEl
+     * @returns {void}
+     */
+    function announceReply(msgEl) {
+        if (!msgEl) return;
+        var content = msgEl.querySelector('.mago-message-content');
+        var answer = content ? content.textContent.replace(/\s+/g, ' ').trim() : '';
+        var parts = [];
+        if (answer) parts.push(t('%1 replied: %2', config.assistantName, answer));
+        if (msgEl.querySelector('.mago-confirm-actions')) parts.push(t('Waiting for your confirmation.'));
+        if (parts.length) announce(parts.join(' '));
+    }
+
     // Busy drives the "Working" pill in the header and the send button state.
     function setBusy(state) {
+        if (state && !busy) announce(t('%1 is working…', config.assistantName));
         busy = state;
         chat.classList.toggle('is-busy', state);
         loading.style.display = state ? '' : 'none';
@@ -320,7 +382,41 @@ define([
         toggle.classList.toggle('is-active', open);
     }
 
+    // Full size covers the whole admin, so everything outside the panel is made inert
+    // while it is up: keyboard focus cannot land on a control nobody can see.
+    var inertedByFullsize = [];
+
+    /**
+     * Switches the panel between side panel and full size.
+     *
+     * @param {boolean} isFullsize
+     * @returns {void}
+     */
+    function setFullsize(isFullsize) {
+        chat.classList.toggle('is-fullsize', isFullsize);
+        document.body.classList.toggle('mago-fullsize', isFullsize);
+        var expandBtn = qs('#mago-expand');
+        expandBtn.title = isFullsize ? 'Side panel' : 'Full size';
+        expandBtn.innerHTML = isFullsize
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+
+        inertedByFullsize.forEach(function(el) { el.inert = false; });
+        inertedByFullsize = [];
+        if (!isFullsize) return;
+        for (var node = chat; node && node !== document.body; node = node.parentElement) {
+            var siblings = node.parentElement ? node.parentElement.children : [];
+            for (var i = 0; i < siblings.length; i++) {
+                var sibling = siblings[i];
+                if (sibling === node || sibling.inert || sibling.matches('script, style, .modals-wrapper')) continue;
+                sibling.inert = true;
+                inertedByFullsize.push(sibling);
+            }
+        }
+    }
+
     function openPanel() {
+        chat.inert = false;
         chat.classList.add('is-open');
         document.body.classList.add('mago-active');
         syncToggleLabel();
@@ -332,16 +428,18 @@ define([
     }
 
     function closePanel() {
-        chat.classList.remove('is-open', 'is-fullsize');
-        document.body.classList.remove('mago-active', 'mago-fullsize');
-        var expandBtn = qs('#mago-expand');
-        expandBtn.title = 'Full size';
-        expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+        var hadFocus = chat.contains(document.activeElement);
+        setFullsize(false);
+        chat.classList.remove('is-open');
+        document.body.classList.remove('mago-active');
         syncToggleLabel();
         if (showingHistory) hideHistory();
         if (showingLog) hideLog();
         hideSlashMenu();
         saveState();
+        // Off screen but still in the DOM, the closed panel would otherwise stay in the tab order.
+        chat.inert = true;
+        if (hadFocus) toggle.focus();
     }
 
     toggle.onclick = function() {
@@ -353,18 +451,16 @@ define([
     };
     qs('#mago-close').onclick = closePanel;
     qs('#mago-expand').onclick = function() {
-        var isFullsize = chat.classList.toggle('is-fullsize');
-        document.body.classList.toggle('mago-fullsize', isFullsize);
-        var expandBtn = qs('#mago-expand');
-        if (isFullsize) {
-            expandBtn.title = 'Side panel';
-            expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
-        } else {
-            expandBtn.title = 'Full size';
-            expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
-        }
+        setFullsize(!chat.classList.contains('is-fullsize'));
         saveState();
     };
+    chat.addEventListener('keydown', function(e) {
+        // The input handles Escape itself while the slash menu is open.
+        if (e.key === 'Escape' && !e.defaultPrevented) {
+            e.preventDefault();
+            closePanel();
+        }
+    });
     qs('#mago-new').onclick = function() {
         if (showingHistory) hideHistory();
         if (showingLog) hideLog();
@@ -430,7 +526,7 @@ define([
         // get a group heading inside the one menu when both kinds survive the filter.
         var hasCommands = filteredItems.some(function(i) { return i.type === 'command'; });
         var hasSkills = filteredItems.some(function(i) { return i.type === 'skill'; });
-        slashMenu.appendChild(UI.skillMenu({
+        slashMenuNode = UI.skillMenu({
             itemClass: 'mago-slash-item',
             title: hasCommands ? (hasSkills ? 'Commands and skills' : 'Commands') : 'Skills',
             skills: filteredItems.map(function(item) {
@@ -443,8 +539,17 @@ define([
                 };
             }),
             onSelect: function(entry, i) { selectSlashItem(filteredItems[i]); }
-        }));
+        });
+        slashMenu.appendChild(slashMenuNode);
         slashMenu.classList.add('is-visible');
+        input.setAttribute('aria-controls', slashMenuNode.magoListId);
+        input.setAttribute('aria-activedescendant', slashMenuNode.magoItems[0].id);
+        if (filteredItems.length !== announcedSlashCount) {
+            announcedSlashCount = filteredItems.length;
+            announce(filteredItems.length === 1
+                ? t('1 suggestion. Press Enter to insert.')
+                : t('%1 suggestions. Use up and down to choose, Enter to insert.', filteredItems.length));
+        }
     }
 
 
@@ -470,7 +575,7 @@ define([
         loading.style.display = 'none';
         inputArea.style.display = 'none';
         logView.style.display = '';
-        if (logBtn) logBtn.classList.add('is-active');
+        if (logBtn) logBtn.setAttribute('aria-pressed', 'true');
     }
 
     function hideLog() {
@@ -479,7 +584,7 @@ define([
         logView.style.display = 'none';
         msgs.style.display = '';
         inputArea.style.display = '';
-        if (logBtn) logBtn.classList.remove('is-active');
+        if (logBtn) logBtn.setAttribute('aria-pressed', 'false');
     }
 
     if (logBtn) {
@@ -489,8 +594,12 @@ define([
 
     function hideSlashMenu() {
         slashActive = false;
+        slashMenuNode = null;
+        announcedSlashCount = null;
         slashMenu.classList.remove('is-visible');
         slashMenu.innerHTML = '';
+        input.removeAttribute('aria-controls');
+        input.removeAttribute('aria-activedescendant');
     }
 
     function selectSlashItem(item) {
@@ -511,11 +620,9 @@ define([
     }
 
     function updateSlashHighlight() {
-        var items = slashMenu.querySelectorAll('.mago-slash-item');
-        items.forEach(function(el, i) {
-            el.classList.toggle('is-active', i === slashIndex);
-        });
-        if (items[slashIndex]) items[slashIndex].scrollIntoView({block:'nearest'});
+        if (!slashMenuNode) return;
+        slashMenuNode.magoSetActive(slashIndex);
+        input.setAttribute('aria-activedescendant', slashMenuNode.magoItems[slashIndex].id);
     }
 
     function autoGrow() {
@@ -541,6 +648,7 @@ define([
     function updatePrivacyHint(v) {
         if (!privacyHint) return;
         var hit = v.length > 5 && privacyHintPatterns.some(function(p) { return p.test(v); });
+        if (hit && privacyHint.hidden) announce(privacyHint.textContent.trim());
         privacyHint.hidden = !hit;
     }
 
@@ -649,11 +757,12 @@ define([
     function loadHistory() {
         if (showingLog) hideLog();
         showingHistory = true;
+        qs('#mago-history').setAttribute('aria-pressed', 'true');
         msgs.style.display = 'none';
         loading.style.display = 'none';
         inputArea.style.display = 'none';
         histList.style.display = '';
-        histList.innerHTML = '<div style="padding:16px;color:#999;font-size:13px;">Loading...</div>';
+        histList.innerHTML = '<div class="mago-history-empty">Loading...</div>';
 
         fetch(config.historyUrl, {
             headers: {'X-Requested-With':'XMLHttpRequest'},
@@ -663,21 +772,24 @@ define([
         .then(function(data) {
             histList.innerHTML = '';
             if (!data.conversations || !data.conversations.length) {
-                histList.innerHTML = '<div style="padding:16px;color:#999;font-size:13px;">No previous chats</div>';
+                histList.innerHTML = '<div class="mago-history-empty">No previous chats</div>';
                 return;
             }
             data.conversations.forEach(function(conv) {
                 var item = document.createElement('div');
                 item.className = 'mago-history-item';
-                item.innerHTML = '<span class="mago-history-item-title">' + esc(conv.title || 'Untitled') + '</span>'
+                var title = conv.title || 'Untitled';
+                item.innerHTML = '<button type="button" class="mago-history-item-title">' + esc(title) + '</button>'
                     + '<span class="mago-history-item-date">' + formatDate(conv.updated_at) + '</span>'
-                    + '<button type="button" class="mago-history-item-delete" title="Delete">'
-                    + '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
+                    + '<button type="button" class="mago-history-item-delete">'
+                    + '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
                     + '</button>';
 
                 item.querySelector('.mago-history-item-title').onclick = function() {
                     loadConversation(conv.entity_id, conv.title);
+                    input.focus();
                 };
+                item.querySelector('.mago-history-item-delete').title = t('Delete conversation: %1', title);
                 item.querySelector('.mago-history-item-delete').onclick = function(e) {
                     e.stopPropagation();
                     deleteConversation(conv.entity_id, item);
@@ -686,12 +798,13 @@ define([
             });
         })
         .catch(function() {
-            histList.innerHTML = '<div style="padding:16px;color:#e22626;font-size:13px;">Failed to load history</div>';
+            histList.innerHTML = '<div class="mago-history-empty is-error">Failed to load history</div>';
         });
     }
 
     function hideHistory() {
         showingHistory = false;
+        qs('#mago-history').setAttribute('aria-pressed', 'false');
         histList.style.display = 'none';
         msgs.style.display = '';
         inputArea.style.display = '';
@@ -729,6 +842,7 @@ define([
                 return;
             }
             var loaded = data.messages || [];
+            var tokens = data.tokens || {};
             if (!loaded.length) {
                 showGreeting();
                 return;
@@ -759,7 +873,12 @@ define([
                     addDateSep(m.created_at);
                     // No timestamp: a live bubble never carries one, and a reloaded conversation
                     // that grows them is not the same conversation the admin was just looking at.
-                    var msgEl = addMsg(m.role, renderMd(m.content));
+                    var msgEl = m.role === 'user'
+                        ? addTextMsg('user', vaultTokens.replaceTokens(m.content, tokens))
+                        : addMsg('assistant', renderMd(m.content, tokens));
+                    if (m.role === 'assistant') {
+                        attachFeedback(msgEl, m.entity_id, m.rating || null);
+                    }
                     if (m.role === 'assistant' && pendingTools.length) {
                         replayTools(msgEl, pendingTools);
                         pendingTools = [];
@@ -787,7 +906,11 @@ define([
             body: fd,
             credentials: 'same-origin'
         }).then(function(r) { return r.json(); }).then(function() {
+            // The deleted row held focus; hand it to the next row, or back to the History button.
+            var next = el.nextElementSibling || el.previousElementSibling;
+            var hadFocus = el.contains(document.activeElement);
             el.remove();
+            if (hadFocus) (next ? next.querySelector('.mago-history-item-title') : qs('#mago-history')).focus();
             if (conversationId === id) {
                 conversationId = null;
                 clearMsgs();
@@ -795,85 +918,24 @@ define([
         });
     }
 
-    // Model output is attacker-influenceable, so a link target is only ever http(s) or a local
-    // path, with quotes neutralised so it cannot break out of the href attribute.
-    function safeHref(href) {
-        href = String(href || '').replace(/[\n\r]/g, '');
-        if (!/^(https?:\/\/|\/)/i.test(href)) return '#';
-        return href.replace(/"/g, '%22');
-    }
+    var widgetsStreaming = false;
 
-    // Configure marked.js once if available
-    if (window.marked) {
-        var markedRenderer = new marked.Renderer();
-        markedRenderer.link = function(href, title, text) {
-            if (typeof href === 'object' && href !== null) { text = href.text; title = href.title; href = href.href; }
-            href = safeHref(href);
-            var isAdmin = href.indexOf('/admin') !== -1 || href.charAt(0) === '/';
-            var target = isAdmin ? '_self' : '_blank';
-            var titleAttr = title ? ' title="' + String(title).replace(/"/g, '&quot;') + '"' : '';
-            return '<a href="' + href + '" target="' + target + '" rel="noopener"' + titleAttr + '>' + text + '</a>';
-        };
-        markedRenderer.table = function(token) {
-            // Render using the default logic but wrap in a scrollable div
-            var html = marked.Renderer.prototype.table.call(this, token);
-            return '<div class="mago-table-wrap">' + html + '</div>';
-        };
-        // A ```mago fenced block holds a widget spec ({"type": "stat", ...} or a
-        // list of them) and renders as the matching widget. While the block is
-        // still streaming in, the JSON is incomplete and a skeleton holds its place.
-        markedRenderer.code = function(token) {
-            var lang = typeof token === 'object' ? token.lang : arguments[1];
-            if (lang === 'mago' && UI) {
-                var code = typeof token === 'object' ? token.text : token;
-                return UI.renderJson(code) || UI.skeleton().outerHTML;
-            }
-            return marked.Renderer.prototype.code.apply(this, arguments);
-        };
-        marked.use({ renderer: markedRenderer, gfm: true, breaks: true });
-    }
-
-    function renderMd(t) {
-        if (!t) return '';
-        // Model output is attacker-influenceable (tool results can carry injected instructions), so
-        // raw HTML must never reach innerHTML: escape first, then let marked render markdown only.
-        return renderEscapedMd(esc(t));
-    }
-
-    // For sentences the panel builds itself (chat/confirm-text.js). Every value in them that came
-    // from the store or the model is already escaped with text.escapeForMarkdown and wrapped in a
-    // <code> the panel wrote, so escaping again would show that <code> and every entity as text.
-    function renderPanelMd(t) {
-        if (!t) return '';
-        return renderEscapedMd(t);
-    }
-
-    function renderEscapedMd(safe) {
-        if (window.marked) {
-            return marked.parse(safe);
+    // Renders an answer that is still coming in: an incomplete widget block shows a skeleton.
+    function renderStreamingMd(t, tokens) {
+        widgetsStreaming = true;
+        try {
+            return renderMd(t, tokens);
+        } finally {
+            widgetsStreaming = false;
         }
-        // Fallback: simple regex-based renderer
-        var h = safe;
-        h = h.replace(/```(\w*)\n([\s\S]*?)```/g, function(m,l,c){ return '<pre><code>'+c.trim()+'</code></pre>'; });
-        h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
-        h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        h = h.replace(/\[([^\]]+)\]\(((?:https?:\/\/[^ )]+|\/[^ )]+))\)/g, function(m, text, url) {
-            url = safeHref(url);
-            var isAdmin = url.indexOf('/admin') !== -1 || url.charAt(0) === '/';
-            var target = isAdmin ? '_self' : '_blank';
-            return '<a href="' + url + '" target="' + target + '" rel="noopener">' + text + '</a>';
-        });
-        h = h.replace(/(https?:\/\/[^ <\n]+)/g, function(m, url, offset) {
-            var before = h.substring(Math.max(0, offset - 6), offset);
-            if (before.indexOf('href=') !== -1 || before.indexOf('">') !== -1) return m;
-            var isAdmin = url.indexOf('/admin') !== -1;
-            var target = isAdmin ? '_self' : '_blank';
-            return '<a href="' + safeHref(url) + '" target="' + target + '" rel="noopener">' + url + '</a>';
-        });
-        h = h.replace(/\n\n/g, '</p><p>');
-        h = h.replace(/\n/g, '<br>');
-        return '<p>' + h + '</p>';
+    }
+
+    // Only the model's own answer is markdown. Model output is attacker-influenceable (tool results
+    // can carry injected instructions), so raw HTML in it shows as text, and what marked renders is
+    // sanitized before innerHTML. tokens: the vault values its privacy tokens stand for, which go
+    // in as text after sanitizing, so a customer's review or name can never become markup.
+    function renderMd(t, tokens) {
+        return markdown.renderText(t, tokens);
     }
 
     var lastDateLabel = '';
@@ -896,6 +958,16 @@ define([
     }
 
 
+    // Anything that is not the model's answer (what the admin typed, the panel's own notices) is
+    // shown exactly as written: a text node, never markdown or HTML.
+    function addTextMsg(role, text) {
+        const msgEl = addMsg(role, '');
+        const paragraph = document.createElement('p');
+        paragraph.textContent = text;
+        msgEl.querySelector('.mago-message-content').appendChild(paragraph);
+        return msgEl;
+    }
+
     function addMsg(role, html, timestamp) {
         var cls = role === 'user' ? 'is-user' : 'is-assistant';
         var timeHtml = timestamp ? '<div class="mago-msg-time">' + esc(formatTime(timestamp)) + '</div>' : '';
@@ -910,6 +982,203 @@ define([
         msgs.insertBefore(div, loading);
         msgs.scrollTop = msgs.scrollHeight;
         return div;
+    }
+
+    // Thumbs under an answer let the admin say whether it helped. Either thumb
+    // copies the turn, with its tool calls and whatever the provider was sent and
+    // sent back, into a row the Answer Feedback screen reads. Nothing about the
+    // conversation changes, and the copy is what makes the feedback survive the
+    // payload purge.
+    //
+    // A click saves the rating straight away, so one click is all it takes. The
+    // S10 card that follows asks for an optional note; leaving it empty, or
+    // pressing Escape, keeps the rating as it is.
+    var RATINGS = ['up', 'down'];
+
+    function attachFeedback(msgEl, messageId, rating) {
+        if (!msgEl || !messageId || msgEl.querySelector('.mago-msg-feedback')) {
+            return;
+        }
+
+        var group = document.createElement('div');
+        group.className = 'mago-msg-feedback';
+        group.setAttribute('role', 'group');
+        group.setAttribute('aria-label', t('Rate this answer'));
+
+        RATINGS.forEach(function (value) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'mago-msg-rate';
+            btn.setAttribute('data-rating', value);
+            btn.setAttribute('aria-label', value === 'up' ? t('Good answer') : t('Bad answer'));
+            btn.title = btn.getAttribute('aria-label');
+            btn.innerHTML = UI.icon(value === 'up' ? 'thumbsUp' : 'thumbsDown', 14).outerHTML;
+            btn.addEventListener('click', function () {
+                var open = msgEl.querySelector('.mago-feedback-ask');
+                if (open) {
+                    open.remove();
+                }
+                if (btn.getAttribute('aria-pressed') === 'true') {
+                    sendFeedback(msgEl, group, messageId, {remove: true});
+                    return;
+                }
+                sendFeedback(msgEl, group, messageId, {rating: value}, function () {
+                    askNote(msgEl, group, messageId, value);
+                });
+            });
+            group.appendChild(btn);
+        });
+
+        // Kept empty and in place from the start, so a screen reader announces what lands in it.
+        var live = document.createElement('span');
+        live.className = 'mago-feedback-live';
+        live.setAttribute('role', 'status');
+        group.appendChild(live);
+
+        setRating(group, rating);
+        msgEl.appendChild(group);
+    }
+
+    function setRating(group, rating) {
+        group.classList.toggle('is-rated', !!rating);
+        Array.prototype.forEach.call(group.querySelectorAll('.mago-msg-rate'), function (btn) {
+            btn.setAttribute('aria-pressed', btn.getAttribute('data-rating') === rating ? 'true' : 'false');
+        });
+    }
+
+    function setFeedbackBusy(group, busy) {
+        Array.prototype.forEach.call(group.querySelectorAll('.mago-msg-rate'), function (btn) {
+            btn.disabled = busy;
+        });
+    }
+
+    // S10: the note is optional, so the card says so and an empty submit only
+    // closes it. The chips are the reasons a thumbs down comes up with most.
+    function askNote(msgEl, group, messageId, rating) {
+        var isDown = rating === 'down';
+        var question = isDown
+            ? t('What was wrong with this answer? (optional)')
+            : t('What was helpful about this answer? (optional)');
+        var card = UI.paramPrompt({
+            text: question,
+            placeholder: isDown
+                ? t('It said the order was shipped, but it was not')
+                : t('It found the right orders straight away'),
+            submitLabel: t('Send'),
+            chips: isDown ? [
+                {label: t('Wrong information'), value: t('Wrong information')},
+                {label: t('Did not do what I asked'), value: t('Did not do what I asked')},
+                {label: t('Missing something'), value: t('Missing something')}
+            ] : null,
+            onSubmit: function (note) {
+                if (!note.trim()) {
+                    card.remove();
+                    return;
+                }
+                sendFeedback(msgEl, group, messageId, {rating: rating, note: note});
+            }
+        });
+        card.classList.add('mago-feedback-ask');
+        var input = card.querySelector('input');
+        if (input) {
+            input.setAttribute('aria-label', question);
+            input.maxLength = 2000;
+        }
+        card.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                // Closes the card, not the panel: the panel only acts on an Escape nobody handled.
+                e.preventDefault();
+                card.remove();
+                var pressed = group.querySelector('.mago-msg-rate[aria-pressed="true"]');
+                if (pressed) {
+                    pressed.focus();
+                }
+            }
+        });
+        msgEl.appendChild(card);
+        msgs.scrollTop = msgs.scrollHeight;
+        if (card.magoFocus) {
+            card.magoFocus();
+        }
+    }
+
+    // A note replaces the card with one quiet line, so the answer is not left
+    // looking as though nothing happened. A plain rating needs no line: the
+    // pressed thumb already says it.
+    function sendFeedback(msgEl, group, messageId, options, onRated) {
+        var card = msgEl.querySelector('.mago-feedback-ask');
+        var removing = !!options.remove;
+        setFeedbackBusy(group, true);
+
+        fetch(config.flagUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message_id: messageId,
+                remove: removing,
+                rating: options.rating || '',
+                note: options.note || '',
+                form_key: formKey
+            })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                setFeedbackBusy(group, false);
+                if (card) {
+                    card.remove();
+                }
+                if (d.error) {
+                    showFeedbackLine(
+                        msgEl,
+                        removing
+                            ? t('This feedback can only be removed under Answer Feedback.')
+                            : t('Could not save your feedback.'),
+                        'failed'
+                    );
+                    return;
+                }
+                setRating(group, d.rating || null);
+                var line = msgEl.querySelector('.mago-feedback-line');
+                if (line) {
+                    line.remove();
+                }
+                if (removing) {
+                    showFeedbackLine(msgEl, t('Feedback removed.'), 'done');
+                } else if (options.note) {
+                    showFeedbackLine(
+                        msgEl,
+                        d.note_saved ? t('Thanks for your feedback.') : t('This feedback was already resolved, so the note was not added.'),
+                        d.note_saved ? 'done' : 'failed'
+                    );
+                } else if (onRated && d.rating === options.rating) {
+                    onRated();
+                }
+            })
+            .catch(function () {
+                setFeedbackBusy(group, false);
+                if (card) {
+                    card.remove();
+                }
+                showFeedbackLine(msgEl, t('Could not save your feedback.'), 'failed');
+            });
+    }
+
+    function showFeedbackLine(msgEl, text, state) {
+        var existing = msgEl.querySelector('.mago-feedback-line');
+        if (existing) {
+            existing.remove();
+        }
+        var line = UI.readLine({text: text, state: state === 'failed' ? 'active' : 'done'});
+        line.classList.add('mago-feedback-line');
+        var live = msgEl.querySelector('.mago-feedback-live');
+        if (live) {
+            live.textContent = text;
+        }
+        if (state === 'failed') {
+            line.classList.add('is-failed');
+        }
+        msgEl.appendChild(line);
+        msgs.scrollTop = msgs.scrollHeight;
     }
 
     // S06: a read-only call is one quiet line above the answer — spinner while
@@ -940,8 +1209,9 @@ define([
     }
 
     // Answer widgets arrive as static HTML from the markdown renderer, so their
-    // interactions are wired here once: a chip or suggestion card asks its label,
-    // a value prompt (S10) sends the value the admin typed or picked.
+    // interactions are wired here once, for built-in and registered widgets alike:
+    // data-mago-send sends its value as the next message, data-mago-focus moves the
+    // focus to the input, and a value prompt (S10) sends the value the admin typed.
     function askFromWidget(text) {
         if (!text || busy) return;
         input.value = text;
@@ -952,6 +1222,19 @@ define([
     msgs.addEventListener('click', function(e) {
         var scope = e.target.closest('.mago-message-content');
         if (!scope) return;
+        var focusEl = e.target.closest('[' + UI.focusAttr + ']');
+        if (focusEl && scope.contains(focusEl)) {
+            e.preventDefault();
+            input.focus();
+            return;
+        }
+        var sendEl = e.target.closest('[' + UI.sendAttr + ']');
+        if (sendEl && scope.contains(sendEl)) {
+            e.preventDefault();
+            askFromWidget(sendEl.getAttribute(UI.sendAttr).trim());
+            return;
+        }
+        // Chips a value prompt draws carry no send value; they still ask their label
         var chip = e.target.closest('.mago-chip, .mago-suggestion:not([href])');
         if (chip) {
             e.preventDefault();
@@ -1073,17 +1356,134 @@ define([
     function showGreeting() {
         chat.classList.add('is-empty');
         setSubtitle('');
+        loadAddons();
     }
 
-    // Welcome starters drop the skill into the input so the slash menu takes over.
+    var addonsAsked = false;
+
+    // The newest add-ons, asked for once the welcome state is on screen.
+    //
+    // This is the whole reason there is an endpoint for it: the panel is on every admin page, so
+    // fetching while a page renders would put someone else's server in the path of all of them, and
+    // firing on load would cost a request on every page view for a section most of them never show.
+    function loadAddons() {
+        var host = document.getElementById('mago-addons');
+        if (addonsAsked || !host || !config.addonsUrl || !chat.classList.contains('is-open')) {
+            return;
+        }
+        addonsAsked = true;
+
+        fetch(config.addonsUrl, {credentials: 'same-origin'})
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var addons = (d && d.addons) || [];
+                if (!addons.length) {
+                    return;
+                }
+
+                var label = document.createElement('div');
+                label.className = 'mago-welcome-label';
+                label.textContent = t('New available add-ons');
+
+                // Heading and link share one row, so the link reads as part of the
+                // section rather than as a footer under the last card.
+                var head = document.createElement('div');
+                head.className = 'mago-addons-head';
+                head.appendChild(label);
+
+                if (d.more_url) {
+                    var more = document.createElement('a');
+                    more.className = 'mago-addons-more';
+                    more.href = d.more_url;
+                    more.target = '_blank';
+                    more.rel = 'noopener noreferrer';
+                    more.textContent = t('All add-ons');
+                    head.appendChild(more);
+                }
+
+                var list = document.createElement('div');
+                list.className = 'mago-addons';
+                addons.forEach(function (addon) {
+                    list.appendChild(addonCard(addon));
+                });
+
+                host.appendChild(head);
+                host.appendChild(list);
+                host.hidden = false;
+            })
+            .catch(function () {
+                // No add-ons is a normal answer; it is never worth telling the admin about.
+            });
+    }
+
+    // Built node by node with textContent: every value here came off the network.
+    function addonCard(addon) {
+        var card = document.createElement(addon.url ? 'a' : 'div');
+        card.className = 'mago-addon';
+        if (addon.url) {
+            card.href = addon.url;
+            card.target = '_blank';
+            card.rel = 'noopener noreferrer';
+        }
+
+        var icon = document.createElement('span');
+        icon.className = 'mago-addon-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = addon.icon || '\u25C6';
+
+        var name = document.createElement('span');
+        name.className = 'mago-addon-name';
+        name.textContent = addon.name || '';
+
+        var title = document.createElement('span');
+        title.className = 'mago-addon-title';
+        title.appendChild(name);
+
+        var released = releaseDate(addon.released_at);
+        if (released) {
+            var date = document.createElement('span');
+            date.className = 'mago-addon-date';
+            date.textContent = released;
+            title.appendChild(date);
+        }
+
+        var body = document.createElement('span');
+        body.className = 'mago-addon-body';
+        body.appendChild(title);
+
+        if (addon.description) {
+            var text = document.createElement('span');
+            text.className = 'mago-addon-text';
+            text.textContent = addon.description;
+            body.appendChild(text);
+        }
+
+        card.appendChild(icon);
+        card.appendChild(body);
+        return card;
+    }
+
+    // The feed dates a release as a plain day (2026-09-24); the card shows it short,
+    // in the browser's own locale. A date it cannot read is left out rather than
+    // printed as "Invalid Date".
+    function releaseDate(value) {
+        if (!value) {
+            return '';
+        }
+        var d = new Date(value + 'T00:00:00Z');
+        if (isNaN(d.getTime())) {
+            return '';
+        }
+        return d.toLocaleDateString([], {month: 'short', day: 'numeric', timeZone: 'UTC'});
+    }
+
     var starters = chat.querySelectorAll('.mago-starter');
     for (var si = 0; si < starters.length; si++) {
         starters[si].onclick = function() {
-            var name = this.getAttribute('data-skill');
-            if (!name) return;
-            input.value = '/' + name + ' ';
-            input.dispatchEvent(new Event('input'));
-            input.focus();
+            var question = this.getAttribute('data-question');
+            if (!question || busy) return;
+            input.value = question;
+            send();
         };
     }
 
@@ -1159,11 +1559,12 @@ define([
         autoGrow();
         updatePrivacyHint('');
         setBusy(true);
-        addMsg('user', renderMd(text));
+        addTextMsg('user', text);
 
         var msg = null;
         var content = null;
         var full = '';
+        let tokens = {};
 
         /* The form's fields register over several ticks, and a Page Builder field only once its
            stage has initialised. Sending straight away describes a form that is genuinely missing
@@ -1225,7 +1626,14 @@ define([
                     try { var d=JSON.parse(ln.substring(6)); } catch(e){return;}
                     if (evt==='text'&&d.text) {
                         if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
-                        full+=d.text; content.innerHTML=renderMd(full); msgs.scrollTop=msgs.scrollHeight;
+                        tokens = vaultTokens.merge(tokens, d.tokens);
+                        full+=d.text; content.innerHTML=renderStreamingMd(full, tokens); msgs.scrollTop=msgs.scrollHeight;
+                    }
+                    // The server caught a raw JSON/XML dump in the finished reply and is re-presenting it,
+                    // or dropped a write proposed before its instructions were read: drop what streamed
+                    // so the next answer streams into a clean message.
+                    else if (evt==='replace') {
+                        if (content) { full=''; content.innerHTML=''; }
                     }
                     else if (evt==='conversation') { conversationId=d.conversation_id; saveState(); }
                     else if (evt==='tool_call') {
@@ -1245,11 +1653,16 @@ define([
                     }
                     else if (evt==='done') {
                         gotDone = true;
+                        if (content && full) { content.innerHTML = renderMd(full, tokens); }
                         if(d.conversation_id) conversationId=d.conversation_id;
                         saveState(); releaseInput();
+                        if (d.message_id && msg && !d.pending_confirmation) {
+                            attachFeedback(msg, d.message_id, null);
+                        }
                         if (d.pending_confirmation && msg && !writeToolDetected) {
                             showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, []);
                         }
+                        announceReply(msg);
                         if (!d.pending_confirmation && writeToolDetected) {
                             writeToolDetected = false;
                         }
@@ -1307,15 +1720,15 @@ define([
         var text = first && first.description ? first.description : 'I want to perform an action. Allow this?';
 
         /* A form write is the one confirmation the tool's own description cannot describe: what
-           matters is which fields change and from what, read off the form open right now. That
-           sentence is built in chat/confirm-text.js and rendered as markdown here, so it replaces
-           both the description and the parameter table, which would otherwise show the raw
-           directive JSON. Every other tool keeps the generic card. */
-        var formWriteMessage = isFormWrite(first)
-            ? {html: renderPanelMd(formatConfirmMessage(tools))}
-            : null;
+           matters is which fields change and from what, read off the form open right now. The
+           heading comes from chat/confirm-text.js and the field list from UI.fieldChanges, both as
+           DOM with every value a text node; every field is listed, a long value folded but never
+           cut. It replaces both the description and the parameter table, which would otherwise
+           show the raw directive JSON. Every other tool keeps the generic card. */
+        var formWriteMessage = isFormWrite(first) ? buildFormWriteMessage(first) : null;
         var hooks = {actions: 'mago-confirm-actions', allow: 'mago-btn--confirm', confirm: 'mago-btn--confirm', later: 'mago-btn--reject', cancel: 'mago-btn--reject'};
         var irreversible = tools.filter(function(t) { return t.irreversible; });
+        var cautioned = tools.filter(function(t) { return t.caution; });
         var card;
 
         if (tools.length > 1) {
@@ -1323,25 +1736,32 @@ define([
             title = tools.length + ' actions';
             card = UI.skillBulk({
                 title: title,
-                text: 'Choose which of these to run.',
-                notice: irreversible.length ? UI.callout({tone: 'danger', text: irreversible.length + ' of these cannot be undone: ' + irreversible.map(function(t) { return toolLabel(t); }).join(', ') + '.'}) : null,
+                text: 'Tick each action you want to run. Nothing is ticked for you.',
+                labels: {allArguments: t('Show all arguments'), fullValue: t('Show full value')},
+                notice: irreversible.length ? UI.callout({tone: 'danger', text: irreversible.length + ' of these cannot be undone: ' + irreversible.map(function(t) { return toolLabel(t); }).join(', ') + '.'})
+                    : cautioned.length ? UI.callout({
+                        tone: 'warn',
+                        text: t('Check these before you run them, and run only what you asked for yourself:') + ' '
+                            + cautioned.map(function(c) { return toolLabel(c) + ': ' + (c.impacts || []).slice(0, 2).join(' '); }).join(' ')
+                    }) : null,
                 items: tools.map(function(t, i) {
-                    return {id: t.id || String(i), label: toolLabel(t), meta: summarizeInput(t.input)};
+                    return {id: t.id || String(i), label: toolLabel(t), meta: summarizeInput(t.input), params: UI.paramsFromInput(t.input)};
                 }),
                 confirmLabel: function(n) { return 'Run ' + n; },
                 classes: hooks,
                 onConfirm: function(ids) { decide(true, ids); },
                 onLater: function() { decide(false); }
             });
-        } else if (first && first.irreversible) {
-            // S07: the write has no undo, so it asks with its impact list and a ticked acknowledgement.
+        } else if (first && (first.irreversible || first.caution)) {
+            // S07: the write has no undo, or changes something to weigh first (#245), so it asks with
+            // its impact list and a ticked acknowledgement.
             card = UI.skillIrreversible({
                 title: title,
                 tool: first.name,
                 text: text,
                 params: UI.paramsFromInput(first.input),
                 impacts: first.impacts || [],
-                ackLabel: 'I understand this cannot be undone',
+                ackLabel: first.irreversible ? 'I understand this cannot be undone' : t('I understand what this changes'),
                 confirmLabel: 'Allow',
                 classes: hooks,
                 onConfirm: function() { decide(true); },
@@ -1360,14 +1780,18 @@ define([
             });
         }
         var actions = card.querySelector('.mago-confirm-actions');
-        // A write carrying a masked personal value (#114) is allowed, but only with that value in plain sight.
+        // A write carrying a value that was masked for privacy (#114) is allowed, but only with that value in plain sight.
         if (tools.some(function(t) { return t.sensitive; })) {
-            actions.parentNode.insertBefore(UI.callout({tone: 'warn', text: 'This may write personal data (such as an email address or phone number). Check the values before you allow it.'}), actions);
+            actions.parentNode.insertBefore(UI.callout({tone: 'warn', text: t('This writes values that were masked for privacy: personal or customer data, such as a name, an email address or an order number. Check them before you allow it.')}), actions);
         }
         msgEl.appendChild(card);
         msgs.scrollTop = msgs.scrollHeight;
 
+        var decided = false;
+        // One answer per card: a second click (or a double click) must not send a second confirm.
         function decide(allowed, selectedIds) {
+            if (decided) return;
+            decided = true;
             actions.innerHTML = '';
             actions.appendChild(UI.spinner());
             getMessageId(function(mid) {
@@ -1430,11 +1854,34 @@ define([
         }
     }
 
+    function buildFormWriteMessage(tool) {
+        var intro = document.createElement('div');
+        var footer = document.createElement('div');
+        intro.appendChild(formatWriteFieldsIntro(tool));
+        [formatWriteFieldsFooter(), t('Allow this?')].forEach(function(sentence) {
+            var paragraph = document.createElement('p');
+            paragraph.textContent = sentence;
+            footer.appendChild(paragraph);
+        });
+        var message = document.createElement('div');
+        message.className = 'mago-form-write-message';
+        message.appendChild(intro);
+        message.appendChild(UI.fieldChanges({
+            changes: describeWriteFieldChanges(tool),
+            hiddenLabel: t('(hidden)'),
+            previewLength: confirmValuePreviewLength,
+            labels: {fullValue: t('Show full value')}
+        }));
+        message.appendChild(footer);
+        return message;
+    }
+
     // run = {card, title, tools, startedAt}: the S02 card that replaced the
     // question; tool_status events feed its step list and "done" collapses it.
     function handleConfirm(messageId, run) {
         setBusy(true);
         var msg = null, content = null, full = '';
+        let tokens = {};
 
         var failureMessage = '';
 
@@ -1517,7 +1964,13 @@ define([
                     try { var d=JSON.parse(ln.substring(6)); } catch(e){return;}
                     if (evt==='text'&&d.text) {
                         if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
-                        full+=d.text; content.innerHTML=renderMd(full); msgs.scrollTop=msgs.scrollHeight;
+                        tokens = vaultTokens.merge(tokens, d.tokens);
+                        full+=d.text; content.innerHTML=renderStreamingMd(full, tokens); msgs.scrollTop=msgs.scrollHeight;
+                    }
+                    // The server dropped what streamed (a raw data dump, or a write proposed before its
+                    // instructions were read): the next turn streams into a clean message.
+                    else if (evt==='replace') {
+                        if (content) { full=''; content.innerHTML=''; }
                     }
                     else if (evt==='tool_call') {
                         if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
@@ -1548,6 +2001,7 @@ define([
                     }
                     else if (evt==='form_apply') { applyPending = true; applyFormDirective(d, handleApplyOutcome); }
                     else if (evt==='done') {
+                        if (content && full) { content.innerHTML = renderMd(full, tokens); }
                         if (d.conversation_id) conversationId=d.conversation_id;
                         saveState(); releaseInput();
                         finishRun(failed ? 'failed' : 'done');
@@ -1556,9 +2010,13 @@ define([
                             reportApplyOutcome(applyResult);
                             applyResult = null;
                         }
+                        if (d.message_id && msg && !d.pending_confirmation) {
+                            attachFeedback(msg, d.message_id, null);
+                        }
                         if (d.pending_confirmation && msg) {
                             showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, []);
                         }
+                        announceReply(msg);
                         keepNavigateStatusLast();
                     }
                     else if (evt==='error') {
@@ -1601,7 +2059,11 @@ define([
             body: JSON.stringify({message_id: messageId, form_key: formKey}),
             credentials: 'same-origin'
         }).then(function(r) { return r.json(); }).then(function(d) {
-            addMsg('assistant', renderMd(t('Action rejected. No changes were made.')));
+            if (d && d.error) {
+                showError(addMsg('assistant', ''), d.error);
+                return;
+            }
+            addTextMsg('assistant', t('Action rejected. No changes were made.'));
         }).catch(function(e) {
             showError(addMsg('assistant', ''), e.message);
         });
@@ -1620,11 +2082,7 @@ define([
                 }
             }
             if (wasFullsize) {
-                chat.classList.add('is-fullsize');
-                document.body.classList.add('mago-fullsize');
-                var expandBtn = qs('#mago-expand');
-                expandBtn.title = 'Side panel';
-                expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+                setFullsize(true);
             }
             openPanel();
         }

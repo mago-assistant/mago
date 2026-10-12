@@ -23,6 +23,11 @@ final class FakeTool implements ToolInterface
     /** @var array<string,array{0:string,1?:string}> */
     private array $fieldClassification = [PiiClass::ANY => [PiiClass::PUBLIC]];
 
+    private ?string $description = null;
+
+    /** @var array<string, mixed>|null */
+    private ?array $parameterSchema = null;
+
     /**
      * @param string[] $actions
      * @param string[] $readActions
@@ -31,7 +36,7 @@ final class FakeTool implements ToolInterface
         private readonly string $name,
         private readonly array $actions,
         private readonly array $readActions,
-        private readonly string $magentoAcl = ''
+        private readonly string $magentoAcl = 'Magento_Backend::admin'
     ) {
     }
 
@@ -55,6 +60,23 @@ final class FakeTool implements ToolInterface
         return $this;
     }
 
+    public function withDescription(string $description): self
+    {
+        $this->description = $description;
+
+        return $this;
+    }
+
+    /**
+     * @param array<string, mixed> $parameterSchema
+     */
+    public function withParameterSchema(array $parameterSchema): self
+    {
+        $this->parameterSchema = $parameterSchema;
+
+        return $this;
+    }
+
     public function getName(): string
     {
         return $this->name;
@@ -62,14 +84,14 @@ final class FakeTool implements ToolInterface
 
     public function getDescription(): string
     {
-        return 'Fake tool with actions ' . implode(', ', $this->actions);
+        return $this->description ?? 'Fake tool with actions ' . implode(', ', $this->actions);
     }
 
     public function getParameterSchema(): array
     {
         $this->schemaCalls++;
 
-        return [
+        return $this->parameterSchema ?? [
             'type' => 'object',
             'properties' => [
                 'action' => ['type' => 'string', 'enum' => $this->actions],

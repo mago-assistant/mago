@@ -6,10 +6,10 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Sales\OrderManager;
 
-use MagoAssistant\Mago\Service\Api\InternalApiClient;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\CancelAction;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\OrderResolver;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -29,8 +29,7 @@ class CancelActionTest extends TestCase
             'status' => 'processing',
         ]);
 
-        $apiClient = $this->createStub(InternalApiClient::class);
-        $apiClient->method('post')->willReturn($postResult);
+        $apiClient = (new FakeInternalApiClient())->withResponseForEvery(FakeInternalApiClient::POST, $postResult);
 
         $adminUrl = $this->createStub(SecureAdminUrl::class);
         $adminUrl->method('getUrl')->willReturn('http://example.test/admin/order/5');

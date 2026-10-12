@@ -13,6 +13,7 @@
     <rule ref="Magento2.Security.LanguageConstruct.DirectOutput">
         <exclude-pattern>Controller/Adminhtml/Chat/Stream.php</exclude-pattern>
         <exclude-pattern>Controller/Adminhtml/Chat/Confirm.php</exclude-pattern>
+        <exclude-pattern>Controller/Adminhtml/Chat/ReleasesSessionLock.php</exclude-pattern>
     </rule>
     <rule ref="Magento2.Security.LanguageConstruct.ExitUsage">
         <exclude-pattern>Controller/Adminhtml/Chat/Stream.php</exclude-pattern>

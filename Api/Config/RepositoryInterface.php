@@ -18,17 +18,18 @@ interface RepositoryInterface
     public const XML_PATH_EXTENSION_ENABLE = 'mago/general/enabled';
     public const XML_PATH_DEBUG = 'mago/debug/debug';
     public const XML_PATH_PAYLOAD_RETENTION_DAYS = 'mago/debug/payload_retention_days';
+    public const XML_PATH_HISTORY_RETENTION_DAYS = 'mago/privacy/history_retention_days';
     public const XML_PATH_AI_SERVICE = 'mago/api/ai_service';
     public const XML_PATH_MAX_TOKENS = 'mago/api/max_tokens';
     public const XML_PATH_STREAMING = 'mago/api/streaming';
     public const XML_PATH_SYSTEM_PROMPT = 'mago/chat/system_prompt';
     public const XML_PATH_MAX_TOOL_ITERATIONS = 'mago/chat/max_tool_iterations';
     public const XML_PATH_MAX_RESPONSE_TOKENS = 'mago/tools/max_response_tokens';
+    public const XML_PATH_ALLOW_REINDEX = 'mago/tools/allow_reindex';
+    public const XML_PATH_CUSTOMER_NOTIFICATION_INTERVAL = 'mago/tools/customer_notification_interval';
     public const XML_PATH_ACCENT_COLOR = 'mago/chat/accent_color';
     public const XML_PATH_TEXT_COLOR = 'mago/chat/text_color';
     public const XML_PATH_ASSISTANT_NAME = 'mago/chat/assistant_name';
-    public const XML_PATH_INTERNAL_URL = 'mago/api/internal_url';
-    public const XML_PATH_INTERNAL_SSL_VERIFY = 'mago/api/internal_ssl_verify';
     public const XML_PATH_LANGUAGE = 'mago/chat/language';
     public const XML_PATH_ANSWER_WIDGETS = 'mago/chat/answer_widgets';
     public const XML_PATH_VOICE_INPUT = 'mago/voice/enabled';
@@ -36,6 +37,7 @@ interface RepositoryInterface
     public const XML_PATH_VOICE_LANGUAGE = 'mago/voice/language';
     public const XML_PATH_VOICE_HANDS_FREE = 'mago/voice/hands_free';
     public const XML_PATH_VOICE_SEND_DELAY = 'mago/voice/send_delay';
+    public const XML_PATH_ADDONS_ENABLED = 'mago/addons/enabled';
     public const XML_PATH_DOCS_ENABLED = 'mago/docs/enabled';
     public const XML_PATH_DOCS_SOURCE_REPO = 'mago/docs/source_repo';
     public const XML_PATH_DOCS_REF = 'mago/docs/ref';
@@ -83,6 +85,11 @@ interface RepositoryInterface
     public function getPayloadRetentionDays(): int;
 
     /**
+     * @return int
+     */
+    public function getHistoryRetentionDays(): int;
+
+    /**
      * Row id of the MageOS_AiBase service the assistant runs on.
      *
      * Empty means "whichever service is usable first", which is what a single-provider store wants
@@ -117,6 +124,18 @@ interface RepositoryInterface
      * @return int
      */
     public function getMaxResponseTokens(): int;
+
+    /**
+     * @return bool
+     */
+    public function isReindexAllowed(): bool;
+
+    /**
+     * Minutes Mago waits before it e-mails the customer of the same order again, 0 when unlimited
+     *
+     * @return int
+     */
+    public function getCustomerNotificationInterval(): int;
 
     /**
      * @return string
@@ -181,14 +200,11 @@ interface RepositoryInterface
     public function getVoiceSendDelay(): int;
 
     /**
-     * @return string
-     */
-    public function getInternalUrl(): string;
-
-    /**
+     * Whether the dashboard may show the add-on feed
+     *
      * @return bool
      */
-    public function isInternalSslVerifyEnabled(): bool;
+    public function isAddonFeedEnabled(): bool;
 
     /**
      * @return bool

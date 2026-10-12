@@ -377,4 +377,21 @@ export default class MagentoApi {
       headers: {Authorization: 'Bearer ' + await this.getToken(request)},
     });
   }
+
+  /**
+   * The order with this increment id, including its status_histories, or null when the install has none.
+   */
+  async findOrderByIncrementId(request: APIRequestContext, incrementId: string) {
+    const response = await request.get('/rest/V1/orders', {
+      headers: {Authorization: 'Bearer ' + await this.getToken(request)},
+      params: {
+        'searchCriteria[filterGroups][0][filters][0][field]': 'increment_id',
+        'searchCriteria[filterGroups][0][filters][0][value]': incrementId,
+      },
+    });
+
+    const result = await response.json();
+
+    return result.items?.[0] ?? null;
+  }
 }

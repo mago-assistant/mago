@@ -101,6 +101,14 @@ class ConversationVault
     }
 
     /**
+     * The value behind one token, or null when this conversation never issued it.
+     */
+    public function valueOf(string $token): ?string
+    {
+        return $this->valueByToken[$token] ?? null;
+    }
+
+    /**
      * Replace any vaulted value occurring in the text with its token. Closes the echo path the
      * heuristic cannot: a tool embedding a rehydrated argument in kept free text (a write ack
      * "Invoice created for order #000000549") has no PII signature to match, but the vault knows the

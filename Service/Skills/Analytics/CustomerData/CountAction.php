@@ -7,13 +7,15 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Analytics\CustomerData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
-use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Skills\PeriodParser;
 
 class CountAction implements ActionInterface
 {
     public function __construct(
-        private readonly InternalApiClient $apiClient
+        private readonly InternalApiClientInterface $apiClient,
+        private readonly PeriodParser $periodParser
     ) {
     }
 
@@ -70,7 +72,7 @@ class CountAction implements ActionInterface
 
         $total = $result['total_count'] ?? 0;
 
-        $today = (new \DateTimeImmutable())->format('Y-m-d 00:00:00');
+        $today = $this->periodParser->getFromDate('today');
         $todayParams = $this->apiClient->buildSearchCriteria(
             [['field' => 'created_at', 'value' => $today, 'condition_type' => 'gteq']],
             1

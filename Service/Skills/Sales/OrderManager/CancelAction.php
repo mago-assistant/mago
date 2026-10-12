@@ -7,14 +7,14 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Sales\OrderManager;
 
 use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
-use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class CancelAction implements IrreversibleActionInterface
 {
     public function __construct(
-        private readonly InternalApiClient $apiClient,
+        private readonly InternalApiClientInterface $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl,
         private readonly OrderResolver $orderResolver
     ) {

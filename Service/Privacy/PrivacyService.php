@@ -93,7 +93,7 @@ class PrivacyService
             if (is_array($value)) {
                 $input[$key] = $this->rehydrateArguments($value);
             } elseif (is_string($value)) {
-                $input[$key] = $this->vault->rehydrate($value);
+                $input[$key] = $this->vault->rehydrate($this->canonicalTokens($value));
             }
         }
 
@@ -107,11 +107,40 @@ class PrivacyService
     private const WRITE_REFUSED_TYPES = '/(?:\[|mago:\/\/)url_\d+\]?/';
 
     /**
-     * Heuristic-minted personal values. They may be written (#114: a contact person in a CMS block is
-     * a legitimate write), but the confirmation card shows the real value with a warning, so the
-     * administrator decides with it in plain sight rather than approving an opaque token.
+     * Text a customer wrote (a review, its title, the reviewer's nickname). It never rehydrates into
+     * a write either: it is the text a prompt injection arrives in, and copying it into store data
+     * would publish whatever the customer wrote under the store's name.
      */
-    private const PERSONAL_TYPES = '/(?:\[|mago:\/\/)(?:name|email|iban|vat|bsn|phone)_\d+\]?/';
+    private const CUSTOMER_WRITTEN_TYPES = '/(?:\[|mago:\/\/)(?:reviewtext|reviewtitle|nickname)_\d+\]?/';
+
+    /**
+     * Every masked value except an admin URL: personal data, customer data and ids. They may be
+     * written (#114: a contact person in a CMS block is a legitimate write), but the confirmation
+     * card shows the real value with a warning, so the administrator decides with it in plain sight
+     * rather than approving an opaque token.
+     */
+    private const MASKED_VALUE_TYPES = '/(?:mago:\/\/(?!url_)[a-z]+_\d+|\[(?!url_)[a-z]+_\d+\])/';
+
+    /**
+     * Any vault token, in the scheme form tokens are minted in and the bracket form older
+     * conversations stored.
+     */
+    private const TOKEN = '/(?:\[[a-z]+_\d+\]|mago:\/\/[a-z]+_\d+)/';
+
+    /**
+     * A token the model wrote with markdown escapes: "mago://url\_3", "mago\://url_3", "\[name\_1\]". Markdown
+     * shows it as the token again, so the admin saw raw token grammar where a link or name belonged
+     * (#160), and a write check that only knows the plain form would let it through.
+     */
+    private const ESCAPED_SCHEME_TOKEN = '/mago\\\\?:\\\\?\/\\\\?\/([a-z]+)\\\\?_(\d+)/';
+    private const ESCAPED_BRACKET_TOKEN = '/\\\\?\[([a-z]+)\\\\?_(\d+)\\\\?\]/';
+
+    /**
+     * A token cut off at the end of a streamed delta, escaped or not. Every branch consumes at least
+     * one character, or it matches the empty string at the end of any delta and nothing is emitted.
+     */
+    private const PARTIAL_TOKEN = '/(?:\\\\?\[[a-z]*(?:\\\\?_?\d*)?\\\\?'
+        . '|m(?:a(?:g(?:o(?:\\\\?:(?:\\\\?\/(?:\\\\?\/[a-z]*(?:\\\\?_?\d*)?)?)?)?)?)?)?)\\\\?$/';
 
     /**
      * True when any argument carries a token of a write-refused class (see WRITE_REFUSED_TYPES).
@@ -125,14 +154,25 @@ class PrivacyService
     }
 
     /**
-     * True when any argument carries a masked personal value (see PERSONAL_TYPES). Checked on the
-     * raw, still tokenised arguments.
+     * True when any argument carries customer-written text (see CUSTOMER_WRITTEN_TYPES). Checked on
+     * the raw arguments BEFORE rehydration, so a resolvable token still refuses.
+     *
+     * @param array<array-key,mixed> $input
+     */
+    public function containsCustomerWrittenToken(array $input): bool
+    {
+        return $this->matchesAnywhere($input, self::CUSTOMER_WRITTEN_TYPES);
+    }
+
+    /**
+     * True when any argument carries a masked value that rehydrates into the write (see
+     * MASKED_VALUE_TYPES). Checked on the raw, still tokenised arguments.
      *
      * @param array<array-key,mixed> $input
      */
     public function containsPersonalToken(array $input): bool
     {
-        return $this->matchesAnywhere($input, self::PERSONAL_TYPES);
+        return $this->matchesAnywhere($input, self::MASKED_VALUE_TYPES);
     }
 
     /**
@@ -144,7 +184,7 @@ class PrivacyService
             if (is_array($value) && $this->matchesAnywhere($value, $pattern)) {
                 return true;
             }
-            if (is_string($value) && preg_match($pattern, $value) === 1) {
+            if (is_string($value) && preg_match($pattern, $this->canonicalTokens($value)) === 1) {
                 return true;
             }
         }
@@ -174,7 +214,7 @@ class PrivacyService
             if (is_array($value) && $this->containsToken($value)) {
                 return true;
             }
-            if (is_string($value) && preg_match('/(?:\[[a-z]+_\d+\]|mago:\/\/[a-z]+_\d+)/', $value) === 1) {
+            if (is_string($value) && preg_match(self::TOKEN, $this->canonicalTokens($value)) === 1) {
                 return true;
             }
         }
@@ -188,7 +228,7 @@ class PrivacyService
      */
     public function rehydrate(string $text): string
     {
-        return $this->vault->rehydrate($text);
+        return $this->vault->rehydrate($this->canonicalTokens($text));
     }
 
     /**
@@ -199,33 +239,62 @@ class PrivacyService
     public function displayText(string $text): string
     {
         return (string)preg_replace(
-            '/(?:\[[a-z]+_\d+\]|mago:\/\/[a-z]+_\d+)/',
+            self::TOKEN,
             '[earlier record]',
-            $this->vault->rehydrate($text)
+            $this->rehydrate($text)
         );
     }
 
     /**
-     * Rehydrate a streamed text delta for the admin. A token can split across SSE chunks, so a
-     * trailing partial token is held back as the returned carry and prepended to the next delta; the
-     * rest is rehydrated now. Both shapes have to be recognised half-written: the bracket form and
-     * the "mago://" form a url token wears so markdown link syntax leaves it alone. The stored
-     * message stays tokenised; only the displayed copy is restored.
+     * The values behind the tokens in a text, keyed by token, for a display sink that puts them in
+     * as text itself: the admin panel renders the answer's markdown with the tokens still in place
+     * and only then swaps each one for its value, so a value can never become markup. A token the
+     * vault cannot resolve is left out; the panel shows a neutral label for it (decision 5).
+     *
+     * @return array<string,string>
+     */
+    public function tokenValues(string $text): array
+    {
+        if (preg_match_all(self::TOKEN, $this->canonicalTokens($text), $matches) === 0) {
+            return [];
+        }
+
+        return array_filter(
+            array_combine($matches[0], array_map($this->vault->valueOf(...), $matches[0])),
+            static fn (?string $value): bool => $value !== null
+        );
+    }
+
+    /**
+     * Split a streamed text delta into the part that can be shown now and a trailing partial token
+     * held back as the carry for the next delta. A token can split across SSE chunks, and the panel
+     * only recognises a whole one. Both shapes have to be recognised half-written: the bracket form
+     * and the "mago://" form. The text itself is not rehydrated; tokenValues() supplies the values.
      *
      * @return array{0:string,1:string} [text to emit now, carry for the next delta]
      */
-    public function rehydrateStreamDelta(string $carry, string $delta): array
+    public function splitStreamDelta(string $carry, string $delta): array
     {
         $text = $carry . $delta;
-        $newCarry = '';
         // Every branch has to consume at least one character, or the pattern matches the empty
         // string at the end of any delta and nothing is ever emitted.
-        if (preg_match('/(?:\[[a-z]*(?:_\d*)?|m(?:a(?:g(?:o(?::(?:\/(?:\/[a-z]*(?:_\d*)?)?)?)?)?)?)?)$/', $text, $m, PREG_OFFSET_CAPTURE) === 1) {
-            $offset = (int)$m[0][1];
-            $newCarry = substr($text, $offset);
-            $text = substr($text, 0, $offset);
+        if (preg_match(self::PARTIAL_TOKEN, $text, $m, PREG_OFFSET_CAPTURE) !== 1) {
+            return [$text, ''];
         }
+        $offset = (int)$m[0][1];
 
-        return [$this->displayText($text), $newCarry];
+        return [substr($text, 0, $offset), substr($text, $offset)];
+    }
+
+    /**
+     * Every token in its plain form, whatever markdown escapes the model put in it.
+     */
+    private function canonicalTokens(string $text): string
+    {
+        return (string)preg_replace(
+            [self::ESCAPED_SCHEME_TOKEN, self::ESCAPED_BRACKET_TOKEN],
+            ['mago://$1_$2', '[$1_$2]'],
+            $text
+        );
     }
 }

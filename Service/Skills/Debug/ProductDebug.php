@@ -15,6 +15,14 @@ class ProductDebug extends AbstractSkill
         return 'product_debug';
     }
 
+    /**
+     * Both actions inspect a product, which the Products grid guards.
+     */
+    public function getMagentoAcl(array $input = []): string
+    {
+        return 'Magento_Catalog::products';
+    }
+
     protected function getBaseDescription(): string
     {
         return 'Debug why a product is hidden, not visible, or missing images on the storefront.';

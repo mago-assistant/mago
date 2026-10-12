@@ -4,13 +4,11 @@
 
 /**
  * The panel's own translations and the entity wording built on top of them. A factory rather than
- * a plain object because the phrase table comes from MAGO_CONFIG, and the entity helpers escape
- * through the shared text helpers before anything reaches innerHTML.
+ * a plain object because the phrase table comes from MAGO_CONFIG. Everything here is plain text:
+ * the panel puts it in text nodes, never in innerHTML or markdown.
  */
-define(['MagoAssistant_Mago/js/chat/text'], function (text) {
+define([], function () {
     'use strict';
-
-    var escapeForMarkdown = text.escapeForMarkdown;
 
     var ENTITY_LABELS = {cms_page: 'CMS page', cms_block: 'CMS block'};
 
@@ -33,12 +31,12 @@ define(['MagoAssistant_Mago/js/chat/text'], function (text) {
     // they are escaped here like every other value on the card.
     function entityLabel(entityType) {
         if (!entityType) return 'item';
-        return ENTITY_LABELS[entityType] ? t(ENTITY_LABELS[entityType]) : escapeForMarkdown(String(entityType).replace(/_/g, ' '));
+        return ENTITY_LABELS[entityType] ? t(ENTITY_LABELS[entityType]) : String(entityType).replace(/_/g, ' ');
     }
 
     function describeEntity(entityType, entityId) {
         return entityId
-            ? t('%1 #%2', entityLabel(entityType), escapeForMarkdown(entityId))
+            ? t('%1 #%2', entityLabel(entityType), entityId)
             : t('a new %1', entityLabel(entityType));
     }
 

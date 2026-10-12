@@ -72,9 +72,15 @@ body.is-capture details { display: none; }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/less.js/4.2.0/less.min.js"></script>
 <script>
-    // mago-ui.js is an AMD module; this shim runs the factory and lets it set window.MagoUI.
-    window.define = function (deps, factory) { factory(); };
+    // mago-ui.js and safe-url.js are AMD modules; this shim runs each factory with the modules
+    // loaded before it, and mago-ui sets window.MagoUI.
+    window.magoModules = {};
+    window.define = function (deps, factory) {
+        var name = 'MagoAssistant_Mago/js/' + document.currentScript.src.split('/js/').pop().replace(/\.js$/, '');
+        window.magoModules[name] = factory.apply(null, deps.map(function (dep) { return window.magoModules[dep]; }));
+    };
 </script>
+<script src="../view/adminhtml/web/js/safe-url.js"></script>
 <script src="../view/adminhtml/web/js/mago-ui.js"></script>
 <script>
 (function () {
@@ -252,11 +258,16 @@ body.is-capture details { display: none; }
         return U.entityList({
             items: [
                 {title: 'Brass Wall Sconce, Small', meta: 'SKU LT-2201 · 1.240 views / 30d', onClick: log, action: {label: 'Upload', onClick: log}},
-                {title: 'Leather Card Holder, Tan', meta: 'SKU AC-1044 · 980 views / 30d', href: '#', action: {label: 'Upload', href: '#'}}
+                {title: 'Leather Card Holder, Tan', meta: 'SKU AC-1044 · 980 views / 30d', href: '#', action: {label: 'Upload', href: '#'}},
+                {title: 'Oak Side Table', meta: 'SKU FN-3310 · 870 views / 30d', href: '#'},
+                {title: 'Linen Cushion, Sand', meta: 'SKU HT-0412 · 760 views / 30d', href: '#'},
+                {title: 'Ceramic Vase, Tall', meta: 'SKU HT-0988 · 655 views / 30d', href: '#'},
+                {title: 'Wool Throw, Grey', meta: 'SKU HT-1201 · 590 views / 30d', href: '#'},
+                {title: 'Walnut Tray', meta: 'SKU HT-0730 · 512 views / 30d', href: '#'}
             ],
             more: {count: 126, onClick: log}
         });
-    }, 'Never more than five in the panel; the rest behind "show more" or a grid link.');
+    }, 'Five in the panel; the rest fold behind "Show N more", which opens without script.');
 
     ex('data', 'W14', 'Compact table', function () {
         return U.table({
@@ -319,6 +330,14 @@ body.is-capture details { display: none; }
         return U.suggestions({
             cards: [{label: 'Revenue versus last week', icon: 'barChart', onClick: log}],
             chips: [{label: 'Split per country', onClick: log}, {label: 'Mobile only', onClick: log}, {label: 'Export CSV', onClick: log}]
+        });
+    });
+
+    ex('actions', 'W19b', 'Clarifying choices', function () {
+        return U.choices({
+            options: [{label: 'Low stock', onClick: log}, {label: 'Disabled products with stock', onClick: log}, {label: 'Visible products without an image', onClick: log}],
+            other: 'Something else…',
+            onOther: log
         });
     });
 

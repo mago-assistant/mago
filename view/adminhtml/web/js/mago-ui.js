@@ -9,7 +9,7 @@
  *   Widgets      stat, stats, sparkline, meter, ring, composition, rankedBars,
  *                columns, lines, stackedColumns, heatmap, funnel, entityList,
  *                table, record, confirmWrite, toolTrace, callout, suggestions,
- *                answerFooter, empty, skeleton
+ *                choices, answerFooter, empty, skeleton
  *   Skill cards  skillAsk, skillRunning, skillLine, skillFailed, readLine,
  *                skillIrreversible, skillBulk, skillPlan, paramPrompt,
  *                undoCallout, sessionLog, skillMenu
@@ -27,10 +27,11 @@
  * Loaded through RequireJS as MagoAssistant_Mago/js/mago-ui; also exposed as
  * window.MagoUI for the plain-script chat panel.
  */
-define([], function () {
+define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
     'use strict';
 
     var SVG_NS = 'http://www.w3.org/2000/svg';
+    var menuSeq = 0;
 
     // Inline icon set (24x24, stroke = currentColor). Kept as markup strings so
     // a builder can drop one into an <svg> without a template engine.
@@ -49,6 +50,7 @@ define([], function () {
         chevronUp: '<path d="M18 15l-6-6-6 6"/>',
         chevronRight: '<path d="M9 6l6 6-6 6"/>',
         copy: '<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5H6a2 2 0 0 0-2 2v9"/>',
+        flag: '<path d="M5 21V4.5h13l-2.5 4 2.5 4H5"/>',
         thumbsUp: '<path d="M7 11v9H4v-9h3Zm0 0 4-7a2.5 2.5 0 0 1 2.5 3.2L13 11h5.5a2 2 0 0 1 2 2.4l-1.2 5.2a2 2 0 0 1-2 1.4H7"/>',
         thumbsDown: '<path d="M17 13V4h3v9h-3Zm0 0-4 7a2.5 2.5 0 0 1-2.5-3.2L11 13H5.5a2 2 0 0 1-2-2.4l1.2-5.2A2 2 0 0 1 6.7 4H17"/>',
         search: '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/>',
@@ -57,8 +59,15 @@ define([], function () {
         list: '<path d="M4 6h11M4 12h16M4 18h8"/>',
         barChart: '<path d="M4 19V9m5 10V5m5 14v-7m5 7V8"/>',
         imageOff: '<rect x="3" y="4" width="18" height="14" rx="2.5"/><path d="M4 17l5-4 3.5 2.5"/><path d="M3 3l18 18"/>',
-        sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.7 1.8L21.5 19.5l-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z"/>'
+        sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.7 1.8L21.5 19.5l-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z"/>',
+        pencil: '<path d="M16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1 1-4z"/><path d="M14.5 6.5l3 3"/>'
     };
+
+    // Inside an answer, a click on an element with SEND_ATTR sends its value as
+    // the admin's next message and one with FOCUS_ATTR moves the focus to the
+    // input. The chat panel handles both, so a widget needs no script of its own.
+    var SEND_ATTR = 'data-mago-send';
+    var FOCUS_ATTR = 'data-mago-focus';
 
     // Default English copy. Override per call through opts.labels, or globally
     // through MagoUI.labels before rendering.
@@ -83,11 +92,16 @@ define([], function () {
         menuHint: '↑↓ choose · ⏎ insert',
         risk: {read: 'read', write: 'writes', irreversible: 'irreversible'},
         showMore: 'Show %1 more',
+        moreNotShown: '%1 more not shown',
+        showLess: 'Show less',
         nothingFound: 'Nothing found',
         confirmChange: 'Confirm change',
         cannotUndo: 'Cannot be undone',
         stepOf: 'step %1 of %2',
-        ofSelected: '%1 of %2'
+        ofSelected: '%1 of %2',
+        allArguments: 'Show all arguments',
+        fullValue: 'Show full value',
+        somethingElse: 'Something else…'
     };
 
     /* ------------------------------------------------------------------ */
@@ -146,13 +160,10 @@ define([], function () {
     }
 
     // Links from specs may only point at web or in-admin URLs; anything else
-    // (javascript:, data:) is dropped so a clickable row cannot run code.
+    // (javascript:, data:, a protocol-relative //host) is dropped so a clickable
+    // row cannot run code or pass for a link inside the admin. See js/safe-url.js.
     function safeHref(href) {
-        if (typeof href !== 'string') {
-            return null;
-        }
-        var trimmed = href.trim();
-        return /^(https?:\/\/|\/|#|\?)/i.test(trimmed) ? trimmed : null;
+        return safeUrl.safeHref(href);
     }
 
     // Colours from specs are limited to literal colours and kit tokens, so a
@@ -657,13 +668,20 @@ define([], function () {
     /* W13–W15 Data                                                         */
     /* ------------------------------------------------------------------ */
 
-    // W13 Entity list: thumb, two lines, one action. Never more than five in the panel.
+    // W13 Entity list: thumb, two lines, one action. The panel shows five; further items fold behind
+    // "Show N more" in a <details>, so it opens without script: an answer widget reaches the panel as
+    // scrubbed HTML and loses its listeners (#249). A spec from an answer has no working url or
+    // handler for "the rest", so its more.count is a note, never a link.
     // {items: [{title, meta, thumb, href, onClick, action: {label, href, onClick}}], more: {count, label, onClick, href}}
+    var ENTITIES_SHOWN = 5;
+
     function entityList(opts) {
         var items = opts.items || [];
-        var list = el('div', 'mago-entities', items.map(function (it) {
+        var more = opts.more || null;
+        function entity(it) {
             var thumb;
-            if (safeHref(it.thumb)) {
+            // A thumb loads by itself, so an off-site one would tell that site the admin looked.
+            if (safeUrl.isSameOrigin(it.thumb)) {
                 thumb = el('img', 'mago-entity-thumb');
                 thumb.src = safeHref(it.thumb);
                 thumb.alt = '';
@@ -694,17 +712,37 @@ define([], function () {
                 row.href = rowHref;
             }
             return clickable(row, it.onClick ? function (e) { it.onClick(e, it); } : null);
-        }));
-        if (opts.more) {
-            var moreHref = safeHref(opts.more.href);
-            var more = el(moreHref ? 'a' : 'div', 'mago-entity-more', [
-                opts.more.label || tpl(labels(opts).showMore, opts.more.count),
+        }
+        var L = labels(opts);
+        var list = el('div', 'mago-entities', items.slice(0, ENTITIES_SHOWN).map(entity));
+        var folded = items.slice(ENTITIES_SHOWN);
+        if (folded.length) {
+            list.appendChild(el('details', 'mago-entities-fold', [
+                el('summary', 'mago-entity-more', [
+                    el('span', 'mago-fold-closed', tpl(L.showMore, folded.length)),
+                    el('span', 'mago-fold-open', L.showLess),
+                    icon('chevronDown', 14, 2.2)
+                ]),
+                el('div', 'mago-entities', folded.map(entity))
+            ]));
+        }
+        var moreCount = Math.floor(Number(more && more.count));
+        moreCount = isFinite(moreCount) && moreCount > 0 ? moreCount : 0;
+        var moreHref = more && allowHtml ? safeHref(more.href) : null;
+        var moreClick = more && allowHtml && typeof more.onClick === 'function' ? more.onClick : null;
+        if (moreHref || moreClick) {
+            var link = el(moreHref ? 'a' : 'div', 'mago-entity-more', [
+                more.label || (moreCount ? tpl(L.showMore, moreCount) : L.showMore.replace(' %1', '')),
                 icon('chevronDown', 14, 2.2)
             ]);
             if (moreHref) {
-                more.href = moreHref;
+                link.href = moreHref;
             }
-            list.appendChild(clickable(more, opts.more.onClick));
+            list.appendChild(clickable(link, moreClick));
+            return list;
+        }
+        if (moreCount) {
+            list.appendChild(el('div', 'mago-entity-more is-note', tpl(L.moreNotShown, moreCount)));
         }
         return list;
     }
@@ -856,6 +894,9 @@ define([], function () {
             icon('chevronRight', 16, 2.2)
         ]);
         setHref(node, opts.href);
+        if (!node.href && !opts.onClick) {
+            node.setAttribute(SEND_ATTR, opts.label);
+        }
         return clickable(node, opts.onClick);
     }
 
@@ -865,6 +906,8 @@ define([], function () {
             chip.type = 'button';
             if (c.onClick) {
                 chip.addEventListener('click', function (e) { c.onClick(e, c); });
+            } else {
+                chip.setAttribute(SEND_ATTR, c.label);
             }
             return chip;
         }));
@@ -874,6 +917,49 @@ define([], function () {
         return el('div', 'mago-suggestions', [
             el('div', 'mago-suggestion-cards', (opts.cards || []).map(suggestionCard)),
             opts.chips && opts.chips.length ? chips(opts.chips) : null
+        ]);
+    }
+
+    // W19b Clarifying choices: the options for a question that was too vague to answer.
+    // {options: [{label}], other: 'Something else…'}
+    // Each option is a button, so the static HTML an answer renders to stays reachable by
+    // keyboard; the chat panel sends a picked option's label as the next message and moves the
+    // focus to the input for "other".
+    function choiceButton(label, iconName, className) {
+        var node = el('button', 'mago-suggestion mago-choice' + (className ? ' ' + className : ''), [
+            el('span', 'mago-suggestion-icon', icon(iconName, 19, 2)),
+            el('span', 'mago-suggestion-label', label),
+            icon('chevronRight', 16, 2.2)
+        ]);
+        node.type = 'button';
+        return node;
+    }
+
+    function choices(opts) {
+        var L = labels(opts);
+        var options = (opts.options || []).filter(function (o) {
+            return o && o.label;
+        });
+        var cards = options.map(function (o) {
+            var node = choiceButton(o.label, 'arrowRight');
+            if (o.onClick) {
+                node.addEventListener('click', function (e) { o.onClick(e, o); });
+            } else {
+                node.setAttribute(SEND_ATTR, o.label);
+            }
+            return node;
+        });
+        if (opts.other !== false) {
+            var other = choiceButton(typeof opts.other === 'string' && opts.other ? opts.other : L.somethingElse, 'pencil', 'is-other');
+            if (opts.onOther) {
+                other.addEventListener('click', opts.onOther);
+            } else {
+                other.setAttribute(FOCUS_ATTR, '');
+            }
+            cards.push(other);
+        }
+        return el('div', 'mago-suggestions mago-choices', [
+            el('div', 'mago-suggestion-cards', cards)
         ]);
     }
 
@@ -966,6 +1052,41 @@ define([], function () {
                 value = el('div', 'mago-param-value', mono(p.value, 'is-chip'));
             }
             return el('div', 'mago-param', [el('div', 'mago-param-key', p.key), value]);
+        }));
+    }
+
+    // A value the admin approves, shown whole. A long one starts folded behind its first
+    // characters, and the fold opens onto every character of it; text nodes only, never markup.
+    // {value, previewLength, labels}
+    function fullValue(opts) {
+        var L = labels(opts);
+        var value = opts.value;
+        var text = value === null || value === undefined ? '' : (typeof value === 'object' ? JSON.stringify(value) : String(value));
+        var previewLength = opts.previewLength || 80;
+        if (text.length <= previewLength) {
+            return el('code', 'mago-value', text);
+        }
+        return el('details', 'mago-value-fold', [
+            el('summary', 'mago-value-summary', [
+                el('code', 'mago-value', text.slice(0, previewLength) + '…'),
+                el('span', 'mago-value-toggle', ' ' + L.fullValue)
+            ]),
+            el('pre', 'mago-value-full', text)
+        ]);
+    }
+
+    // Field changes on a form-write card, every one of them: "Label: old → new".
+    // {changes: [{label, from, isFromHidden, isFromUnknown, to}], hiddenLabel, previewLength, labels}
+    function fieldChanges(opts) {
+        return el('ul', 'mago-field-changes', (opts.changes || []).map(function (change) {
+            var to = fullValue({value: change.to, previewLength: opts.previewLength, labels: opts.labels});
+            if (change.isFromUnknown) {
+                return el('li', 'mago-field-change', [change.label + ': ', to]);
+            }
+            var from = change.isFromHidden
+                ? el('span', 'mago-param-muted', opts.hiddenLabel || '(hidden)')
+                : fullValue({value: change.from, previewLength: opts.previewLength, labels: opts.labels});
+            return el('li', 'mago-field-change', [change.label + ': ', from, ' → ', to]);
         }));
     }
 
@@ -1182,13 +1303,16 @@ define([], function () {
     }
 
     // S08 Bulk with selection: tick the records to act on, the button counts them.
-    // {title, icon, text, items: [{id, label, meta, checked, disabled}], confirmLabel(n), onConfirm(selectedIds), onLater,
-    //  classes: {actions, confirm, later}}
+    // Nothing starts ticked unless an item says checked: true, so every write is chosen on purpose.
+    // An item's params open under its row with every argument in full, so the short meta line is
+    // never all the admin gets to see of what runs.
+    // {title, icon, text, items: [{id, label, meta, params, checked, disabled}], confirmLabel(n), onConfirm(selectedIds),
+    //  onLater, classes: {actions, confirm, later}}
     function skillBulk(opts) {
         var L = labels(opts);
         var classes = opts.classes || {};
         var items = opts.items || [];
-        var state = items.map(function (it) { return it.checked !== false && !it.disabled; });
+        var state = items.map(function (it) { return it.checked === true && !it.disabled; });
         var counter = num('', 'mago-skill-count');
         var confirm = button('', 'is-primary' + (classes.confirm ? ' ' + classes.confirm : ''), function (e) {
             var selected = items.filter(function (it, i) { return state[i]; });
@@ -1222,7 +1346,11 @@ define([], function () {
                     sync();
                 });
             }
-            return row;
+            var details = it.params && it.params.length ? el('details', 'mago-bulk-details', [
+                el('summary', 'mago-bulk-details-toggle', L.allArguments),
+                paramTable(it.params)
+            ]) : null;
+            return el('div', 'mago-bulk-item', [row, details]);
         });
         sync();
         return el('div', 'mago-widget mago-skill is-accent is-flush', [
@@ -1367,20 +1495,34 @@ define([], function () {
     // A "group" on an entry opens a heading row above it, so one menu can hold several
     // kinds of entry; activeIndex and the onSelect index stay flat over all of them.
     // Returns the menu; call menu.magoSetActive(i) to move the highlight.
+    // With onSelect the rows are listbox options driven from a text field through
+    // aria-activedescendant (menu.magoListId, menu.magoItems[i].id), so they take no focus
+    // themselves. Without it the menu is only a static list.
     function skillMenu(opts) {
         var L = labels(opts);
         var skillsList = opts.skills || [];
         var activeIndex = opts.activeIndex || 0;
+        var interactive = typeof opts.onSelect === 'function';
+        var prefix = 'mago-menu-' + (++menuSeq);
         var items = [];
         var listChildren = [];
         var openGroup = null;
+        var groupNode = null;
         skillsList.forEach(function (s, i) {
-            if (s.group && s.group !== openGroup) {
+            if (!s.group) {
+                openGroup = null;
+                groupNode = null;
+            } else if (s.group !== openGroup) {
                 openGroup = s.group;
-                listChildren.push(el('div', 'mago-menu-group', s.group));
+                var groupLabel = el('div', 'mago-menu-group', s.group);
+                groupLabel.id = prefix + '-group-' + i;
+                groupNode = el('div', 'mago-menu-group-items', groupLabel);
+                groupNode.setAttribute('role', 'group');
+                groupNode.setAttribute('aria-labelledby', groupLabel.id);
+                listChildren.push(groupNode);
             }
             var risk = s.risk || 'read';
-            var row = el('div', 'mago-menu-item' + (opts.itemClass ? ' ' + opts.itemClass : '') + (i === activeIndex ? ' is-active' : ''), [
+            var row = el('div', 'mago-menu-item' + (opts.itemClass ? ' ' + opts.itemClass : '') + (interactive && i === activeIndex ? ' is-active' : ''), [
                 el('span', 'mago-risk is-' + risk),
                 el('div', 'mago-menu-text', [
                     el('div', 'mago-menu-title', s.title || s.name),
@@ -1388,17 +1530,36 @@ define([], function () {
                 ]),
                 mono(s.riskLabel || L.risk[risk] || risk, 'mago-menu-risk')
             ]);
-            row.setAttribute('role', 'option');
-            row.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
-            clickable(row, opts.onSelect ? function (e) { opts.onSelect(s, i, e); } : null);
+            row.id = prefix + '-item-' + i;
+            if (interactive) {
+                row.classList.add('is-clickable');
+                row.setAttribute('role', 'option');
+                row.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
+                row.addEventListener('click', function (e) { opts.onSelect(s, i, e); });
+            } else {
+                row.setAttribute('role', 'listitem');
+            }
             items.push(row);
-            listChildren.push(row);
+            if (groupNode) {
+                groupNode.appendChild(row);
+            } else {
+                listChildren.push(row);
+            }
         });
+        var caption = el('div', 'mago-caption is-grow', opts.title || L.skills);
+        caption.id = prefix + '-caption';
+        var list = el('div', 'mago-menu-items', listChildren);
+        list.id = prefix + '-list';
+        list.setAttribute('role', interactive ? 'listbox' : 'list');
+        if (opts.hideHead) {
+            list.setAttribute('aria-label', opts.title || L.skills);
+        } else {
+            list.setAttribute('aria-labelledby', caption.id);
+        }
         var node = el('div', 'mago-menu', [
-            opts.hideHead ? null : el('div', 'mago-menu-head', [el('div', 'mago-caption is-grow', opts.title || L.skills), el('div', 'mago-menu-hint', opts.hint || L.menuHint)]),
-            el('div', 'mago-menu-items', listChildren)
+            opts.hideHead ? null : el('div', 'mago-menu-head', [caption, el('div', 'mago-menu-hint', opts.hint || L.menuHint)]),
+            list
         ]);
-        node.setAttribute('role', 'listbox');
         node.magoSetActive = function (index) {
             items.forEach(function (it, i) {
                 it.classList.toggle('is-active', i === index);
@@ -1409,6 +1570,7 @@ define([], function () {
             }
         };
         node.magoItems = items;
+        node.magoListId = list.id;
         return node;
     }
 
@@ -1436,6 +1598,7 @@ define([], function () {
         toolTrace: toolTrace,
         callout: callout,
         suggestions: suggestions,
+        choices: choices,
         answerFooter: answerFooter,
         empty: empty,
         skeleton: skeleton,
@@ -1454,22 +1617,108 @@ define([], function () {
     };
 
     // Build a widget from a plain spec: {type: 'stat', label: ..., ...}.
-    // Unknown types return null so a caller can fall back to plain text.
+    // Unknown types return null so a caller can fall back to plain text, and so
+    // does a builder that throws: one broken widget must not break the answer.
     function render(spec) {
-        if (!spec || typeof spec !== 'object' || !BUILDERS[spec.type]) {
+        if (!spec || typeof spec !== 'object' || !Object.prototype.hasOwnProperty.call(BUILDERS, spec.type)) {
             return null;
         }
-        return BUILDERS[spec.type](spec);
+        try {
+            return BUILDERS[spec.type](spec) || null;
+        } catch (e) {
+            if (typeof console !== 'undefined') {
+                console.warn('[Mago] widget "' + spec.type + '" failed to render', e);
+            }
+            return null;
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Extension                                                            */
+    /* ------------------------------------------------------------------ */
+
+    // Another module adds a widget type from a requirejs mixin on this module
+    // (see docs/widgets.md). Built-in types cannot be replaced.
+    var TYPE_PATTERN = /^[a-zA-Z][a-zA-Z0-9]*$/;
+
+    function register(type, builder) {
+        if (typeof type !== 'string' || !TYPE_PATTERN.test(type) || typeof builder !== 'function') {
+            warn('MagoUI.register() needs a camelCase type and a builder function');
+            return false;
+        }
+        if (Object.prototype.hasOwnProperty.call(BUILDERS, type)) {
+            warn('widget type "' + type + '" already exists');
+            return false;
+        }
+        BUILDERS[type] = builder;
+        MagoUI[type] = builder;
+        MagoUI.types.push(type);
+        return true;
+    }
+
+    function warn(message) {
+        if (typeof console !== 'undefined') {
+            console.warn('[Mago] ' + message);
+        }
+    }
+
+    // What a widget built from an answer may not contain, whoever wrote the
+    // builder: the spec came from the model, and the HTML lands in innerHTML.
+    // Raw-text elements are out because their content serializes unescaped and
+    // parses differently the second time; SVG animation can rewrite an href.
+    var FORBIDDEN_TAGS = new RegExp('^(script|style|iframe|frame|object|embed|link|meta|base|form|template'
+        + '|xmp|noembed|noframes|noscript|plaintext|math|foreignobject'
+        + '|animate|animatemotion|animatetransform|set|handler|listener)$', 'i');
+    var URL_ATTRS = /^(href|src|action|formaction|xlink:href|poster|background)$/i;
+
+    function scrub(root) {
+        var nodes = [root].concat(Array.prototype.slice.call(root.querySelectorAll('*')));
+        nodes.forEach(function (node) {
+            if (node !== root && FORBIDDEN_TAGS.test(node.tagName)) {
+                node.parentNode.removeChild(node);
+                return;
+            }
+            Array.prototype.slice.call(node.attributes).forEach(function (attr) {
+                var name = attr.name.toLowerCase();
+                if (name.indexOf('on') === 0 || name === 'srcdoc'
+                    || (URL_ATTRS.test(name) && safeHref(attr.value) === null)
+                    || (name === 'style' && /url\s*\(|expression\s*\(|javascript:/i.test(attr.value))) {
+                    node.removeAttribute(attr.name);
+                }
+            });
+        });
+        return root;
+    }
+
+    // The HTML goes back through innerHTML, which may not parse it the way the
+    // builder built it. Parse it once in an inert document, where nothing loads
+    // or runs, and scrub what that parse produced: that is what the page gets.
+    function scrubbedHtml(root) {
+        var html = scrub(root).outerHTML;
+        var parsed = new DOMParser().parseFromString(html, 'text/html').body.firstElementChild;
+        return parsed ? scrub(parsed).outerHTML : null;
     }
 
     // Render a JSON string (a ```mago fenced block) to HTML, or null when it
     // is not a valid spec. Used by the markdown renderer, which needs a string.
-    function renderJson(json) {
+    // resolveUrls, when given, maps the parsed spec before it is built: the
+    // markdown renderer uses it to turn admin URL tokens into the URLs they
+    // stand for. Every other token is built as it is and becomes its value, as
+    // text, once the answer is rendered.
+    function renderJson(json, resolveUrls) {
         var spec;
         try {
             spec = JSON.parse(json);
         } catch (e) {
-            return null;
+            // Models sometimes put several widgets in one block as {...},{...}: read that as a list.
+            try {
+                spec = JSON.parse('[' + json + ']');
+            } catch (e2) {
+                return null;
+            }
+        }
+        if (typeof resolveUrls === 'function') {
+            spec = resolveUrls(spec);
         }
         var specs = Array.isArray(spec) ? spec : [spec];
         var wrap = el('div', 'mago-answer');
@@ -1479,7 +1728,7 @@ define([], function () {
         try {
             specs.forEach(function (s) {
                 var node = render(s);
-                if (node) {
+                if (node instanceof Node) {
                     wrap.appendChild(node);
                     built++;
                 }
@@ -1487,7 +1736,7 @@ define([], function () {
         } finally {
             allowHtml = true;
         }
-        return built ? wrap.outerHTML : null;
+        return built ? scrubbedHtml(wrap) : null;
     }
 
     var MagoUI = {
@@ -1503,11 +1752,19 @@ define([], function () {
         formatNumber: formatNumber,
         paramsFromInput: paramsFromInput,
         paramTable: paramTable,
+        fullValue: fullValue,
+        fieldChanges: fieldChanges,
         traceStep: traceStep,
         suggestionCard: suggestionCard,
         chips: chips,
         render: render,
         renderJson: renderJson,
+        register: register,
+        el: el,
+        content: content,
+        safeHref: safeHref,
+        sendAttr: SEND_ATTR,
+        focusAttr: FOCUS_ATTR,
         types: Object.keys(BUILDERS)
     };
     Object.keys(BUILDERS).forEach(function (k) { MagoUI[k] = BUILDERS[k]; });

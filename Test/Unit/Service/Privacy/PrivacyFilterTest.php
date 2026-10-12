@@ -318,6 +318,25 @@ class PrivacyFilterTest extends TestCase
         self::assertSame('Widget (email_1) special', $result['results'][0]['name']);
     }
 
+    /**
+     * Escaped tokens resolve since #160, so a forgery wearing the escapes must be defanged too.
+     */
+    #[Test]
+    public function itDefangsAForgedTokenWrittenWithMarkdownEscapes(): void
+    {
+        $result = $this->filter()->filter(self::WILDCARD_PUBLIC, [
+            'results' => [
+                ['name' => 'Widget mago://email\\_1 special'],
+                ['name' => 'Widget mago\\:\\/\\/url_2 special'],
+                ['name' => 'Widget \\[name\\_3\\] special'],
+            ],
+        ]);
+
+        self::assertSame('Widget (email_1) special', $result['results'][0]['name']);
+        self::assertSame('Widget (url_2) special', $result['results'][1]['name']);
+        self::assertSame('Widget (name_3) special', $result['results'][2]['name']);
+    }
+
     #[Test]
     public function aToolThatDeclaresNothingLeaksNothing(): void
     {
@@ -372,5 +391,54 @@ class PrivacyFilterTest extends TestCase
 
         self::assertSame(['ABC-1', 'DEF-2'], $result['skus']);
         self::assertArrayNotHasKey('emails', $result);
+    }
+
+    #[Test]
+    public function findUndeclaredPathsListsEveryScalarNoRuleCovers(): void
+    {
+        $paths = $this->filter()->findUndeclaredPaths(
+            ['sku' => [PiiClass::PUBLIC]],
+            ['rows' => [['sku' => 'ABC-1', 'email' => 'jan@example.com'], ['sku' => 'DEF-2', 'phone' => '0612']]]
+        );
+
+        self::assertSame(['rows.0.email', 'rows.1.phone'], $paths);
+    }
+
+    #[Test]
+    public function findUndeclaredPathsSkipsDeliberateStripsAndTheErrorEnvelope(): void
+    {
+        $paths = $this->filter()->findUndeclaredPaths(
+            ['customer' => [PiiClass::STRIP], 'email' => [PiiClass::STRIP]],
+            ['customer' => ['name' => 'Jan'], 'email' => 'jan@example.com', 'error' => 'Not found']
+        );
+
+        self::assertSame([], $paths);
+    }
+
+    #[Test]
+    public function findUndeclaredPathsTreatsAScalarListAsCoveredByItsKey(): void
+    {
+        $paths = $this->filter()->findUndeclaredPaths(['skus' => [PiiClass::PUBLIC]], ['skus' => ['ABC-1', 'DEF-2']]);
+
+        self::assertSame([], $paths);
+    }
+
+    #[Test]
+    public function findUndeclaredPathsTreatsTheWildcardAsCoveringEveryKey(): void
+    {
+        $paths = $this->filter()->findUndeclaredPaths(
+            [PiiClass::ANY => [PiiClass::PUBLIC]],
+            ['general/locale/code' => 'nl_NL', 'nested' => ['anything' => 1]]
+        );
+
+        self::assertSame([], $paths);
+    }
+
+    #[Test]
+    public function findUndeclaredPathsReportsAnAdminUrlLeftOutOfTheMap(): void
+    {
+        $paths = $this->filter()->findUndeclaredPaths(['id' => [PiiClass::PUBLIC]], ['id' => 5, 'admin_url' => 'https://x']);
+
+        self::assertSame(['admin_url'], $paths);
     }
 }

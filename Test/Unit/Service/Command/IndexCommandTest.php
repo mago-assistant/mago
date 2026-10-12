@@ -56,6 +56,40 @@ final class IndexCommandTest extends TestCase
     }
 
     #[Test]
+    public function confirmableToolCallsMapReindexAndLeaveReadsEmpty(): void
+    {
+        $command = $this->command(new FakeChatService(static fn (array $call): array => []));
+
+        // A bare reindex ("everything") asks first, so it maps to no card; only scoped IDs do.
+        self::assertSame([], $command->getConfirmableToolCalls('reindex', []));
+
+        $calls = $command->getConfirmableToolCalls('reindex', ['catalog_product_price', 'catalogsearch_fulltext', 'catalog_product_price']);
+        self::assertSame(
+            [
+                ['name' => 'indexer_manager', 'input' => ['action' => 'reindex', 'indexer_id' => 'catalog_product_price']],
+                ['name' => 'indexer_manager', 'input' => ['action' => 'reindex', 'indexer_id' => 'catalogsearch_fulltext']],
+            ],
+            array_map(static fn (array $call): array => array_diff_key($call, ['id' => true]), $calls)
+        );
+        self::assertMatchesRegularExpression('/^slash_reindex_0_[0-9a-f]{12}$/', $calls[0]['id']);
+        self::assertMatchesRegularExpression('/^slash_reindex_1_[0-9a-f]{12}$/', $calls[1]['id']);
+
+        self::assertSame([], $command->getConfirmableToolCalls('status', []));
+        self::assertSame([], $command->getConfirmableToolCalls('list', []));
+    }
+
+    #[Test]
+    public function confirmableToolCallsGetANewIdEveryTimeTheSameReindexIsTyped(): void
+    {
+        $command = $this->command(new FakeChatService(static fn (array $call): array => []));
+
+        $first = $command->getConfirmableToolCalls('reindex', ['catalog_product_price']);
+        $second = $command->getConfirmableToolCalls('reindex', ['catalog_product_price']);
+
+        self::assertNotSame($first[0]['id'], $second[0]['id']);
+    }
+
+    #[Test]
     public function statusSummarisesInvalidIndexersAndTranslatesStates(): void
     {
         $chat = new FakeChatService(static fn (array $call): array => self::STATUS);
@@ -86,31 +120,24 @@ final class IndexCommandTest extends TestCase
     }
 
     #[Test]
-    public function reindexWithoutArgumentRebuildsEverythingAndListsFailures(): void
+    public function reindexWithoutArgumentAsksWhatToRebuildInsteadOfRebuildingEverything(): void
     {
-        $chat = new FakeChatService(static fn (array $call): array => [
-            'success' => false,
-            'message' => '1 indexers reindexed',
-            'reindexed' => ['catalog_product_price'],
-            'errors' => ['catalogsearch_fulltext: Elasticsearch is down'],
-        ]);
+        $chat = new FakeChatService(static fn (array $call): array => ['success' => true]);
 
         $reply = $this->command($chat)->execute('reindex', [], self::ADMIN_ID, $this->noopChunk());
 
-        self::assertSame([['action' => 'reindex_all']], $chat->inputs());
-        self::assertSame(
-            "**1 indexer reindexed.**\n\n`catalog_product_price`\n\n"
-            . "**Failed:**\n\n- catalogsearch_fulltext: Elasticsearch is down",
-            $reply
-        );
+        self::assertSame([], $chat->inputs(), 'a bare reindex runs no tool; it asks first');
+        self::assertStringContainsString('rebuilds every index', $reply);
+        self::assertStringContainsString('`catalogsearch_fulltext`', $reply);
+        self::assertStringContainsString('/index reindex catalog_product_price', $reply);
     }
 
     #[Test]
-    public function reindexWithIdsRebuildsEachGivenIndexerOnce(): void
+    public function reindexWithIdsQueuesEachGivenIndexerOnce(): void
     {
         $chat = new FakeChatService(static fn (array $call): array => $call['input']['indexer_id'] === 'nope'
             ? ['error' => 'Unknown indexer: nope']
-            : ['success' => true, 'message' => 'Indexer "' . $call['input']['indexer_id'] . '" has been reindexed']);
+            : ['success' => true, 'message' => 'Reindex queued', 'bulk_uuid' => 'uuid-' . $call['input']['indexer_id']]);
 
         $reply = $this->command($chat)->execute(
             'reindex',
@@ -125,21 +152,21 @@ final class IndexCommandTest extends TestCase
             ['action' => 'reindex', 'indexer_id' => 'cataloginventory_stock'],
         ], $chat->inputs());
         self::assertSame(
-            "**Indexer \"catalog_product_price\" has been reindexed.**\n\n"
+            "**Reindex of `catalog_product_price` queued.**\n\nBulk operation `uuid-catalog_product_price`.\n\n"
             . "**Error:** Unknown indexer: nope\n\n"
-            . "**Indexer \"cataloginventory_stock\" has been reindexed.**",
+            . "**Reindex of `cataloginventory_stock` queued.**\n\nBulk operation `uuid-cataloginventory_stock`.",
             $reply
         );
     }
 
     #[Test]
-    public function reindexAllDenialIsReportedAsError(): void
+    public function reindexDenialIsReportedAsError(): void
     {
         $chat = new FakeChatService(static fn (array $call): array => ['error' => 'Access denied: nope']);
 
-        $reply = $this->command($chat)->execute('reindex', [], self::ADMIN_ID, $this->noopChunk());
+        $reply = $this->command($chat)->execute('reindex', ['catalog_product_price'], self::ADMIN_ID, $this->noopChunk());
 
-        self::assertSame('**Error:** Access denied: nope', $reply);
+        self::assertStringContainsString('**Error:** Access denied: nope', $reply);
     }
 
     private function command(FakeChatService $chat): IndexCommand

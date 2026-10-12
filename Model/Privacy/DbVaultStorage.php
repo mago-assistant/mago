@@ -10,7 +10,7 @@ use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Adapter\DuplicateException;
 use MagoAssistant\Mago\Api\Privacy\VaultStorageInterface;
 use MagoAssistant\Mago\Logger\DebugLogger;
-use MagoAssistant\Mago\Logger\ErrorLogger;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 
 /**
  * Stores the token vault in mago_pii_token. Every DB access is guarded: before setup:upgrade has
@@ -23,8 +23,9 @@ class DbVaultStorage implements VaultStorageInterface
 
     public function __construct(
         private readonly ResourceConnection $resourceConnection,
-        private readonly ErrorLogger $errorLogger,
-        private readonly DebugLogger $debugLogger
+        private readonly ErrorReporter $errorReporter,
+        private readonly DebugLogger $debugLogger,
+        private readonly VaultValueCipher $cipher
     ) {
     }
 
@@ -39,12 +40,12 @@ class DbVaultStorage implements VaultStorageInterface
 
             $rows = [];
             foreach ($connection->fetchAll($select) as $row) {
-                $rows[] = ['token' => $row['token'], 'value' => $row['value'], 'type' => $row['token_type']];
+                $rows[] = ['token' => $row['token'], 'value' => $this->cipher->decrypt((string)$row['value']), 'type' => $row['token_type']];
             }
 
             return $rows;
         } catch (\Throwable $e) {
-            $this->errorLogger->addLog('PII vault load', $e->getMessage());
+            $this->errorReporter->log('PII vault load', $e);
 
             return [];
         }
@@ -57,7 +58,7 @@ class DbVaultStorage implements VaultStorageInterface
             $connection->insert($this->resourceConnection->getTableName(self::TABLE), [
                 'conversation_id' => $conversationId,
                 'token' => $token,
-                'value' => $value,
+                'value' => $this->cipher->encrypt($value),
                 'token_type' => $type,
             ]);
         } catch (DuplicateException $e) {
@@ -68,10 +69,10 @@ class DbVaultStorage implements VaultStorageInterface
             // simply does not persist, and reads back as an unresolved one.
             $this->debugLogger->addLog('PII vault persist skipped a duplicate token', [
                 'conversation_id' => $conversationId,
-                'token' => $token,
+                'token_type' => $type,
             ]);
         } catch (\Throwable $e) {
-            $this->errorLogger->addLog('PII vault persist', $e->getMessage());
+            $this->errorReporter->log('PII vault persist', $e);
         }
     }
 }

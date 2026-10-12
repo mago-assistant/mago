@@ -7,8 +7,6 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Catalog\ReviewManager;
 
 use Magento\Review\Model\Review;
-use Magento\Review\Model\ReviewFactory;
-use Magento\Review\Model\ResourceModel\Review as ReviewResource;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
@@ -17,8 +15,7 @@ class RejectAction implements ActionInterface
     private const STATUS_NOT_APPROVED = 3;
 
     public function __construct(
-        private readonly ReviewFactory $reviewFactory,
-        private readonly ReviewResource $reviewResource
+        private readonly ReviewServices $reviewServices
     ) {
     }
 
@@ -78,15 +75,16 @@ class RejectAction implements ActionInterface
             return ['error' => 'review_id is required'];
         }
 
-        $review = $this->reviewFactory->create();
-        $this->reviewResource->load($review, $reviewId);
+        $review = $this->reviewServices->createReview();
+        $reviewResource = $this->reviewServices->getReviewResource();
+        $reviewResource->load($review, $reviewId);
 
         if (!$review->getId()) {
             return ['error' => 'Review not found: ' . $reviewId];
         }
 
         $review->setStatusId(self::STATUS_NOT_APPROVED);
-        $this->reviewResource->save($review);
+        $reviewResource->save($review);
         $review->aggregate();
 
         return [

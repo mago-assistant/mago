@@ -22,6 +22,9 @@ use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepositoryInterfa
 
 class Repository extends System\BaseRepository implements ConfigRepositoryInterface
 {
+    private const DEFAULT_ACCENT_COLOR = '#F26322';
+    private const DEFAULT_TEXT_COLOR = '#FFFFFF';
+
     public function __construct(
         StoreManagerInterface $storeManager,
         ScopeConfigInterface $scopeConfig,
@@ -90,6 +93,13 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return ctype_digit($value) ? (int)$value : 30;
     }
 
+    public function getHistoryRetentionDays(): int
+    {
+        // Non-numeric/negative config falls back to 90 rather than failing open to keep-forever
+        $value = $this->getStoreValue(self::XML_PATH_HISTORY_RETENTION_DAYS);
+        return ctype_digit($value) ? (int)$value : 90;
+    }
+
     public function getAiServiceId(): string
     {
         return trim((string)$this->getStoreValue(self::XML_PATH_AI_SERVICE));
@@ -123,14 +133,35 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return (int)($this->getStoreValue(self::XML_PATH_MAX_RESPONSE_TOKENS) ?: 4000);
     }
 
+    public function isReindexAllowed(): bool
+    {
+        return $this->isSetFlag(self::XML_PATH_ALLOW_REINDEX);
+    }
+
+    public function getCustomerNotificationInterval(): int
+    {
+        // Non-numeric config falls back to 60 rather than failing open to unlimited e-mail
+        $value = $this->getStoreValue(self::XML_PATH_CUSTOMER_NOTIFICATION_INTERVAL);
+        return ctype_digit($value) ? (int)$value : 60;
+    }
+
     public function getAccentColor(): string
     {
-        return $this->getStoreValue(self::XML_PATH_ACCENT_COLOR) ?: '#F26322';
+        return $this->getColor(self::XML_PATH_ACCENT_COLOR, self::DEFAULT_ACCENT_COLOR);
     }
 
     public function getTextColor(): string
     {
-        return $this->getStoreValue(self::XML_PATH_TEXT_COLOR) ?: '#FFFFFF';
+        return $this->getColor(self::XML_PATH_TEXT_COLOR, self::DEFAULT_TEXT_COLOR);
+    }
+
+    /**
+     * Templates print the color unescaped inside <style>, so anything but #RRGGBB falls back to the default.
+     */
+    private function getColor(string $path, string $default): string
+    {
+        $value = $this->getStoreValue($path);
+        return HexColor::isValid($value) ? $value : $default;
     }
 
     public function getAssistantName(): string
@@ -175,14 +206,9 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return $value === '' ? 1400 : max(0, (int)$value);
     }
 
-    public function getInternalUrl(): string
+    public function isAddonFeedEnabled(): bool
     {
-        return trim((string)$this->getStoreValue(self::XML_PATH_INTERNAL_URL));
-    }
-
-    public function isInternalSslVerifyEnabled(): bool
-    {
-        return $this->isSetFlag(self::XML_PATH_INTERNAL_SSL_VERIFY);
+        return $this->isSetFlag(self::XML_PATH_ADDONS_ENABLED, null, ScopeConfigInterface::SCOPE_TYPE_DEFAULT);
     }
 
     public function isDocsEnabled(): bool

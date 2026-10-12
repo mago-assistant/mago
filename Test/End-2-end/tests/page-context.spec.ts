@@ -4,6 +4,7 @@
 
 import {expect, test} from '@playwright/test';
 import {promises as fs} from 'fs';
+import path from 'path';
 import ChatPanel from 'Pages/backend/ChatPanel';
 import ChatMock from 'Actions/backend/ChatMock';
 import MagentoApi from 'Services/MagentoApi';
@@ -16,7 +17,24 @@ const chatMock = new ChatMock();
 const magentoApi = new MagentoApi();
 const wireMock = new WireMock();
 
-const DEBUG_LOG_PATH = process.env.MAGO_DEBUG_LOG || '/var/www/html/var/log/mago-debug.log';
+const DEBUG_LOG_BASE = process.env.MAGO_DEBUG_LOG || '/var/www/html/var/log/mago-debug.log';
+
+/**
+ * The debug log rotates daily (mago-debug-YYYY-MM-DD.log next to the configured base name), so the
+ * file being written to is the newest one carrying that prefix.
+ */
+async function currentDebugLogPath(): Promise<string | null> {
+  const directory = path.dirname(DEBUG_LOG_BASE);
+  const prefix = path.basename(DEBUG_LOG_BASE, '.log');
+  const names = (await fs.readdir(directory).catch((): string[] => []))
+    .filter((name) => name.startsWith(prefix) && name.endsWith('.log'));
+  const files = await Promise.all(names.map(async (name) => {
+    const file = path.join(directory, name);
+    return {file, modified: (await fs.stat(file)).mtimeMs};
+  }));
+
+  return files.sort((a, b) => b.modified - a.modified)[0]?.file ?? null;
+}
 
 /**
  * The debug log is one shared file for the whole suite, so a byte-offset diff can pick up another
@@ -227,15 +245,18 @@ test.describe('Page context transport', () => {
 
       await wireMock.ensureReachable(request);
 
-      const logSizeBefore = await fs.stat(DEBUG_LOG_PATH).then((stat) => stat.size).catch(() => 0);
+      const logBefore = await currentDebugLogPath();
+      const logSizeBefore = logBefore ? (await fs.stat(logBefore)).size : 0;
 
       await chatPanel.openOn(page, 'catalog/product/edit/id/' + productId);
       await chatPanel.ask(page, 'E2E Page Context Ack Check: what page am I on?');
 
       await expect(chatPanel.lastAssistantMessage(page)).toContainText('Page context check acknowledged', {timeout: PROVIDER_ROUND_TRIP_TIMEOUT});
 
-      const logContents = await fs.readFile(DEBUG_LOG_PATH, 'utf8');
-      const appended = logContents.slice(logSizeBefore);
+      const logAfter = await currentDebugLogPath();
+      expect(logAfter).not.toBeNull();
+      const logContents = await fs.readFile(logAfter as string, 'utf8');
+      const appended = logContents.slice(logAfter === logBefore ? logSizeBefore : 0);
       const ownTurnLog = extractOwnTurnLog(appended, 'E2E Page Context Ack Check');
 
       expect(ownTurnLog).toContain('"namespace":"product_form"');

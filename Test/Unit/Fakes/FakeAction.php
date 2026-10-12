@@ -23,7 +23,8 @@ final class FakeAction implements ActionInterface
         private readonly array $parameterSchema = [],
         private readonly string $instructions = '',
         private readonly ?array $result = null,
-        private readonly ?array $fieldClassification = null
+        private readonly ?array $fieldClassification = null,
+        private readonly ?string $aclResource = null
     ) {
     }
 
@@ -44,7 +45,7 @@ final class FakeAction implements ActionInterface
 
     public function getAclResource(): ?string
     {
-        return null;
+        return $this->aclResource;
     }
 
     public function isReadOnly(): bool

@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Command;
 
+use MagoAssistant\Mago\Api\Acl;
 use MagoAssistant\Mago\Service\Command\CacheCommand;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeChatService;
@@ -29,19 +30,16 @@ final class CacheCommandTest extends TestCase
     private array $chunks = [];
 
     #[Test]
-    public function flushRunsTheFlushActionAndListsTheCleanedTypes(): void
+    public function flushAsksWhatToClearInsteadOfFlushingEverything(): void
     {
-        $chat = $this->chat(static fn (array $call): array => [
-            'success' => true,
-            'message' => 'All caches have been flushed',
-            'flushed' => ['config', 'layout'],
-        ]);
+        $chat = $this->chat(static fn (array $call): array => ['success' => true]);
 
         $reply = $this->command($chat)->execute('flush', [], self::ADMIN_ID, $this->chunk());
 
-        self::assertSame([['action' => 'flush']], $chat->inputs());
-        self::assertSame("**All caches flushed.**\n\nCleaned 2 cache types: `config`, `layout`", $reply);
-        self::assertSame(['running', 'done'], array_column(array_column($this->chunks, 'data'), 'status'));
+        self::assertSame([], $chat->inputs(), 'a bare flush runs no tool; it asks first');
+        self::assertStringContainsString('rarely what a change needs', $reply);
+        self::assertStringContainsString('`full_page`', $reply);
+        self::assertStringContainsString('/cache clean', $reply);
     }
 
     #[Test]
@@ -103,9 +101,9 @@ final class CacheCommandTest extends TestCase
     {
         $chat = $this->chat(static fn (array $call): array => ['error' => 'Access denied: nope']);
 
-        $reply = $this->command($chat)->execute('flush', [], self::ADMIN_ID, $this->chunk());
+        $reply = $this->command($chat)->execute('clean', ['config'], self::ADMIN_ID, $this->chunk());
 
-        self::assertSame('**Error:** Access denied: nope', $reply);
+        self::assertStringContainsString('**Error:** Access denied: nope', $reply);
     }
 
     #[Test]
@@ -123,12 +121,70 @@ final class CacheCommandTest extends TestCase
         self::assertFalse($this->command($chat, 'disabled')->isAvailable(self::ADMIN_ID));
     }
 
+    #[Test]
+    public function confirmableToolCallsMapWritesAndLeaveStatusEmpty(): void
+    {
+        $command = $this->command($this->chat(static fn (array $call): array => []));
+
+        // flush ("everything") asks first, so it maps to no card; only the scoped clean does.
+        self::assertSame([], $command->getConfirmableToolCalls('flush', []));
+
+        $calls = $command->getConfirmableToolCalls('clean', ['config', 'full_page', 'config']);
+        self::assertSame(
+            [
+                ['name' => 'cache_manager', 'input' => ['action' => 'flush_type', 'cache_type' => 'config']],
+                ['name' => 'cache_manager', 'input' => ['action' => 'flush_type', 'cache_type' => 'full_page']],
+            ],
+            array_map(static fn (array $call): array => array_diff_key($call, ['id' => true]), $calls)
+        );
+        self::assertMatchesRegularExpression('/^slash_clean_0_[0-9a-f]{12}$/', $calls[0]['id']);
+        self::assertMatchesRegularExpression('/^slash_clean_1_[0-9a-f]{12}$/', $calls[1]['id']);
+
+        self::assertSame([], $command->getConfirmableToolCalls('status', []));
+        self::assertSame([], $command->getConfirmableToolCalls('clean', []));
+    }
+
+    #[Test]
+    public function confirmableToolCallsGetANewIdEveryTimeTheSameCleanIsTyped(): void
+    {
+        $command = $this->command($this->chat(static fn (array $call): array => []));
+
+        $first = $command->getConfirmableToolCalls('clean', ['config']);
+        $second = $command->getConfirmableToolCalls('clean', ['config']);
+
+        self::assertNotSame($first[0]['id'], $second[0]['id']);
+    }
+
     /**
      * @param callable(array<string, mixed>): array<string, mixed> $resultFor
      */
     private function chat(callable $resultFor): FakeChatService
     {
         return new FakeChatService($resultFor);
+    }
+
+    /**
+     * A per-user tool's command is offered only on an explicit row, and only for what the row
+     * grants: holding assistant_write is not having been given the tool (#220)
+     */
+    #[Test]
+    public function aPerUserToolsCommandIsOfferedOnlyOnAnExplicitRow(): void
+    {
+        $chat = $this->chat(static fn (array $call): array => []);
+        $tool = new FakeTool('cache_manager', ['status', 'flush', 'flush_type'], ['status'], Acl::MAGO_PER_USER);
+        $blanket = (new FakePermissionChecker())
+            ->withDecision('cache_manager', 'read', true)
+            ->withDecision('cache_manager', 'write', true);
+        $readRow = (clone $blanket)->withExplicitGrant('cache_manager', 'read');
+        $writeRow = (clone $readRow)->withExplicitGrant('cache_manager', 'write');
+
+        self::assertFalse((new CacheCommand(new ToolRegistry($blanket, [$tool]), $chat))->isAvailable(self::ADMIN_ID));
+
+        $read = new CacheCommand(new ToolRegistry($readRow, [$tool]), $chat);
+        self::assertTrue($read->isAvailable(self::ADMIN_ID, 'status'));
+        self::assertFalse($read->isAvailable(self::ADMIN_ID, 'flush'));
+
+        self::assertTrue((new CacheCommand(new ToolRegistry($writeRow, [$tool]), $chat))->isAvailable(self::ADMIN_ID, 'flush'));
     }
 
     private function command(FakeChatService $chat, string $grant = 'write'): CacheCommand

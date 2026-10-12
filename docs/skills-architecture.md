@@ -72,7 +72,7 @@ interface ToolInterface
 | `isReadOnly()` | `true` = all actions are read-only; `false` = tool has at least one write action |
 | `isReadOnlyAction(array $input)` | Checks if a specific invocation is read-only based on input parameters. For tools with mixed read/write sub-actions (e.g. `cms_data`), this checks the actual action. |
 | `getInstructions()` | Detailed usage instructions injected only when the tool is invoked (JIT). Keeps the base prompt lean. |
-| `getMagentoAcl(array $input)` | Native Magento ACL resource for a specific invocation (e.g. `Magento_Backend::cache` for a cache `status` read, `Magento_Backend::flush_cache_storage` for `flush`). Mixed tools return the resource matching the action in `$input`; empty or unknown input must resolve to the most restrictive resource (fail closed). Checked in addition to the assistant skill permissions. Return empty string if not needed. |
+| `getMagentoAcl(array $input)` | Native Magento ACL resource for a specific invocation (e.g. `Magento_Backend::cache` for a cache `status` read, `Magento_Backend::flush_cache_storage` for `flush`). Mixed tools return the resource matching the action in `$input`; empty or unknown input must resolve to the most restrictive resource (fail closed). Checked in addition to the assistant skill permissions. A tool that touches no Magento data returns `Acl::MAGO_PER_USER` instead; an empty string is refused for everyone (see [Access control](#acl--permissions)). |
 
 #### Just-in-Time Instructions
 
@@ -126,14 +126,58 @@ never change anything.
 named in the input, so a skill needs no extra code. `ChatService` asks the tool before it sends a
 confirmation and adds `irreversible: true` plus the `impacts` to that tool in the `confirm` event;
 the chat panel then shows the "cannot be undone" card with an acknowledgement checkbox instead of
-a plain Allow button. Built-in irreversible actions: `order_manager` `cancel` and
-`create_creditmemo`, `url_rewrite_manager` `delete`.
+a plain Allow button. Built-in irreversible actions: `order_manager` `cancel`,
+`create_creditmemo` and `resend_confirmation`, `url_rewrite_manager` `delete`.
+
+A write that can be reverted but changes something the admin should weigh first implements
+`MagoAssistant\Mago\Api\Tool\HighImpactToolInterface`: `getCautions(array $input, int $adminUserId)`
+returns the lines to show, empty when the plain card will do. `ChatService` adds `caution: true`
+and the lines as `impacts`; the panel shows the same card with "I understand what this changes".
+`config_writer` uses it for storefront scripts, admin security, URLs, mail routing, developer,
+environment and sensitive settings, with the current and the new value (#245). The ACL still
+decides whether the admin may make the change at all.
+
+An action that is only irreversible for some calls implements
+`ConditionallyIrreversibleActionInterface` and answers `isIrreversible(array $params)`; the other
+calls get the plain Allow button. The `order_manager` actions `add_comment`, `update_status`,
+`create_invoice` and `create_shipment` do this: they are irreversible when `notify_customer` is
+true, because a sent e-mail cannot be recalled.
+
+Every `order_manager` action that e-mails the customer first asks `CustomerNotificationGuard`,
+after approval and right before the API call. It lets each kind of e-mail (comment, invoice,
+shipment, credit memo, order confirmation) go to the customer of an order once per
+`mago/tools/customer_notification_interval` minutes (default 60, 0 removes the limit) and
+refuses the rest as a tool result. Only a successful call counts as sent. This is what stops a
+request like "send 100 confirmation e-mails": the prompt and the confirmation card alone do not.
+
+The rules that keep the model from trying in the first place (no bulk or repeated e-mail, `resend_confirmation`
+rather than a comment e-mail for the order confirmation, no "try again" after a failed e-mail) are appended to every
+`notify_customer` parameter description (`CustomerNotificationGuard::PARAMETER_RULES`). They cannot
+go in `getInstructions()`: those only reach the model after its first call of the tool, and not at
+all after a confirmed write. They also stay out of the tool description, which the confirmation
+card shows to the administrator.
 
 A `confirm` event also carries each tool call's `id`. With several writes in one turn the panel
-shows a tick list; the confirm request then sends the ticked ids as `tool_call_ids`, and
+shows a tick list where nothing starts ticked; the confirm request then sends the ticked ids as `tool_call_ids`, and
 `executeConfirmedTools()` answers every unticked call with `{"skipped": true, ...}` without
 running it. A tool that returns an `error` key is reported to the panel with a `tool_status` of
 `failed` and the error as `message`.
+
+#### `PresentableToolInterface`
+
+A tool decides how the chat panel shows it by implementing
+`MagoAssistant\Mago\Api\Tool\PresentableToolInterface`:
+
+- `getDisplayName(): string` is the title on its cards and in the session log. Without it the
+  panel derives one from the tool name (`stock_alerts` reads "Stock alerts").
+- `getStatusMessage(string $action, array $input): ?string` is the line shown while the call runs
+  ("Checking stock levels..."). Return `null` to keep the default ("Running stock_alerts...").
+  The input is the call as the model proposed it, so personal values in it are still masked.
+
+Built-in tools take their status lines from a list in `ChatService::getToolStatusMessage()`; a
+tool from another module implements this interface instead. The display name reaches the panel
+through the skills list (`MAGO_CONFIG.skills[].title`). To add an answer widget alongside a tool,
+see [widgets.md](widgets.md).
 
 #### `ActionScopedToolInterface`
 
@@ -155,7 +199,10 @@ Orchestrates the conversation loop:
 2. Send messages + tool definitions to the AI provider
 3. If the AI requests a **read-only** tool → execute automatically, append result, loop
 4. If the AI requests a **write** tool → pause, return `pending_confirmation: true`
-5. On user confirmation → execute the write tool via `executeConfirmedTools()`
+5. On user confirmation → claim the pending message (`ConfirmationClaim`), then execute the write tool via `executeConfirmedTools()`.
+   The claim clears `pending_confirmation` in one conditional update before anything runs, so a double submit, or the
+   panel and the REST API at once, runs the writes once and the other request is told the action was already handled.
+   A proposal older than an hour can no longer be confirmed (it can still be rejected).
 6. Loop continues until the AI produces a final text response or `max_tool_iterations` is reached
 
 ```
@@ -196,6 +243,48 @@ Tool output is truncated by the `ChatService` to prevent context window exhausti
 
 When a tool result exceeds the limit, the result sent to the LLM is replaced by an envelope: `_truncated: true`, an `output` field with the first part of the JSON (cut multibyte-safe, may stop mid-value), `total_bytes`/`returned_bytes`, and a `note` instructing the model not to retry the same call but to narrow the query. The cap applies to all three execution paths (plain, streaming, confirmed writes); the debug log still records the full result before truncation.
 
+### Internal API Client
+
+Most tools read and write through `MagoAssistant\Mago\Api\InternalApiClientInterface`, which takes a web API route (`products/{sku}`, `cmsPage`, `order/{id}/refund`) the way the REST API does, but runs it in the PHP process that handles the chat. Nothing goes over HTTP and no admin token is created. Per call, `Service/Api/InProcess/ServiceDispatcher` does what Magento's REST front controller does:
+
+1. **Store:** `StoreEmulation` switches to the store view the call names (default store view without a code, the admin store for `all`) and its locale, and switches back afterwards, also when the call fails.
+2. **Route:** `RouteResolver` matches the path against `webapi.xml` on a request object of its own, so the query, post data and headers of the request running the chat never leak into the call. An exact path wins over a path with parameters (`cmsBlock/search` over `cmsBlock/:blockId`), as in REST.
+3. **ACL:** `AdminAuthorizationFactory` builds the ACL of the admin the tool acts for, whichever area runs the chat (admin panel, the `/V1/mago/chat` REST endpoint, or the command line), and `RouteAuthorizer` requires every resource the route declares. A disabled or unknown admin user is refused. The admin user and their role are looked up once per admin and request; a refused admin is looked up again on the next call.
+4. **Input, call, output:** Magento's `ServiceInputProcessor` builds the service arguments, the ObjectManager resolves the route's service class, and the output goes through a `ServiceOutputProcessor` that applies the same field-level ACL as `webapi_rest` (a product's `stock_item` is left out for a role without `Magento_CatalogInventory::cataloginventory`). The result is JSON round-tripped so it has exactly the shape a REST response decodes to; a scalar answer sits under `result`.
+5. **Errors:** every failure comes back as `['error' => message]`, as before: Magento's untranslated message with its placeholders filled in, `Resource not found` for a 404, and `You do not have permission to access this data.` followed by what is missing when the admin's role does not allow the route (for example `The admin user is not allowed to use Magento_Sales::actions_cancel.`), so the model can tell the admin which permission to ask for. Exceptions and PHP errors never escape the client. A `TypeError` from input that does not fit the service reads as its PHP message without the `called in <file> on line <n>` part.
+6. **Transactions:** `TransactionBoundary` notes the connection's transaction level before the call and rolls back to it when the call fails. Magento's resource models and EntityManager only roll back on an `\Exception`, so a PHP `\Error` from an observer or plugin during a save would otherwise leave a transaction open, and every later commit in the chat request (other tool writes, the conversation itself) would be nested inside it and lost.
+
+`postAsync()` queues the call on `async.operations.all` through `AsyncScheduler`, as `POST /rest/async/V1/...` would: same ACL check, the bulk is recorded under the admin user, and the topic name comes from `Magento_WebapiAsync`. The route must stay declared in `webapi.xml`, because that is where the topic is generated from. `Magento_WebapiAsync` and `Magento_AsynchronousOperations` are optional (composer `suggest`): `WebapiAsyncQueue` resolves their classes only when a call is queued, and `InternalApiClient` gets the scheduler as a proxy, so a store that removed them keeps every other tool working and `postAsync()` answers with an error that names the missing modules. Like REST async, `AsyncScheduler` runs no guards or follow-ups: the consumer runs the service later, outside this request. Only the reindex uses it today; a future async write must add its own checks.
+
+Some checks Magento only registers for `webapi_rest`. In-process they are replaced so a tool behaves the same in every area:
+
+| REST-only plugin | In-process |
+|------------------|------------|
+| `ProductAuthorization`, `PageAclPlugin` (design fields need `Magento_Catalog::edit_product_design` / `Magento_Cms::save_design`) | `Guard\ProductDesignGuard` and `Guard\CmsPageDesignGuard` hand the product or page that `ServiceInputProcessor` built to Magento's own `Product\Authorization::authorizeSavingOf()` / `Page\Authorization::authorizeFor()`, created with the admin's ACL. Same outcome as REST, whatever spelling the body uses: a value equal to the saved one passes, a change is refused. The refusal keeps core's message and names the missing resource. |
+| Theme `Data\Collection` plugin, disabled in `webapi_rest` (outside it, a current page past the last one is reset to page 1) | `PastLastPageNormalizer` empties `items` when the output's `search_criteria.current_page` lies beyond `total_count` / `page_size`, so a `getList` route answers page 999 with no items, as REST does, instead of with page 1. |
+| `APISourceItemIndexerPlugin` (reindexes a configurable parent's stock after a child is linked) | `FollowUp\ConfigurableStockIndex` runs the same plugin after `configurable-products/{sku}/child` when the chat does not run in `webapi_rest` and the inventory module is enabled. |
+
+The other `webapi_rest`-only plugins on the services the tools call were checked and need no replacement:
+
+| REST-only plugin | Why in-process does without it |
+|------------------|--------------------------------|
+| InventoryCatalog `StockItemRepositoryPlugin` (reindexes a product and its source items after a stock item save) | A product created with `stock_item` gets the same indexing as one saved from the admin product form, which runs without this plugin too: the global `UpdateSourceItemAtLegacyStockItemSavePlugin` updates the default source item and the default stock status and reindexes it, and the global `ReindexAfterSourceItemsSavePlugin` reindexes the other sources. |
+| Catalog `ReindexAfterSaveProductLinksPlugin` / `ReindexAfterDeleteByIdProductLinksPlugin` | No tool calls the product link routes. The links of a new grouped product are saved inside its own product save, whose commit callbacks reindex the product in every area. |
+| CatalogRule `ApplyRulesAfterReindex` | adminhtml registers its own `ApplyRules` plugin on the product resource save, so a product saved from the admin chat gets its catalog rule prices. |
+| CatalogUrlRewrite `InputParamsResolver` plugin | Only acts on a product save that sends a `save_rewrites_history` custom attribute, which no tool sends; the dispatcher never calls `resolve()` either. |
+| Sales `OrderRepositoryPlugin` (billing address and items required on save) | Guards orders created from a REST payload. The tools only change existing orders, which already have both. |
+| Sales `OrderResponseNullKeysPlugin` (adds `state`/`status` as null to order output) | Only adds keys whose value is null; `OrderResolver` reads `status` with a default. |
+| Sales `ChangeOutputArray` (order item row totals in output), `ShippingLabelConverter`, `AddExistingItemProductOptions`, `AddTransactionCommentAfterCapture` | Output shaping of order item totals and shipment labels that no tool reads through the client, a fix for orders saved from a REST payload, and a hook on `InvoiceService::setCapture()`, which `order/{id}/invoice` does not call. |
+| Bundle `BundleOrderTypeValidator` | Only validates `POST /V1/shipment`; `order/{id}/ship` keeps the global `BundleShipmentTypeValidator`. |
+| Catalog `ProductOutputProcessor`, index `TableResolver` plugins | Output shaping (drops empty `tier_prices`/`product_links` of the product just sent) and storefront index table names, which the product repository does not read. |
+| InventoryCatalog `CreateSourceItemsPlugin` | Moves source items when a SKU changes; no tool renames a SKU. |
+
+`CategoryAuthorization` (category design fields), Customer `AccountManagementApi` (`group_id` on `POST customers`) and `UpdateCustomer` (a `PUT customers/{id}` merged onto the stored customer) have no in-process counterpart, because no tool writes categories or customers. A tool that does must add a guard first.
+
+Add your own with a `ServiceCallGuardInterface` (runs after the route ACL and input conversion, right before the service, with the converted arguments) or a `ServiceCallFollowUpInterface` (runs after it succeeded) in the `guards` or `followUps` argument of `ServiceDispatcher`.
+
+Things to keep in mind as a tool author: a call shares the PHP process with the chat, so repositories that cache instances (the product repository, the order registry) can hand back an object loaded earlier in the same turn; pass `forceReload` where you read back what you just wrote. A PHP fatal error inside a service ends the whole chat request, and there is no per-call timeout. In unit tests, use `Test/Unit/Fakes/FakeInternalApiClient` and assert on the calls it recorded.
+
 ### Store Scope Awareness
 
 ```
@@ -213,12 +302,12 @@ Magento configuration and content live on three levels — default (global), web
 |------|----------------|
 | `config_reader` | Validates `scope`/`scope_id` against existing websites and store views. A default-scope read on a multi-store installation also returns `overrides`: every website or store view whose effective value differs from what it inherits (a website override is reported once, not per store view), plus a `note` telling the model to mention them. |
 | `config_writer` | Validates `scope`/`scope_id` before writing; the result and message carry a `scope_label` such as `store view "Luma" (id 2, code "luma")`. Its instructions tell the model to ask which scope the user means when the setting could differ per store view. |
-| `cms_data` (`create_page`, `create_block`) | New `store_id` parameter: `0` (default) creates the entity for **all store views**, a store view id restricts it to that view. Implemented by running the internal REST call under `/rest/{store code}/V1/` (`all` for 0), because `PageInterface`/`BlockInterface` expose no store field. Previously new pages and blocks were tied to the default store view. |
+| `cms_data` (`create_page`, `create_block`) | New `store_id` parameter: `0` (default) creates the entity for **all store views**, a store view id restricts it to that view. Implemented by running the internal API call in that store view (store code `all`, the admin store, for 0), as REST does for `/rest/{store code}/V1/`, because `PageInterface`/`BlockInterface` expose no store field. Previously new pages and blocks were tied to the default store view. |
 | `content_generator` | New `store_id` parameter: `0` reads and saves the default (global) values, a store view id reads and saves a store-view-specific version, e.g. a translation. The same id must be used for the generate call and the save call. Earlier versions saved at the admin's current store view (the default store view) instead of globally, so a default-scope save also returns `overridden_in`: store views that still carry their own value and therefore do not show the new text. |
 
-`InternalApiClient::get()/post()/put()/delete()` accept an optional store code for this; without one they keep calling `/rest/V1/`, which Magento serves in its default store view.
+`InternalApiClientInterface::get()/post()/put()/delete()` accept an optional store code for this. The call then runs in that store view (`all` runs it in the admin store), as `/rest/{code}/V1/` would; without one it runs in the default store view, like `/rest/V1/`. That is the default website's default store view, not the store view of the domain a REST call would have been sent to, which only differs on a multi-website store.
 
-**For tool authors:** inject `StoreScopeContext` when a tool reads or writes anything that Magento stores per scope. Use `validateScope()` for config-style `scope`/`scope_id` pairs, `getRestStoreCode()` when the write goes through the internal REST API, and `describeScope()`/`describeStoreTarget()` to put a human-readable scope label in the result so the assistant can repeat it to the user.
+**For tool authors:** inject `StoreScopeContext` when a tool reads or writes anything that Magento stores per scope. Use `validateScope()` for config-style `scope`/`scope_id` pairs, `getRestStoreCode()` when the write goes through the internal API client, and `describeScope()`/`describeStoreTarget()` to put a human-readable scope label in the result so the assistant can repeat it to the user.
 
 ### Resource Links (Planned frontend rendering)
 
@@ -310,12 +399,21 @@ The module ships with 10 tools grouped into 4 skill areas:
 | `product_data` | `Service\Skills\Analytics\ProductData` | Yes | Product search, lookup by SKU, inventory counts, low-stock alerts. |
 | `customer_data` | `Service\Skills\Analytics\CustomerData` | Yes | Customer counts, recent signups, top spenders. **Never returns PII** — only aggregates and IDs. |
 
+### Inventory
+
+Both tools implement `AvailabilityAwareToolInterface`, so the registry offers exactly one of them depending on whether Multi-Source Inventory is enabled.
+
+| Tool | Class | Read-only | Description |
+|------|-------|-----------|-------------|
+| `stock_level` | `Service\Skills\Inventory\StockLevel` | Yes | Stock of one SKU from the catalog stock item: quantity, in-stock status, manage stock, backorders. Stores without MSI only. |
+| `stock_level_msi` | `Service\Skills\Inventory\StockLevelMsi` | Yes | Quantity and status per inventory source, salable quantity per stock. Stores with MSI only; MSI services are resolved at run time so disabling or removing the Inventory modules does not break the registry. |
+
 ### Store Configuration
 
 | Tool | Class | Read-only | Description |
 |------|-------|-----------|-------------|
-| `config_reader` | `Service\Skills\Configuration\ConfigReader` | Yes | Reads Magento system configuration by path and scope. Validates the scope against existing websites/store views and lists per-scope overrides of a default value. Blocks sensitive paths (keys, secrets, passwords, tokens, payment config). |
-| `config_writer` | `Service\Skills\Configuration\ConfigWriter` | No | Writes Magento system configuration on a validated default/website/store view scope. Same blocked-path protections. Requires user confirmation. |
+| `config_reader` | `Service\Skills\Configuration\ConfigReader` | Yes | Reads Magento system configuration by path and scope. Validates the scope against existing websites/store views and lists per-scope overrides of a default value. Each path is gated by the ACL resource its section declares in `system.xml` (`Magento_Payment::payment`, `Magento_Config::config_admin`, …), the same resource the admin needs to open that section under Stores > Configuration; a path outside any section is refused. Refuses credentials (a path named like a key, secret, password, token or username, or stored by a password or encrypting field), payment config and Mago's own `mago/*` settings. A value Magento marks sensitive (contact addresses, carrier accounts, SMTP host: what `app:config:dump` keeps out of `config.php`) comes back as `masked_value`, which the privacy filter turns into a `mago://config_N` token; the admin reads the real value (#106). Whether a carrier account id is refused or masked follows its field type in `system.xml`. |
+| `config_writer` | `Service\Skills\Configuration\ConfigWriter` | No | Writes Magento system configuration on a validated default/website/store view scope. Same per-section ACL gate and blocked-path protections, shared through `ConfigPathAccess`; a sensitive value is echoed only as `masked_value`. Saves through the field's backend model like `bin/magento config:set` (validation, encryption, after-save), and for a `system.xml` field through Magento's configuration model as the admin save does, so the `admin_system_config_changed_section_*` observers run. Refuses a value locked in `env.php`/`config.php` and an upload field, and shows a caution card for high-impact settings. Requires user confirmation. |
 | `cache_manager` | `Service\Skills\Configuration\CacheManager` | No | Flush all caches, flush specific cache types, or view cache status. Requires confirmation for flush actions. |
 | `indexer_manager` | `Service\Skills\Configuration\IndexerManager` | No | Reindex specific indexers or all, check indexer status, change indexer mode (realtime/schedule). Requires confirmation. |
 
@@ -427,24 +525,43 @@ Magento_Backend::admin
 │
 └── MagoAssistant_Mago::assistant                    # Parent resource
     ├── MagoAssistant_Mago::assistant_read           # Read operations
-    └── MagoAssistant_Mago::assistant_write          # Write operations
+    ├── MagoAssistant_Mago::assistant_write          # Write operations
+    ├── MagoAssistant_Mago::conversations            # Conversations screen (every admin's transcripts)
+    │   └── MagoAssistant_Mago::conversations_delete
+    ├── MagoAssistant_Mago::flags                    # Answer feedback (also needs conversations)
+    │   ├── MagoAssistant_Mago::flags_export
+    │   └── MagoAssistant_Mago::flags_delete
+    ├── MagoAssistant_Mago::statistics               # Statistics and dashboard
+    └── MagoAssistant_Mago::skills                   # Per-user skill permissions
+        ├── MagoAssistant_Mago::skills_read
+        └── MagoAssistant_Mago::skills_write
 ```
+
+`page_form` declares `Magento_Backend::admin` as its floor, because the resource that matters is the one guarding the admin page the form is on, and that page comes from the request rather than the call's input. Its actions resolve the open page's route (and `write_fields`' navigation target) through `AdminRouteAcl` and refuse when the admin lacks that resource or the route cannot be resolved; see [form-access.md](form-access.md#the-pages-own-acl-resource-pageaccess).
+
+`config_reader` and `config_writer` are not gated by `Magento_Config::config`: every call needs the resource of the section its path belongs to (`Magento_Config::web`, `Magento_Payment::payment`, `Magento_Config::config_admin`, ...), resolved from `system.xml` by `ConfigPathAccess` and checked again on the path `execute()` uses. `Magento_Config::config` only answers a call without a path.
 
 ### How It Works
 
-1. **Every tool is gated by the assistant resources** (`assistant_read` for read actions, `assistant_write` for write actions), enforced per invocation by the tool path; tools with a native Magento counterpart additionally declare a per-action resource via `getMagentoAcl(array $input)`.
-2. **Read tools** require `assistant_read` — analytics queries, config reading.
-3. **Write tools** require `assistant_write` — config changes, CMS updates, content generation.
-4. **ACL is checked before execution**, not just at the API level. Even if the AI requests a tool, it won't execute if the admin user's role lacks the required resource.
-5. **Admin roles** in Magento's `System > Permissions > User Roles` control which skills are available per user. An admin with only `assistant_read` will never see write tools offered by the AI — they are excluded from the tool definitions sent to the provider.
+1. **Every tool is gated by the assistant resources** (`assistant_read` for read actions, `assistant_write` for write actions), enforced per invocation by the tool path.
+2. **Every call also declares what it touches**, through `getMagentoAcl(array $input)` on the tool and, for a skill, `getAclResource()` on the action. Both must allow the call: an action can only narrow what its skill requires, never replace it with something broader. `Service\Acl\ToolAccess` reads that declaration the same way wherever a tool is reached — the chat, the welcome screen's example questions, `mago:tool:verify` — and it is one of three things:
+   - **a Magento resource id** (`Magento_Customer::manage`): the admin must hold it, exactly as the admin screen for that data requires. Where the data has an admin screen, derive the resource from it rather than naming it: `EntityRouteMap::getAclResource()` / `getListAclResource()` ask `AdminRouteAcl`, which resolves the route the way Magento's router does and reads `ADMIN_RESOURCE` off the controller — so the tool is gated by whatever Magento enforces on that screen today, and `cms/page/edit` comes out as `Magento_Cms::save` without anyone having to know that;
+   - **`Acl::MAGO_PER_USER`**: the tool touches no Magento data (an external tracker, the assistant's own docs). It is gated by the per-user skill permission alone, and only by an explicit grant there — holding the assistant is not the same as having been given this tool;
+   - **nothing** (`''` or `null`): the tool forgot to say. **It is refused for everyone.** An empty resource used to mean "no check", which is how a tool reading customer records came to be reachable by any admin with the chat grant (#148). `mago:tool:verify` fails on it.
+3. **Read tools** require `assistant_read` — analytics queries, config reading.
+4. **Write tools** require `assistant_write` — config changes, CMS updates, content generation.
+5. **ACL is checked before execution**, not just at the API level. Even if the AI requests a tool, it won't execute if the admin user's role lacks the required resource.
+6. **Admin roles** in Magento's `System > Permissions > User Roles` control which skills are available per user. An admin with only `assistant_read` will never see write tools offered by the AI — they are excluded from the tool definitions sent to the provider.
 
 ### Per-Role Behavior
 
 | Role has | Tools available | Write confirmation |
 |----------|----------------|-------------------|
-| `assistant_read` | ConfigReader, SalesData, ProductData, CustomerData, AdminNavigator | N/A |
-| `assistant_read` + `assistant_write` | All 10 tools | Required for write tools |
+| `assistant_read` | Read tools - each still only for the data the role's Magento resources cover (`customer_data` needs `Magento_Customer::manage`, `product_data` `Magento_Catalog::products`, ...) | N/A |
+| `assistant_read` + `assistant_write` | Read and write tools, under the same Magento resources | Required for write tools |
 | None | Chat only, no tools | N/A |
+
+A tool declaring `Acl::MAGO_PER_USER` runs only for an admin with an explicit row for it under Stores > Admin Assistant > Skills & Permissions, whatever the role holds. Without one it stays in the model's tool list, with its read actions only when it has any (a write-only tool keeps its actions), so the model relays the refusal instead of answering with another tool; it is left out of the slash legend and the command menu. An explicit Disabled row hides it from the model as well. Declare `MAGO_PER_USER` for the whole tool, not for single actions: the legend, the menu and the advertised actions read the tool-level answer.
 
 ### Per-User Skill Permissions
 
@@ -462,6 +579,8 @@ The chat panel's slash-command legend is fed from `ToolRegistry::getEnabledTools
 
 Per-user rows only apply to genuine admin users. Integration-token ids live in a different table than `admin_user`, so a colliding id must never select another admin's permission rows or conversations. The REST endpoints (`Model/WebApi/ChatManagement.php`) therefore require an admin user token: any other user type (`USER_TYPE_INTEGRATION`, customer, guest) receives an authorization error before any conversation or tool work happens.
 
+Unlike the admin panel, the REST endpoints return message content with the privacy-mode values already in place. That content is untrusted: it can quote text a customer wrote (a review, a nickname) and markup the model was steered into writing. A REST client must show it as plain text, or sanitize it as strictly as the panel does (see `privacy-mode/README.md`).
+
 `getAllTools()` / `getToolByName()` remain unfiltered — they serve the Skills admin UI and JIT instruction lookup, not tool access.
 
 ---
@@ -469,6 +588,9 @@ Per-user rows only apply to genuine admin users. Integration-token ids live in a
 ## Building Custom Skills
 
 Third-party modules (hosting providers, PSPs, marketplace integrations) can register their own tools.
+
+The quickest route is `bin/magento mago:tool:create` to scaffold the module and `bin/magento mago:tool:verify` to check
+it; [building-a-tool.md](building-a-tool.md) is the step-by-step guide. The steps below show what the scaffold contains.
 
 ### Step 1: Implement `ToolInterface`
 
@@ -538,8 +660,10 @@ class ServerStatus implements ToolInterface
 
     public function getMagentoAcl(array $input = []): string
     {
-        return ''; // Return e.g. 'Magento_Backend::cache' for native ACL checks;
-                   // mixed tools can switch on $input['action'] per invocation
+        // The Magento resource guarding the data this touches; mixed tools switch on
+        // $input['action']. A tool that touches no Magento data returns Acl::MAGO_PER_USER.
+        // Never '': an empty declaration is refused for everyone.
+        return 'Vendor_HostingIntegration::server_status';
     }
 
     public function getFieldClassification(string $action = ''): array
@@ -578,7 +702,9 @@ class ServerStatus implements ToolInterface
 
 That's it. The `ToolRegistry` picks up the new tool, includes it in AI provider calls, and handles execution within the existing conversation loop.
 
-### Step 3: Add ACL resource (optional but recommended)
+### Step 3: Declare the ACL resource
+
+Every tool declares one (see [Access control](#acl--permissions)); a tool whose data has no Magento screen of its own declares a resource of its module, so a role can be given or denied exactly this:
 
 ```xml
 <!-- Vendor/HostingIntegration/etc/acl.xml -->
@@ -611,6 +737,7 @@ Add a `system.xml` field under the Admin Assistant tools section so store admins
 - **Include `_links` for navigable records** — if your tool returns orders, products, or other admin-viewable entities, add a `_links` array so the admin can click through to the relevant page.
 - **Set `isReadOnly()` correctly** — if your tool has any side effects (writes, API calls that change state), return `false`. This triggers the user confirmation flow.
 - **Classify every output field** (`getFieldClassification()`, required since 2.0.0) — the privacy filter strips any field you do not declare, so an incomplete map silently empties your tool's output. Fields that can carry personal data are `PiiClass::STRIP` (or `TOKENISE` for bare linkable ids); see `docs/privacy-mode/README.md` for the four canonical shapes.
+- **Depend on an optional module? Implement `AvailabilityAwareToolInterface`** — return `false` from `isAvailable()` when the module is off, and the registry leaves the tool out entirely. Do not inject services of that module in the constructor: the registry instantiates every tool, so a missing dependency breaks all of them. `Service\Skills\Inventory\StockLevelMsi` shows the pattern.
 - **Never return secrets** — API keys, passwords, tokens should never appear in tool output. They would be sent to the LLM.
 - **Handle errors gracefully** — throw exceptions with clear messages. The ChatService catches them and reports to the user.
 
@@ -759,12 +886,6 @@ The existing `ToolInterface` methods map 1:1 to MCP tool definitions, making thi
 |------|-------------|---------|
 | `mago/tools/max_response_tokens` | Estimated token cap per tool result before truncation | `4000` |
 
-#### Internal API
-| Path | Description | Default |
-|------|-------------|---------|
-| `mago/api/internal_url` | Internal URL for REST API calls (Docker/proxy setups) | — (uses store base URL) |
-| `mago/api/internal_ssl_verify` | Verify the TLS certificate on internal REST calls (disable when the certificate cannot match the internal URL host) | `1` |
-
 #### Debug & Logging
 | Path | Description | Default |
 |------|-------------|---------|
@@ -797,9 +918,10 @@ The existing `ToolInterface` methods map 1:1 to MCP tool definitions, making thi
 
 | Data type | Protection mechanism |
 |-----------|---------------------|
-| API keys, secrets, passwords, tokens | Blocked path patterns in `ConfigReader` and `ConfigWriter` |
-| Payment configuration (`payment/*`) | Hardcoded path block in config tools |
-| Encrypted config values | Blocked by sensitive path detection |
+| API keys, secrets, passwords, tokens, usernames | Blocked path names in `ConfigPathAccess` (`ConfigReader`, `ConfigWriter`) |
+| Payment configuration (`payment/*`), Mago's own settings (`mago/*`) | Hardcoded path block in config tools |
+| Encrypted and password config fields | Blocked by the field's `system.xml` type or backend model (subclasses and virtual types of `Encrypted` included; a backend model that resolves to no class is blocked too) |
+| Config values Magento marks sensitive | Returned as `masked_value`, tokenised by the privacy filter |
 | Customer PII (names, emails, addresses) | Privacy mode (see `privacy-mode/README.md`): every tool classifies its output fields; direct identifiers are stripped, bare linkable ids are tokenised, undeclared fields never pass |
 | Admin passwords | Never exposed via any tool |
 | Database credentials | Blocked by sensitive path detection |

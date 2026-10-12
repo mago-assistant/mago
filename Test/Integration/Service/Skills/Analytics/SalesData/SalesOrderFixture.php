@@ -53,6 +53,25 @@ final class SalesOrderFixture
         $this->insert($state, $subtotal, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, false);
     }
 
+    /**
+     * An order with the given addresses; null leaves that address out, as a virtual order has no
+     * shipping address.
+     */
+    public function addressedOrder(?string $shippingCountry, ?string $billingCountry): void
+    {
+        $orderId = $this->insert(Order::STATE_PROCESSING, 10.00, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+
+        foreach (['shipping' => $shippingCountry, 'billing' => $billingCountry] as $type => $country) {
+            if ($country !== null) {
+                $this->connection()->insert($this->resourceConnection->getTableName('sales_order_address'), [
+                    'parent_id' => $orderId,
+                    'address_type' => $type,
+                    'country_id' => $country,
+                ]);
+            }
+        }
+    }
+
     private function insert(
         string $state,
         float $subtotal,
@@ -63,7 +82,7 @@ final class SalesOrderFixture
         float $refundedShipping,
         float $globalRate,
         bool $isInvoiced = true
-    ): void {
+    ): int {
         $grandTotal = $subtotal + $tax + $shipping;
         $refunded = $refundedSubtotal + $refundedTax + $refundedShipping;
 
@@ -89,6 +108,8 @@ final class SalesOrderFixture
             'base_tax_refunded' => $refunded > 0 ? $refundedTax : null,
             'base_shipping_refunded' => $refunded > 0 ? $refundedShipping : null,
         ]);
+
+        return (int)$this->connection()->lastInsertId($this->resourceConnection->getTableName(self::TABLE));
     }
 
     private function connection(): AdapterInterface

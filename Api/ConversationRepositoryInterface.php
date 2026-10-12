@@ -99,6 +99,17 @@ interface ConversationRepositoryInterface
     public function getMessageForUser(int $messageId, int $adminUserId): array;
 
     /**
+     * Atomically take a pending confirmation for one request: clears the flag only while it is
+     * still set, so of two requests racing for the same message exactly one gets true.
+     *
+     * @param int $messageId
+     * @param int $adminUserId only claims a message owned by this admin user
+     * @param int|null $maxAgeSeconds when given, a message older than this is not claimed
+     * @return bool whether this call claimed it
+     */
+    public function claimPendingConfirmation(int $messageId, int $adminUserId, ?int $maxAgeSeconds = null): bool;
+
+    /**
      * @param int $messageId
      * @param bool $confirmed
      * @param int|null $adminUserId when given, only resolves messages owned by this admin user

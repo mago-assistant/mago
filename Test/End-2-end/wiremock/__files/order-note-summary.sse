@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl-e2e-order-2","object":"chat.completion.chunk","created":1754000041,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-order-2","object":"chat.completion.chunk","created":1754000041,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"Order note check complete. "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-order-2","object":"chat.completion.chunk","created":1754000041,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"The note is on the order."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-order-2","object":"chat.completion.chunk","created":1754000041,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1450,"completion_tokens":18,"total_tokens":1468}}
+
+data: [DONE]
+

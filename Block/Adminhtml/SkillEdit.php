@@ -9,6 +9,8 @@ namespace MagoAssistant\Mago\Block\Adminhtml;
 use Magento\Backend\Block\Template;
 use Magento\Backend\Block\Template\Context;
 use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\Phrase;
+use MagoAssistant\Mago\Api\Acl;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 
@@ -21,6 +23,14 @@ class SkillEdit extends Template
         array $data = []
     ) {
         parent::__construct($context, $data);
+    }
+
+    /**
+     * Viewing the permissions and changing them are separate grants (#195).
+     */
+    public function canEdit(): bool
+    {
+        return $this->_authorization->isAllowed('MagoAssistant_Mago::skills_write');
     }
 
     public function getSkill(): ?ToolInterface
@@ -62,6 +72,17 @@ class SkillEdit extends Template
             $result[(int)$row['admin_user_id']] = $row['permission'];
         }
         return $result;
+    }
+
+    /**
+     * What the empty option means: a per-user tool is refused until granted, any other tool follows
+     * the role's ACL
+     */
+    public function getDefaultPermissionLabel(): Phrase
+    {
+        return $this->getSkill()?->getMagentoAcl() === Acl::MAGO_PER_USER
+            ? __('Default (not granted)')
+            : __('Default (ACL)');
     }
 
     public function getSaveUrl(): string

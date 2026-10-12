@@ -96,7 +96,7 @@ test('Surfaces a streamed error instead of failing silently', async ({page}) => 
   await expect(chatPanel.sendButton(page)).toBeEnabled();
 });
 
-test('Places the toggle in the admin header, between search and notifications, not floating over the page', async ({page}) => {
+test('Places the toggle in the admin header next to search and notifications, not floating over the page', async ({page}) => {
   await chatMock.install(page, lookupProduct);
 
   await chatPanel.openOnDashboard(page);
@@ -104,17 +104,18 @@ test('Places the toggle in the admin header, between search and notifications, n
   await expect(page.locator('.mago-toggle-tab')).toHaveCount(0);
   await expect(page.locator('.page-header #mago-toggle')).toHaveCount(1);
 
-  // Search reserves a box wider than its visible icon (the icon itself is
-  // right-aligned inside it), so neighbours sit a few px inside that box by
-  // design - comparing left edges avoids being tripped up by that overlap.
+  // Magento and Mage-OS order the header actions differently, so only assert
+  // that the toggle sits in the same row as search and notifications. Search
+  // reserves a box wider than its visible icon (the icon itself is right-aligned
+  // inside it), so comparing left edges avoids being tripped up by that overlap.
   const searchBox = await page.locator('.search-global').boundingBox();
   const toggleBox = await page.locator('#mago-toggle').boundingBox();
   const notificationsBox = await page.locator('.notifications-wrapper').boundingBox();
-  const userBox = await page.locator('.admin-user').boundingBox();
+  const toggleCenterY = toggleBox.y + toggleBox.height / 2;
 
   expect(toggleBox.x).toBeGreaterThan(searchBox.x);
-  expect(notificationsBox.x).toBeGreaterThan(toggleBox.x);
-  expect(userBox.x).toBeGreaterThan(notificationsBox.x);
+  expect(toggleCenterY).toBeGreaterThan(notificationsBox.y);
+  expect(toggleCenterY).toBeLessThan(notificationsBox.y + notificationsBox.height);
 });
 
 test('Makes it obvious the header icon closes Mago once the panel is open', async ({page}) => {

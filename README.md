@@ -19,8 +19,8 @@
 <p align="center">
   <img alt="Free for merchants" src="https://img.shields.io/badge/price-free-FF7A33">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-373330">
-  <img alt="Magento 2.4.9+" src="https://img.shields.io/badge/Magento-2.4.9%2B-373330">
-  <img alt="Mage-OS 3+" src="https://img.shields.io/badge/Mage--OS-3.0%2B-373330">
+  <img alt="Magento 2.4.8+" src="https://img.shields.io/badge/Magento-2.4.8%2B-373330">
+  <img alt="Mage-OS 1.1+" src="https://img.shields.io/badge/Mage--OS-1.1%2B-373330">
   <img alt="PHP 8.2+" src="https://img.shields.io/badge/PHP-8.2%2B-373330">
 </p>
 
@@ -86,7 +86,7 @@ See [docs/skills-examples.md](docs/skills-examples.md) for more example prompts 
 ## Requirements
 
 - PHP >= 8.2
-- Magento >= 2.4.9 or Mage-OS >= 3.0 (Symfony 7.3+ required by the AI bridges)
+- Magento >= 2.4.8 or Mage-OS >= 1.1
 - An API key for one of the supported providers
 
 ## Installation
@@ -95,7 +95,7 @@ Anthropic and OpenAI are included out of the box. For other providers (Azure, Ge
 Ollama, LM Studio, etc.) install the matching Symfony AI bridge — see `composer.json` suggests.
 
 ```bash
-composer require mago-assistant/mago
+composer require mago-assistant/magento2-mago
 bin/magento module:enable MageOS_AiBase MagoAssistant_Mago
 bin/magento setup:upgrade
 ```
@@ -111,16 +111,24 @@ Then, under `Stores > Configuration > Mago Assistant`:
 2. **Pick the AI Service** the assistant runs on (API Settings). Leave it on *Automatic* to use
    the first usable one, which is what a single-provider store wants.
 
-### Internal API URL (Docker / reverse proxy setups)
+### New add-ons in the chat panel (off by default)
 
-If the module's internal REST API calls fail (e.g. in Docker environments where PHP can't reach itself via the public hostname), configure `Stores > Configuration > Mago Assistant > API Settings > Internal API URL`.
+`Stores > Configuration > Mago Assistant > Add-ons > Show new add-ons` puts the newest Mago
+add-ons in the panel's welcome state. It is **off by default**, because switching it on lets the
+store reach out to a host that is not yours: `https://askmago.com/addons.json`, a public JSON
+document, fetched the first time an administrator opens the panel and then cached for a week.
 
-Examples:
-- markshust/docker-magento: `https://app:8443`
-- DDEV: `https://ddev-<project>-web:443`
-- Leave empty to use the store's base URL (works for most setups)
+The request carries nothing about the store beyond what any HTTP request carries — its server
+address and the user agent `MagoAssistant-Mago`. There is no query string, no store identifier and
+no account behind it, which is why the feed is a static file rather than an endpoint that answers
+per installation. With the setting off, nothing is fetched and the panel asks for nothing.
 
-These calls verify the TLS certificate by default. If the internal URL points at a host whose certificate cannot match (loopback addresses, container hostnames, self-signed certificates), set `Verify TLS Certificate` to No. Keep it enabled in production.
+### How tools reach Magento
+
+Tools run Magento's web API routes inside the PHP process that handles the chat, as the admin who is
+chatting: the route's ACL resources are checked against that admin's role, and nothing goes over
+HTTP. There is no internal URL to configure and no admin token is created. The former `Internal API
+URL` and `Verify TLS Certificate` settings are removed, along with their saved values.
 
 ## Built-in Skills
 
@@ -130,6 +138,7 @@ These calls verify the TLS certificate by default. If the internal URL points at
 | Store Configuration | `config_reader`, `config_writer`, `cache_manager`, `indexer_manager` | Read / Write |
 | Content Management | `cms_data`, `content_generator` | Read / Write |
 | Navigation | `admin_navigator` | Read |
+| Inventory | `stock_level` (without MSI), `stock_level_msi` (with MSI) | Read |
 | Documentation | `docs_search` | Read |
 | Form Access | `page_form` | Read / Stage (never saves) |
 
@@ -151,7 +160,7 @@ Typing `/` in the chat shows the available commands. These run without the AI pr
 
 Write commands need the `MagoAssistant_Mago::assistant_write` ACL resource plus a write grant on the underlying skill. See [docs/skills-architecture.md](docs/skills-architecture.md#slash-commands) for registering your own commands.
 
-The answer widgets and skill cards the chat panel renders are documented in [docs/ui-components.md](docs/ui-components.md); [docs/ui-components-examples.md](docs/ui-components-examples.md) shows every component with sample data and the call behind it.
+The answer widgets and skill cards the chat panel renders are documented in [docs/ui-components.md](docs/ui-components.md); [docs/ui-components-examples.md](docs/ui-components-examples.md) shows every component with sample data and the call behind it. To add a widget of your own from another module, follow [docs/widgets.md](docs/widgets.md).
 `page_form` reads the admin form currently open in the browser and can stage new field values for
 the administrator to confirm — it never writes to the database itself, only into the same fields
 the administrator would type into, so their own Save button is what persists anything. See
@@ -235,6 +244,10 @@ See [docs/skills-architecture.md](docs/skills-architecture.md) for the full arch
 - Data & privacy details
 - MCP compatibility roadmap
 
+Building your own tool? `bin/magento mago:tool:create` scaffolds the module and `bin/magento mago:tool:verify` checks
+it, including every returned field's privacy class. [docs/building-a-tool.md](docs/building-a-tool.md) walks through it
+and works as instructions for any coding agent: point your `AGENTS.md` at it.
+
 ## Testing
 
 End-to-end tests run with Playwright against Chromium. No test calls a real provider: the
@@ -254,15 +267,28 @@ and how to add scenarios.
 
 | ACL Resource | Grants |
 |---|---|
-| `MagoAssistant_Mago::config` | Module configuration access |
+| `MagoAssistant_Mago::config` | Module configuration (Stores > Configuration > Mago) |
 | `MagoAssistant_Mago::assistant_read` | Read-only tools (analytics, config reading, navigation) |
 | `MagoAssistant_Mago::assistant_write` | Write tools (config changes, CMS, content generation) |
+| `MagoAssistant_Mago::conversations` | Conversations grid and transcripts of every admin, continue a conversation |
+| `MagoAssistant_Mago::conversations_delete` | Delete conversations |
+| `MagoAssistant_Mago::flags` | Answer feedback (also needs `conversations`) |
+| `MagoAssistant_Mago::statistics` | Statistics and dashboard |
+| `MagoAssistant_Mago::skills_read` | View per-user skill permissions |
+| `MagoAssistant_Mago::skills_write` | Edit per-user skill permissions |
+
+Each screen asks for its own resource. A role that held `MagoAssistant_Mago::config` used to reach
+conversations, statistics and skill permissions too. On upgrade it keeps statistics and skill permissions
+(data patch `GrantSplitScreenResources`), but not conversations: grant `MagoAssistant_Mago::conversations`
+explicitly to roles that should read other admins' transcripts.
 
 ## Data & privacy
 
 Mago stores nothing outside your Magento installation. Every request goes directly from your
 store to the AI provider you configured, using your own API key; what that provider does with
-the request is governed by its API terms. Mago only reads what the current admin's role allows
+the request is governed by its API terms. The only other outbound call the module can make is the
+add-on feed, which is off unless you switch it on — see
+[New add-ons in the chat panel](#new-add-ons-in-the-chat-panel-off-by-default). Mago only reads what the current admin's role allows
 and never writes without an explicit confirmation. Details in
 [docs/skills-architecture.md](docs/skills-architecture.md#data--privacy).
 

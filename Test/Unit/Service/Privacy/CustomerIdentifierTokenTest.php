@@ -16,7 +16,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * A customer's name, address and phone number are masked rather than dropped: the provider is given
+ * A customer's name, address (city included) and phone number are masked rather than dropped: the provider is given
  * a token, and the admin is given the value back. Dropping them left the assistant unable to answer
  * who a customer is, which is the most ordinary question there is, and bought nothing extra in
  * return since neither form sends the value.
@@ -62,7 +62,7 @@ final class CustomerIdentifierTokenTest extends TestCase
         self::assertStringNotContainsString('Jan Jansen', $sent);
         self::assertStringNotContainsString('jan@example.com', $sent);
         self::assertStringNotContainsString('0612345678', $sent);
-        self::assertStringContainsString('Utrecht', $sent, 'city is not an identifier and stays usable');
+        self::assertStringNotContainsString('Utrecht', $sent);
 
         $row = $out['recent'][0];
         self::assertSame('Jan Jansen', $vault->rehydrate($row['name']));
@@ -79,6 +79,39 @@ final class CustomerIdentifierTokenTest extends TestCase
 
         self::assertMatchesRegularExpression('#^mago://name_\d+$#', $row['name']);
         self::assertSame('Jan Jansen', $vault->rehydrate($row['name']));
+    }
+
+    #[Test]
+    public function itTokenisesTheCityOfALookedUpCustomer(): void
+    {
+        [$filter, $vault] = $this->filter();
+
+        $out = $filter->filter($this->classesOf(LookupCustomerAction::class), ['results' => [self::ROW]]);
+        $row = $out['results'][0];
+
+        self::assertMatchesRegularExpression('#^mago://city_\d+$#', $row['city']);
+        self::assertSame('Utrecht', $vault->rehydrate($row['city']));
+    }
+
+    #[Test]
+    public function itTokenisesTheCityOfANewCustomer(): void
+    {
+        [$filter, $vault] = $this->filter();
+
+        $out = $filter->filter($this->classesOf(RecentSignupsAction::class), ['recent' => [self::ROW]]);
+        $row = $out['recent'][0];
+
+        self::assertMatchesRegularExpression('#^mago://city_\d+$#', $row['city']);
+        self::assertSame('Utrecht', $vault->rehydrate($row['city']));
+    }
+
+    #[Test]
+    public function aMaskedCityWrittenBackIsFlaggedForTheConfirmationWarning(): void
+    {
+        $vault = new ConversationVault();
+        $service = new PrivacyService(new PrivacyFilter($vault, new PiiHeuristic()), $vault, new PiiHeuristic());
+
+        self::assertTrue($service->containsPersonalToken(['city' => 'mago://city_1']));
     }
 
     #[Test]

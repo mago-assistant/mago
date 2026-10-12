@@ -15,14 +15,19 @@ class CronStatus extends AbstractSkill
         return 'cron_status';
     }
 
+    /**
+     * Cron has no admin screen of its own, so there is no resource to derive. Reading the schedule
+     * and queueing a job are developer-facing, like the module version lookup, so this shares its
+     * resource (#148). Scheduling additionally asks for confirmation, as every write does.
+     */
+    public function getMagentoAcl(array $input = []): string
+    {
+        return 'Magento_Config::dev';
+    }
+
     protected function getBaseDescription(): string
     {
         return 'Monitor Magento cron jobs: check running, scheduled, and failed jobs, and perform health checks.';
-    }
-
-    public function getMagentoAcl(array $input = []): string
-    {
-        return '';
     }
 
     protected function getBaseInstructions(): string

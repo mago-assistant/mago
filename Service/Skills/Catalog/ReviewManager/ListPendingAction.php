@@ -6,7 +6,6 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Catalog\ReviewManager;
 
-use Magento\Review\Model\ResourceModel\Review\CollectionFactory;
 use Magento\Review\Model\Review;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
@@ -15,7 +14,7 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 class ListPendingAction implements ActionInterface
 {
     public function __construct(
-        private readonly CollectionFactory $collectionFactory,
+        private readonly ReviewServices $reviewServices,
         private readonly SecureAdminUrl $secureAdminUrl
     ) {
     }
@@ -79,7 +78,7 @@ class ListPendingAction implements ActionInterface
 
         $limit = (int)($params['limit'] ?? 20);
 
-        $collection = $this->collectionFactory->create();
+        $collection = $this->reviewServices->createCollection();
         $collection->addStatusFilter(Review::STATUS_PENDING);
         $collection->setOrder('review_id', 'DESC');
         $collection->setPageSize($limit);

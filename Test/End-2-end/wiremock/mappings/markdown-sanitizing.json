@@ -1,0 +1,28 @@
+{
+  "mappings": [
+    {
+      "name": "Markdown sanitizing - a stored answer carrying injected markup",
+      "priority": 1,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/chat/completions",
+        "bodyPatterns": [
+          {
+            "contains": "E2E Markdown Sanitizing Check"
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "text/event-stream"
+        },
+        "bodyFileName": "markdown-sanitizing.sse",
+        "chunkedDribbleDelay": {
+          "numberOfChunks": 10,
+          "totalDuration": 100
+        }
+      }
+    }
+  ]
+}

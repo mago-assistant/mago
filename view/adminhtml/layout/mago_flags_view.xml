@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">
+    <body>
+        <referenceContainer name="content">
+            <block class="MagoAssistant\Mago\Block\Adminhtml\Flag\Container" name="mago_flag_container">
+                <block class="MagoAssistant\Mago\Block\Adminhtml\Flag\View"
+                       name="mago_flag_view"
+                       template="MagoAssistant_Mago::flags/view.phtml"/>
+            </block>
+        </referenceContainer>
+    </body>
+</page>

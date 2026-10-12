@@ -9,8 +9,8 @@ namespace MagoAssistant\Mago\Service\Docs;
 use Magento\Framework\FlagManager;
 use Magento\Framework\Lock\LockManagerInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
-use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Model\Doc\Repository as DocRepository;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 
 class DocsSyncService
 {
@@ -26,7 +26,7 @@ class DocsSyncService
         private readonly ExlMarkdownNormalizer $normalizer,
         private readonly DocRepository $docRepository,
         private readonly FlagManager $flagManager,
-        private readonly ErrorLogger $errorLogger,
+        private readonly ErrorReporter $errorReporter,
         private readonly LockManagerInterface $lockManager
     ) {
     }
@@ -48,7 +48,7 @@ class DocsSyncService
         try {
             $locked = $this->lockManager->lock(self::LOCK_NAME, 0);
         } catch (\Throwable $e) {
-            $this->errorLogger->addLog('DocsSync', $e->getMessage());
+            $this->errorReporter->log('DocsSync', $e);
             return ['error' => $e->getMessage()];
         }
         if (!$locked) {
@@ -92,9 +92,19 @@ class DocsSyncService
             foreach ($tree['paths'] as $i => $path) {
                 $progress('fetch', $i + 1, $totalPaths);
                 $content = $this->source->fetchRaw($repo, $ref, $path);
-                if ($content !== null) {
-                    $rawByPath[$path] = $content;
+                if ($content === null) {
+                    // A partial corpus would replace the full one and mark this commit synced, so it
+                    // would never be retried. Failing here keeps the old corpus and the old SHA.
+                    throw new \RuntimeException(sprintf(
+                        'Could not fetch %s from %s@%s (file %d of %d), keeping existing corpus',
+                        $path,
+                        $repo,
+                        $ref,
+                        $i + 1,
+                        $totalPaths
+                    ));
                 }
+                $rawByPath[$path] = $content;
             }
 
             if (!$rawByPath) {
@@ -147,8 +157,20 @@ class DocsSyncService
 
             return ['indexed' => count($rows), 'sha' => $sha];
         } catch (\Throwable $e) {
-            $this->flagManager->saveFlag(self::FLAG_ERROR, $e->getMessage());
-            $this->errorLogger->addLog('DocsSync', $e->getMessage());
+            // The CLI and cron answer the server operator with the message; the stored flag only
+            // points at the log entry.
+            // The failure that got us here (out of file handles, a lost connection) can take the log
+            // and flag writes down too; the caller still gets the original message.
+            try {
+                $reference = $this->errorReporter->log('DocsSync', $e);
+                $this->flagManager->saveFlag(self::FLAG_ERROR, 'See var/log/mago-error.log, reference ' . $reference);
+            } catch (\Throwable $recordError) {
+                try {
+                    $this->errorReporter->log('DocsSync: could not record the error', $recordError);
+                } catch (\Throwable) {
+                    // Nothing left to record it with.
+                }
+            }
             return ['error' => $e->getMessage()];
         }
     }

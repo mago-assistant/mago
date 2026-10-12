@@ -7,14 +7,14 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CouponManager;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
-use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class CreateRuleAction implements ActionInterface
 {
     public function __construct(
-        private readonly InternalApiClient $apiClient,
+        private readonly InternalApiClientInterface $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl
     ) {
     }
@@ -42,7 +42,8 @@ class CreateRuleAction implements ActionInterface
             ],
             'discount_amount' => [
                 'type' => 'number',
-                'description' => 'Discount amount (e.g. 20 for 20% or 20 for $20 off)',
+                'description' => 'Discount amount (e.g. 20 for 20% or 20 for $20 off), 0 or greater. '
+                    . 'For "percent" this is a percentage and must be at most 100.',
             ],
             'coupon_code' => [
                 'type' => 'string',
@@ -119,6 +120,17 @@ class CreateRuleAction implements ActionInterface
             'free_shipping' => 'by_percent',
             default => 'by_percent',
         };
+
+        // A negative amount raises the grand total instead of discounting it, whatever the type.
+        if ($discountAmount < 0) {
+            return ['error' => 'discount_amount must be 0 or greater'];
+        }
+
+        // Stricter than Magento's own form, which clamps a percentage to 100 only at apply time:
+        // above 100 can only be a mistake in the call. free_shipping discards the amount.
+        if ($simpleAction === 'by_percent' && $discountType !== 'free_shipping' && $discountAmount > 100) {
+            return ['error' => 'discount_amount must be between 0 and 100 for a percentage discount'];
+        }
 
         // Determine coupon type and code
         $couponCode = trim((string)($params['coupon_code'] ?? ''));

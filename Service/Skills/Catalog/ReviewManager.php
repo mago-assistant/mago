@@ -6,10 +6,28 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Catalog;
 
+use Magento\Framework\AuthorizationInterface;
+use Magento\Framework\Module\Manager as ModuleManager;
+use MagoAssistant\Mago\Api\Tool\AvailabilityAwareToolInterface;
 use MagoAssistant\Mago\Service\Skills\AbstractSkill;
 
-class ReviewManager extends AbstractSkill
+class ReviewManager extends AbstractSkill implements AvailabilityAwareToolInterface
 {
+    private const REQUIRED_MODULE = 'Magento_Review';
+
+    public function __construct(
+        AuthorizationInterface $authorization,
+        private readonly ModuleManager $moduleManager,
+        array $actions = []
+    ) {
+        parent::__construct($authorization, $actions);
+    }
+
+    public function isAvailable(): bool
+    {
+        return $this->moduleManager->isEnabled(self::REQUIRED_MODULE);
+    }
+
     public function getName(): string
     {
         return 'review_manager';

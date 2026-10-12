@@ -67,6 +67,20 @@ controlled by *Stores > Configuration > Mago Assistant > Chat Settings > Answer
 Widgets* (`mago/chat/answer_widgets`, default Yes); switching it off keeps the
 renderer but stops the model from being told about it.
 
+Inside an answer, clicks work through two attributes the panel handles for every
+widget: `data-mago-send="text"` (`MagoUI.sendAttr`) sends the text as the admin's
+next message and `data-mago-focus` (`MagoUI.focusAttr`) focuses the input. Chips
+and suggestion cards without their own `onClick` or `href` carry
+`data-mago-send` with their label. Whatever a builder returns is scrubbed before
+it reaches the page (no scripts, event attributes or unsafe links), and a
+builder that throws is skipped.
+
+Another module can add its own widget type with `MagoUI.register(type, builder)`
+and the `widgets` argument of `AnswerWidgets` in its `di.xml`; see
+[widgets.md](widgets.md) for the full walkthrough and
+[examples/Vendor_MagoStockAlert](examples/Vendor_MagoStockAlert) for a working
+module.
+
 ## Widgets (W01–W21)
 
 | # | Builder | Options |
@@ -83,15 +97,21 @@ renderer but stops the model from being told about it.
 | W10 | `stackedColumns` | `label`, `series: [{label, color}]`, `points: [{label, values}]` |
 | W11 | `heatmap` | `label`, `rows: [label]`, `values: [[n, ...]]`, `scale: [low, high]` |
 | W12 | `funnel` | `label`, `steps: [{label, value, valueText}]` |
-| W13 | `entityList` | `items: [{title, meta, thumb, href, onClick, action: {label, href, onClick}}]`, `more: {count, label, href, onClick}` |
+| W13 | `entityList` | `items: [{title, meta, thumb, href, onClick, action: {label, href, onClick}}]` (five shown, the rest in a `<details>` behind "Show N more", labels `showMore` / `showLess`), `more: {count, label, href, onClick}` (a bare `count`, or any `more` from an answer, renders as a note) |
 | W14 | `table` | `columns: [{key, label, align, width, num}]`, `rows: [{key: value \| {text, badge, tone, strong, num}}]`, `onRowClick` |
 | W15 | `record` | `title`, `badge: {text, tone}`, `rows: [{label, value, strong, num}]` |
 | W16 | `confirmWrite` | `title`, `text`, `diff: {from, to, delta}`, `onConfirm`, `onCancel` |
 | W17 | `toolTrace` | `steps: [{label, state: done\|active\|pending\|failed, tool}]` |
 | W18 | `callout` | `tone: warn\|danger\|ok\|info`, `text`, `action: {label, href, onClick}` |
 | W19 | `suggestions` | `cards: [{label, icon, href, onClick}]`, `chips: [{label, onClick}]` |
+| W19b | `choices` | `options: [{label, onClick}]`, `other` (label, default "Something else…"; `false` hides it), `onOther` |
 | W20 | `answerFooter` | `primary: {label, href, onClick, external}`, `onCopy`, `onFeedback(vote)` |
 | W21 | `empty`, `skeleton` | `title`, `text`, `icon` / `widths` |
+
+`choices` is what Mago answers with when a question is too vague to act on: the
+options are buttons, and inside an answer the chat panel sends a picked option's
+label as the next message (`data-mago-send`) and focuses the input for "other"
+(`data-mago-focus`).
 
 Chart colours follow the ramp: the first (highest) item is the accent, the next
 ones peach, and from four items on the last one is grey ("the remainder").
@@ -111,12 +131,12 @@ changes in place, it does not move.
 | S04 | `skillFailed` | `title`, `code`, `text`, `details`, `onRetry`, `onDetails` |
 | S06 | `readLine` | `text`, `tool`, `action`, `state: done\|active` — one quiet line per read-only call |
 | S07 | `skillIrreversible` | `title`, `tool`, `text`, `impacts: [...]`, `ackLabel`, `confirmLabel`, `onConfirm`, `onCancel`. The confirm button stays disabled until the acknowledgement is ticked. |
-| S08 | `skillBulk` | `title`, `items: [{id, label, meta, checked, disabled}]`, `confirmLabel(n)`, `onConfirm(ids, items)`, `onLater` |
+| S08 | `skillBulk` | `title`, `items: [{id, label, meta, params, checked, disabled}]`, `confirmLabel(n)`, `onConfirm(ids, items)`, `onLater`. Items start unticked unless `checked: true`. `params` (rows as for S01) fold out under the row with every argument in full. |
 | S09 | `skillPlan` | `title`, `current`, `total`, `steps: [{title, meta, state: done\|active\|ask\|pending}]`, `onAllowAll`, `onPause` |
 | S10 | `paramPrompt` | `text`, `prefix`, `value`, `placeholder`, `type`, `onSubmit(value)`, `chips: [{label, value}]` |
 | S11 | `undoCallout` | `text`, `onUndo`, `undoLabel`, `expiresText` |
 | S12 | `sessionLog` | `title`, `entries: [{text, time, tone}]`, `onExport` |
-| S14 | `skillMenu` | `skills: [{name, title, description, risk: read\|write\|irreversible, group}]`, `title`, `activeIndex`, `onSelect(skill, index)`, `itemClass`. A `group` opens a heading row above the entry, so one menu can hold several kinds of entry; `activeIndex` and the `onSelect` index stay flat over all of them. Exposes `magoSetActive(index)`. |
+| S14 | `skillMenu` | `skills: [{name, title, description, risk: read\|write\|irreversible, group}]`, `title`, `activeIndex`, `onSelect(skill, index)`, `itemClass`. A `group` opens a heading row above the entry, so one menu can hold several kinds of entry; `activeIndex` and the `onSelect` index stay flat over all of them. Exposes `magoSetActive(index)`. With `onSelect` the rows are listbox options that take no focus: drive them from a text field through `aria-controls` (`magoListId`) and `aria-activedescendant` (`magoItems[i].id`). Without it the menu is a static list. |
 
 ## Where the panel uses them
 
@@ -131,9 +151,10 @@ changes in place, it does not move.
 - a write whose action implements `IrreversibleActionInterface` arrives with
   `irreversible: true` and an `impacts` list and renders as the S07 card: the
   Allow button stays disabled until the acknowledgement is ticked;
-- several writes in one turn render as the S08 tick list; the ticked tool call
-  ids go to the confirm endpoint as `tool_call_ids`, unticked calls are answered
-  with a "skipped" tool result and never run;
+- several writes in one turn render as the S08 tick list. Nothing starts
+  ticked, and every row folds out to all of its arguments in full; the ticked
+  tool call ids go to the confirm endpoint as `tool_call_ids`, unticked calls are
+  answered with a "skipped" tool result and never run;
 - `tool_status` events for read-only tools render as S06 lines above the answer,
   a failed read shows the error in the line's tooltip;
 - `error` events render as a danger callout (W18);

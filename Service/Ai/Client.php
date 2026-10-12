@@ -10,6 +10,8 @@ use MageOS\AiBase\Api\AiClientFactoryInterface;
 use MageOS\AiBase\Api\AiClientInterface;
 use MageOS\AiBase\Api\Data\ChatResponseInterface;
 use MageOS\AiBase\Api\Data\StreamChunkType;
+use Magento\Framework\Exception\LocalizedException;
+use Magento\Framework\Phrase;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Service\Privacy\EgressTripwire;
 
@@ -41,15 +43,24 @@ class Client
      * Resolve the service the administrator picked, or the first usable one.
      *
      * @return AiClientInterface
-     * @throws \Magento\Framework\Exception\LocalizedException When nothing usable is configured
+     * @throws AiNotConfiguredException When nothing usable is configured
      */
     public function resolve(): AiClientInterface
     {
         $serviceId = $this->configRepository->getAiServiceId();
 
-        return $serviceId === ''
-            ? $this->clientFactory->create()
-            : $this->clientFactory->createById($serviceId);
+        try {
+            return $serviceId === ''
+                ? $this->clientFactory->create()
+                : $this->clientFactory->createById($serviceId);
+        } catch (LocalizedException $e) {
+            // Only the factory's own setup messages; a subclass (or a replacement factory that
+            // probes the endpoint) may carry request details and is reported generically.
+            if ($e::class !== LocalizedException::class) {
+                throw $e;
+            }
+            throw new AiNotConfiguredException(new Phrase($e->getRawMessage(), $e->getParameters()), $e);
+        }
     }
 
     /**
@@ -58,7 +69,7 @@ class Client
      * @param AiClientInterface $client
      * @param array<int,array<string,mixed>> $messages
      * @param array<int,array<string,mixed>> $tools
-     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int>}
+     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int|null>}
      */
     public function chat(AiClientInterface $client, array $messages, array $tools): array
     {
@@ -78,7 +89,7 @@ class Client
      * @param array<int,array<string,mixed>> $messages
      * @param array<int,array<string,mixed>> $tools
      * @param callable $onChunk Receives (string $event, array $payload)
-     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int>}
+     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int|null>}
      */
     public function stream(AiClientInterface $client, array $messages, array $tools, callable $onChunk): array
     {
@@ -123,7 +134,7 @@ class Client
 
     /**
      * @param ChatResponseInterface $response
-     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int>}
+     * @return array{content: string, tool_calls: array<int,array<string,mixed>>, usage: array<string,int|null>}
      */
     private function toArray(ChatResponseInterface $response): array
     {
@@ -142,6 +153,10 @@ class Client
             'usage' => [
                 'input_tokens' => $usage?->getPromptTokens() ?? 0,
                 'output_tokens' => $usage?->getCompletionTokens() ?? 0,
+                // Null, not zero, when the provider does not report them: "no cache hits" and "no
+                // cache figures" are different facts, and only the first one means caching missed.
+                'cache_read_tokens' => $usage?->getCacheReadTokens(),
+                'cache_write_tokens' => $usage?->getCacheWriteTokens(),
             ],
         ];
     }

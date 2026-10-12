@@ -9,9 +9,8 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Privacy;
 use MagoAssistant\Mago\Service\Privacy\ConversationVault;
 use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
 use MagoAssistant\Mago\Service\Privacy\PrivacyFilter;
-use MagoAssistant\Mago\Service\Skills\Analytics\SalesData\LookupOrderAction;
-use MagoAssistant\Mago\Service\Skills\Analytics\SalesData\RecentOrdersAction;
-use MagoAssistant\Mago\Service\Skills\Analytics\SalesData\SearchOrdersAction;
+use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\GetDocumentAction;
+use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\ListDocumentsAction;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -42,25 +41,31 @@ final class OrderIdentifierTokenTest extends TestCase
     }
 
     #[Test]
-    public function anOrderLookupNamesItsBuyerToTheAdminAndNotToTheProvider(): void
+    public function aListedOrderNamesItsBuyerToTheAdminAndNotToTheProvider(): void
     {
         [$filter, $vault] = $this->filter();
 
-        $out = $filter->filter($this->classesOf(LookupOrderAction::class), ['order' => [
-            'order_number' => '000000563',
-            'customer' => 'Jan Jansen',
-            'email' => 'jan.jansen@example.com',
-            'total' => 49.90,
-            'status' => 'processing',
-        ]]);
+        $out = $filter->filter($this->classesOf(ListDocumentsAction::class), [
+            'total_count' => 1,
+            'documents' => [[
+                'order_number' => '000000563',
+                'customer' => 'Jan Jansen',
+                'email' => 'jan.jansen@example.com',
+                'total' => 49.90,
+                'status' => 'processing',
+            ]],
+        ]);
         $sent = (string)json_encode($out);
+        $document = $out['documents'][0];
 
         self::assertStringNotContainsString('Jan Jansen', $sent);
         self::assertStringNotContainsString('jan.jansen@example.com', $sent);
+        self::assertStringNotContainsString('000000563', $sent);
         self::assertStringContainsString('processing', $sent, 'the status is not an identifier');
 
-        self::assertSame('Jan Jansen', $vault->rehydrate($out['order']['customer']));
-        self::assertSame('jan.jansen@example.com', $vault->rehydrate($out['order']['email']));
+        self::assertSame('Jan Jansen', $vault->rehydrate($document['customer']));
+        self::assertSame('jan.jansen@example.com', $vault->rehydrate($document['email']));
+        self::assertSame('000000563', $vault->rehydrate($document['order_number']));
     }
 
     #[Test]
@@ -68,29 +73,33 @@ final class OrderIdentifierTokenTest extends TestCase
     {
         [$filter, $vault] = $this->filter();
 
-        $out = $filter->filter(
-            $this->classesOf(\MagoAssistant\Mago\Service\Skills\Analytics\SalesData\CustomerOrdersAction::class),
-            ['customer_id' => null, 'customer' => '']
-        );
+        $out = $filter->filter($this->classesOf(ListDocumentsAction::class), [
+            'documents' => [['customer' => '', 'email' => null]],
+        ]);
+        $document = $out['documents'][0];
 
-        self::assertNull($out['customer_id'], 'a guest has no customer to stand for');
-        self::assertSame('', $out['customer']);
-        self::assertFalse($vault->has('mago://customer_1'));
+        self::assertSame('', $document['customer'], 'a guest without a name has nobody to stand for');
+        self::assertNull($document['email']);
+        self::assertFalse($vault->has('mago://name_1'));
     }
 
     #[Test]
-    public function aSearchAndARecentListNameTheirBuyersTheSameWay(): void
+    public function aShipmentMasksItsNumberBuyerAndTrackingNumbers(): void
     {
-        foreach ([SearchOrdersAction::class, RecentOrdersAction::class] as $action) {
-            [$filter, $vault] = $this->filter();
+        [$filter, $vault] = $this->filter();
 
-            $out = $filter->filter($this->classesOf($action), [
-                'rows' => [['order_number' => '000000563', 'customer' => 'Jan Jansen']],
-            ]);
-            $row = $out['rows'][0];
+        $out = $filter->filter($this->classesOf(GetDocumentAction::class), [
+            'number' => '000000012',
+            'order_number' => '000000563',
+            'customer' => 'Jan Jansen',
+            'qty' => 2,
+            'tracking' => ['3SABCD1234567', '3SABCD7654321'],
+        ]);
 
-            self::assertMatchesRegularExpression('#^mago://name_\d+$#', $row['customer'], $action);
-            self::assertSame('Jan Jansen', $vault->rehydrate($row['customer']), $action);
-        }
+        self::assertMatchesRegularExpression('#^mago://document_\d+$#', $out['number']);
+        self::assertMatchesRegularExpression('#^mago://name_\d+$#', $out['customer']);
+        self::assertSame(2, $out['qty']);
+        self::assertSame('3SABCD1234567', $vault->rehydrate($out['tracking'][0]));
+        self::assertSame('3SABCD7654321', $vault->rehydrate($out['tracking'][1]));
     }
 }
