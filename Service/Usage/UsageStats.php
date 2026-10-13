@@ -180,6 +180,44 @@ class UsageStats
         return $trend;
     }
 
+    /**
+     * Requests and tokens per hour for today, the full day, 00:00 to 23:00 (hours still to come are 0).
+     * Same row shape as getDailyTrend(), with "date" as "Y-m-d H:00".
+     */
+    public function getHourlyTrend(): array
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $table = $this->resourceConnection->getTableName('mago_usage_log');
+        $now = new \DateTimeImmutable();
+        $from = $now->format('Y-m-d 00:00:00');
+        $hourExpr = new Expression("DATE_FORMAT(created_at, '%Y-%m-%d %H:00')");
+
+        $select = $connection->select()
+            ->from($table, [
+                'date' => $hourExpr,
+                'requests' => new Expression('COUNT(*)'),
+                'tokens' => new Expression('SUM(total_tokens)'),
+            ])
+            ->where('created_at >= ?', $from)
+            ->group($hourExpr)
+            ->order('date ASC');
+
+        $dataByHour = [];
+        foreach ($connection->fetchAll($select) as $row) {
+            $dataByHour[$row['date']] = $row;
+        }
+
+        $trend = [];
+        $current = new \DateTimeImmutable($from);
+        for ($h = 0; $h < 24; $h++) {
+            $key = $current->format('Y-m-d H:00');
+            $trend[] = $dataByHour[$key] ?? ['date' => $key, 'requests' => 0, 'tokens' => 0];
+            $current = $current->modify('+1 hour');
+        }
+
+        return $trend;
+    }
+
     private function estimateCost(int $inputTokens, int $outputTokens): float
     {
         // Default estimate using Claude Sonnet pricing
