@@ -12,7 +12,8 @@ use Magento\Framework\DB\Sql\Expression;
 class UsageStats
 {
     public function __construct(
-        private readonly ResourceConnection $resourceConnection
+        private readonly ResourceConnection $resourceConnection,
+        private readonly CostEstimator $costEstimator
     ) {
     }
 
@@ -57,8 +58,40 @@ class UsageStats
                 : null,
             'total_cache_reported_input_tokens' => (int)($result['total_cache_reported_input_tokens'] ?? 0),
             'unique_users' => (int)($result['unique_users'] ?? 0),
-            'estimated_cost' => $this->estimateCost($inputTokens, $outputTokens),
+            'estimated_cost' => $this->costEstimator->estimateRows($this->getModelTokenSums($from)),
         ];
+    }
+
+    /**
+     * Token sums per model (and per admin user when asked), the grain the cost estimate needs because
+     * every model has its own prices.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function getModelTokenSums(?string $from, bool $perUser = false): array
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $columns = [
+            'model',
+            'input_tokens' => new Expression('SUM(input_tokens)'),
+            'output_tokens' => new Expression('SUM(output_tokens)'),
+            'cache_read_tokens' => new Expression('SUM(cache_read_tokens)'),
+            'cache_write_tokens' => new Expression('SUM(cache_write_tokens)'),
+        ];
+        $group = ['model'];
+        if ($perUser) {
+            $columns[] = 'admin_user_id';
+            $group[] = 'admin_user_id';
+        }
+
+        $select = $connection->select()
+            ->from($this->resourceConnection->getTableName('mago_usage_log'), $columns)
+            ->group($group);
+        if ($from) {
+            $select->where('created_at >= ?', $from);
+        }
+
+        return $connection->fetchAll($select);
     }
 
     public function getUserBreakdown(string $period): array
@@ -89,17 +122,19 @@ class UsageStats
         }
 
         $rows = $connection->fetchAll($select);
+        $sumsByUser = [];
+        foreach ($this->getModelTokenSums($from, true) as $sums) {
+            $sumsByUser[(int)$sums['admin_user_id']][] = $sums;
+        }
         $users = [];
         foreach ($rows as $row) {
-            $input = (int)($row['total_input'] ?? 0);
-            $output = (int)($row['total_output'] ?? 0);
             $users[] = [
                 'admin_user_id' => (int)$row['admin_user_id'],
                 'username' => $row['username'] ?? 'Unknown',
                 'name' => trim(($row['firstname'] ?? '') . ' ' . ($row['lastname'] ?? '')),
                 'request_count' => (int)$row['request_count'],
                 'total_tokens' => (int)$row['total_tokens'],
-                'estimated_cost' => $this->estimateCost($input, $output),
+                'estimated_cost' => $this->costEstimator->estimateRows($sumsByUser[(int)$row['admin_user_id']] ?? []),
             ];
         }
 
@@ -178,14 +213,6 @@ class UsageStats
         }
 
         return $trend;
-    }
-
-    private function estimateCost(int $inputTokens, int $outputTokens): float
-    {
-        // Default estimate using Claude Sonnet pricing
-        $inputCost = ($inputTokens / 1000000) * 3.0;
-        $outputCost = ($outputTokens / 1000000) * 15.0;
-        return round($inputCost + $outputCost, 4);
     }
 
     private function getFromDate(string $period): ?string
