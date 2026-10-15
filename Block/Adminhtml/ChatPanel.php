@@ -254,6 +254,7 @@ class ChatPanel extends Template
             'I understand, turn on the microphone',
             'Not now',
             'Microphone access was denied. Allow it in the browser to use voice input.',
+            'Voice input is not available in this browser. Use Chrome, Edge or Safari.',
             'Could not save your choice. Please try again.',
         ];
 

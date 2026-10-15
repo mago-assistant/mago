@@ -170,7 +170,7 @@ directive contract it uses to reach the browser.
 ### Voice input
 
 The chat panel shows a microphone button next to Send in browsers with built-in speech
-recognition (Chrome, Edge, Safari). The first time an administrator presses it, a card explains
+recognition (Chrome, Edge, Safari); in others, such as Firefox, it is greyed out and says why. The first time an administrator presses it, a card explains
 that the audio is handled by the browser vendor's speech service, outside Mago's control, and
 asks them to acknowledge that before the microphone turns on. The acknowledgement is stored per
 admin user (`mago_voice_preference`, with the moment it was given), so it is asked once, in any browser. After that, press it, speak, and the words appear in the input

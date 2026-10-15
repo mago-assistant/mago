@@ -96,8 +96,27 @@ define([], function () {
         var Recognition = recognitionClass();
 
         if (!Recognition || !input || !button) {
+            if (!Recognition && input && button) explainUnsupported();
             var noop = function () {};
             return {isSupported: false, stop: noop, sending: noop, turnEnded: noop, setMode: noop, getMode: function () { return null; }};
+        }
+
+        // Firefox and some other browsers have no speech recognition. A greyed-out microphone that
+        // says so beats a button that is simply missing in one browser and present in the next.
+        function explainUnsupported() {
+            var sentence = t('Voice input is not available in this browser. Use Chrome, Edge or Safari.');
+            button.hidden = false;
+            button.classList.add('is-unsupported');
+            button.setAttribute('aria-disabled', 'true');
+            button.title = sentence;
+            button.setAttribute('aria-label', sentence);
+            button.addEventListener('click', function () {
+                if (!status) return;
+                status.hidden = false;
+                status.className = 'mago-voice-status';
+                if (statusText) statusText.textContent = sentence;
+                setTimeout(function () { status.hidden = true; }, 5000);
+            });
         }
 
         var recognition = null;

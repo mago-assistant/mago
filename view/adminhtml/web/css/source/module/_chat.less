@@ -1051,6 +1051,11 @@ html:has(body.mago-active) {
         border-color: var(--mago-ink-muted, #9A918B);
     }
 
+    &.is-unsupported {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+
     // Recording is unmistakably red rather than the accent, so it cannot be confused with the
     // send button or a hover state.
     &.is-listening {
