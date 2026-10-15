@@ -12,6 +12,7 @@ use Magento\Backend\Model\Auth\Session as AdminSession;
 use Magento\Framework\Locale\ResolverInterface as LocaleResolver;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
+use MagoAssistant\Mago\Api\VoicePreferenceRepositoryInterface;
 use MagoAssistant\Mago\Api\Tool\PresentableToolInterface;
 use MagoAssistant\Mago\Service\Command\CommandRegistry;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
@@ -62,6 +63,7 @@ class ChatPanel extends Template
         private readonly FormPolicy $formPolicy,
         private readonly LocaleResolver $localeResolver,
         private readonly ExampleQuestions $exampleQuestions,
+        private readonly VoicePreferenceRepositoryInterface $voicePreferenceRepository,
         private readonly AdminPath $adminPath,
         array $data = []
     ) {
@@ -105,6 +107,9 @@ class ChatPanel extends Template
             'adminPath' => $this->adminPath->get(),
             'isStreamingEnabled' => $this->configRepository->isStreamingEnabled(),
             'voiceInput' => $this->configRepository->isVoiceInputEnabled(),
+            'voiceConsent' => $this->voicePreferenceRepository->hasConsented((int)$this->getAdminUserId()),
+            'voiceUserMode' => $this->voicePreferenceRepository->getMode((int)$this->getAdminUserId()),
+            'voicePreferenceUrl' => $this->getUrl('mago/voice/preference'),
             'voiceMode' => $this->configRepository->getVoiceMode(),
             'voiceSendDelay' => $this->configRepository->getVoiceSendDelay(),
             'voiceIdleTimeout' => $this->configRepository->getVoiceIdleTimeout(),
@@ -231,6 +236,7 @@ class ChatPanel extends Template
             'I understand, turn on the microphone',
             'Not now',
             'Microphone access was denied. Allow it in the browser to use voice input.',
+            'Could not save your choice. Please try again.',
         ];
 
         return array_combine($sentences, array_map(static fn (string $sentence): string => (string)__($sentence), $sentences));
@@ -311,13 +317,6 @@ class ChatPanel extends Template
     {
         $user = $this->adminSession->getUser();
         return $user && $user->getId() ? (int)$user->getId() : null;
-    }
-
-    public function getAdminUserName(): string
-    {
-        $user = $this->adminSession->getUser();
-
-        return $user ? (string)$user->getUserName() : '';
     }
 
     public function getAdminFirstName(): string

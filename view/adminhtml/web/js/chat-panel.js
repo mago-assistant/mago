@@ -702,11 +702,23 @@ define([
 
     // Voice input (#141): browser speech recognition fills the textarea; the module hides itself
     // when the browser has no recogniser, and the setting removes the button altogether.
-    // Voice consent (#141): once per admin user per browser; a server-side record is a follow-up.
-    var voiceConsentKey = 'mago-voice-consent:' + String(config.adminLogin || config.adminUser || '');
+    // The admin's own voice settings (#141), stored server-side so they follow them into every
+    // browser: the consent card's acknowledgement and the mode picked in the menu.
+    function saveVoicePreference(data) {
+        data.form_key = formKey;
+        return fetch(config.voicePreferenceUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+            body: JSON.stringify(data),
+            credentials: 'same-origin'
+        }).then(function (r) { return r.json(); }).then(function (d) {
+            if (!d || !d.success) throw new Error(d && d.error);
+            return d;
+        });
+    }
 
     function hasVoiceConsent() {
-        try { return window.localStorage.getItem(voiceConsentKey) === '1'; } catch (e) { return false; }
+        return !!config.voiceConsent;
     }
 
     function requireVoiceConsent(proceed) {
@@ -723,9 +735,14 @@ define([
             allowLabel: t('I understand, turn on the microphone'),
             laterLabel: t('Not now'),
             onAllow: function () {
-                try { window.localStorage.setItem(voiceConsentKey, '1'); } catch (e) { /* private mode */ }
-                holder.remove();
-                proceed();
+                saveVoicePreference({consent: true}).then(function () {
+                    config.voiceConsent = true;
+                    holder.remove();
+                    proceed();
+                }).catch(function () {
+                    holder.remove();
+                    addMsg('assistant', esc(t('Could not save your choice. Please try again.')));
+                });
             },
             onLater: function () {
                 holder.remove();
@@ -739,11 +756,8 @@ define([
 
     // conversation and hands_free are earlier names of the two hands-free modes.
     var VOICE_MODES = {dictate: 'dictate', auto_send: 'auto_send', confirm: 'confirm', conversation: 'confirm', hands_free: 'auto_send'};
-    var voiceModeKey = 'mago-voice-mode:' + String(config.adminLogin || config.adminUser || '');
-
     function initialVoiceMode() {
-        var stored = null;
-        try { stored = window.localStorage.getItem(voiceModeKey); } catch (e) { /* private mode */ }
+        var stored = config.voiceUserMode;
         return VOICE_MODES.hasOwnProperty(stored) ? VOICE_MODES[stored] : config.voiceMode;
     }
 
@@ -801,7 +815,7 @@ define([
             var item = e.target.closest('[data-mode]');
             if (!item) return;
             voiceInput.setMode(item.dataset.mode);
-            try { window.localStorage.setItem(voiceModeKey, item.dataset.mode); } catch (err) { /* private mode */ }
+            saveVoicePreference({mode: item.dataset.mode}).catch(function () { /* still applies to this page */ });
             mark(item.dataset.mode);
             setOpen(false);
             toggle.focus();

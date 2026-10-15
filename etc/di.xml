@@ -35,6 +35,7 @@
 
     <!-- Conversation Repository -->
     <preference for="MagoAssistant\Mago\Api\ConversationRepositoryInterface" type="MagoAssistant\Mago\Model\Conversation\Repository"/>
+    <preference for="MagoAssistant\Mago\Api\VoicePreferenceRepositoryInterface" type="MagoAssistant\Mago\Model\Voice\PreferenceRepository"/>
 
     <!-- WebApi -->
     <preference for="MagoAssistant\Mago\Api\WebApi\ChatManagementInterface" type="MagoAssistant\Mago\Model\WebApi\ChatManagement"/>

@@ -172,4 +172,15 @@
         <constraint xsi:type="foreign" referenceId="MAGO_PII_TOKEN_CONV_ID" table="mago_pii_token" column="conversation_id" referenceTable="mago_conversation" referenceColumn="entity_id" onDelete="CASCADE"/>
     </table>
 
+
+    <table name="mago_voice_preference" resource="default" engine="innodb" comment="Admin Assistant Voice Input Settings Per Admin User">
+        <column xsi:type="int" name="admin_user_id" unsigned="true" nullable="false" comment="Admin User ID"/>
+        <column xsi:type="timestamp" name="consented_at" nullable="true" comment="When the admin acknowledged the voice input notice, null when not yet"/>
+        <column xsi:type="varchar" name="mode" nullable="true" length="20" comment="Voice mode picked in the chat, null for the configured default"/>
+        <column xsi:type="timestamp" name="updated_at" on_update="true" nullable="false" default="CURRENT_TIMESTAMP" comment="Updated At"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="admin_user_id"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="MAGO_VOICE_PREFERENCE_ADMIN_USER_ID" table="mago_voice_preference" column="admin_user_id" referenceTable="admin_user" referenceColumn="user_id" onDelete="CASCADE"/>
+    </table>
 </schema>

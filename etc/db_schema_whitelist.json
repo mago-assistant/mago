@@ -145,5 +145,17 @@
             "MAGO_FLAG_RATING": true,
             "MAGO_FLAG_STATUS": true
         }
+    },
+    "mago_voice_preference": {
+        "column": {
+            "admin_user_id": true,
+            "consented_at": true,
+            "mode": true,
+            "updated_at": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "MAGO_VOICE_PREFERENCE_ADMIN_USER_ID": true
+        }
     }
 }

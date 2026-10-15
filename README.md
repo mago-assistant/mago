@@ -172,12 +172,12 @@ directive contract it uses to reach the browser.
 The chat panel shows a microphone button next to Send in browsers with built-in speech
 recognition (Chrome, Edge, Safari). The first time an administrator presses it, a card explains
 that the audio is handled by the browser vendor's speech service, outside Mago's control, and
-asks them to acknowledge that before the microphone turns on. The acknowledgement is remembered
-per admin user in that browser. After that, press it, speak, and the words appear in the input
+asks them to acknowledge that before the microphone turns on. The acknowledgement is stored per
+admin user (`mago_voice_preference`, with the moment it was given), so it is asked once, in any browser. After that, press it, speak, and the words appear in the input
 field as you talk. While recording, the button turns red and a status line under the input shows
 what is happening. *Voice Mode* (`mago/voice/mode`) decides what happens once you stop talking;
-the admin can also switch it from the menu next to the microphone, which is remembered per admin
-user in that browser:
+the admin can also switch it from the menu next to the microphone; that choice is stored per admin
+user and follows them into every browser:
 
 | Mode | What you do | What happens |
 |---|---|---|
