@@ -737,6 +737,15 @@ define([
         msgs.scrollTop = msgs.scrollHeight;
     }
 
+    var VOICE_MODES = ['dictate', 'auto_send', 'conversation'];
+    var voiceModeKey = 'mago-voice-mode:' + String(config.adminLogin || config.adminUser || '');
+
+    function initialVoiceMode() {
+        var stored = null;
+        try { stored = window.localStorage.getItem(voiceModeKey); } catch (e) { /* private mode */ }
+        return VOICE_MODES.indexOf(stored) !== -1 ? stored : config.voiceMode;
+    }
+
     var voiceInput = config.voiceInput ? createVoiceInput({
         input: input,
         button: qs('#mago-mic'),
@@ -744,7 +753,7 @@ define([
         notice: qs('#mago-voice-notice'),
         confirmBar: qs('#mago-voice-confirm'),
         lang: config.locale,
-        mode: config.voiceMode,
+        mode: initialVoiceMode(),
         sendDelay: config.voiceSendDelay,
         matchCommand: matchVoiceCommand,
         cardPending: confirmCardPending,
@@ -754,6 +763,62 @@ define([
         onSend: function () { if (input.value.trim()) send(); },
         onError: function (sentence) { addMsg('assistant', esc(sentence)); }
     }) : null;
+
+    // Voice mode menu next to the microphone; only offered where the microphone itself is.
+    (function initVoiceModeMenu() {
+        var toggle = qs('#mago-voice-mode');
+        var menu = qs('#mago-voice-mode-menu');
+        if (!voiceInput || !voiceInput.isSupported || !toggle || !menu) return;
+        var items = Array.prototype.slice.call(menu.querySelectorAll('[data-mode]'));
+
+        function mark(mode) {
+            items.forEach(function (item) {
+                var on = item.dataset.mode === mode;
+                item.setAttribute('aria-checked', on ? 'true' : 'false');
+                if (on) toggle.title = t('Voice mode: %1', item.querySelector('strong').textContent);
+            });
+        }
+
+        function setOpen(open) {
+            menu.hidden = !open;
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+                var current = menu.querySelector('[aria-checked="true"]') || items[0];
+                current.focus();
+            }
+        }
+
+        toggle.hidden = false;
+        mark(voiceInput.getMode());
+        toggle.addEventListener('click', function () { setOpen(menu.hidden); });
+        menu.addEventListener('click', function (e) {
+            var item = e.target.closest('[data-mode]');
+            if (!item) return;
+            voiceInput.setMode(item.dataset.mode);
+            try { window.localStorage.setItem(voiceModeKey, item.dataset.mode); } catch (err) { /* private mode */ }
+            mark(item.dataset.mode);
+            setOpen(false);
+            toggle.focus();
+        });
+        // Escape is claimed here so the panel's own Escape handler does not close the chat.
+        menu.addEventListener('keydown', function (e) {
+            var index = items.indexOf(document.activeElement);
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setOpen(false);
+                toggle.focus();
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                var step = e.key === 'ArrowDown' ? 1 : -1;
+                items[(index + step + items.length) % items.length].focus();
+            } else if (e.key === 'Tab') {
+                setOpen(false);
+            }
+        });
+        document.addEventListener('click', function (e) {
+            if (!menu.hidden && !menu.contains(e.target) && !toggle.contains(e.target)) setOpen(false);
+        });
+    })();
 
 
 

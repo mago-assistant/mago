@@ -891,6 +891,123 @@ html:has(body.mago-active) {
     }
 }
 
+// Microphone plus its voice mode toggle, joined into one split button when the toggle shows
+.mago-mic-group {
+    position: relative;
+    display: flex;
+    flex-shrink: 0;
+
+    &:has(.mago-voice-mode-btn:not([hidden])) .mago-mic-btn {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+}
+
+.mago-voice-mode-btn {
+    width: 22px;
+    height: 40px;
+    margin-left: -1px;
+    border-radius: 0 10px 10px 0;
+    background: var(--mago-surface, #F7F5F3);
+    color: var(--mago-ink-muted, #9A918B);
+    border: 1px solid var(--mago-hairline, #E9E5E1);
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, border-color 0.15s;
+
+    &[hidden] {
+        display: none;
+    }
+
+    &:hover,
+    &[aria-expanded="true"] {
+        color: var(--mago-ink, #373330);
+        border-color: var(--mago-ink-muted, #9A918B);
+    }
+
+    &[aria-expanded="true"] svg {
+        transform: rotate(180deg);
+    }
+}
+
+// Opens upward and right-aligned: the input is the last thing in the panel
+.mago-voice-mode-menu {
+    position: absolute;
+    bottom: ~"calc(100% + 8px)";
+    right: 0;
+    z-index: 20;
+    width: 260px;
+    padding: 6px;
+    border-radius: 12px;
+    background: var(--mago-panel, #FFFFFF);
+    border: 1px solid var(--mago-hairline, #E9E5E1);
+    box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.3);
+
+    &[hidden] {
+        display: none;
+    }
+
+    .mago-voice-mode-title {
+        padding: 6px 10px 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--mago-ink-muted, #9A918B);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    [data-mode] {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        width: 100%;
+        padding: 8px 10px;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+        color: var(--mago-ink, #373330);
+
+        &:hover,
+        &:focus-visible {
+            background: var(--mago-surface, #F7F5F3);
+            outline: none;
+        }
+    }
+
+    .mago-voice-mode-check {
+        flex-shrink: 0;
+        margin-top: 2px;
+        color: var(--mago-accent, #FF7A33);
+        visibility: hidden;
+    }
+
+    [aria-checked="true"] .mago-voice-mode-check {
+        visibility: visible;
+    }
+
+    .mago-voice-mode-label {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 13px;
+        line-height: 1.3;
+
+        strong {
+            font-weight: 600;
+        }
+
+        span {
+            font-size: 11px;
+            color: var(--mago-ink-muted, #9A918B);
+        }
+    }
+}
+
 // Microphone (#141): quiet like an idle send button, accent while listening. Hidden by the
 // template until voice-input.js finds a recogniser in the browser.
 .mago-mic-btn {

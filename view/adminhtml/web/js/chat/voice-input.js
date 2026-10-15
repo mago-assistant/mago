@@ -58,7 +58,8 @@ define([], function () {
      * @param {Function} [options.requireConsent] called with a continuation on the first use;
      *        the session only starts when the continuation is invoked
      * @param {Function} [options.onError] receives a sentence to show the administrator
-     * @returns {{isSupported: boolean, stop: Function, sending: Function, turnEnded: Function}}
+     * @returns {{isSupported: boolean, stop: Function, sending: Function, turnEnded: Function,
+     *     setMode: Function, getMode: Function}}
      */
     return function createVoiceInput(options) {
         var input = options.input;
@@ -72,7 +73,8 @@ define([], function () {
         var Recognition = recognitionClass();
 
         if (!Recognition || !input || !button) {
-            return {isSupported: false, stop: function () {}, sending: function () {}, turnEnded: function () {}};
+            var noop = function () {};
+            return {isSupported: false, stop: noop, sending: noop, turnEnded: noop, setMode: noop, getMode: function () { return null; }};
         }
 
         var recognition = null;
@@ -435,6 +437,13 @@ define([], function () {
             start();
         }
 
+        // Switching mode ends a running session: its timers, bar and parked state belong to the old one.
+        function setMode(next) {
+            if (MODES.indexOf(next) === -1 || next === mode) return;
+            stop(true);
+            mode = next;
+        }
+
         function beginSession() {
             inConversation = mode === 'conversation';
             start();
@@ -472,6 +481,13 @@ define([], function () {
             if (e.key && e.key.length === 1 || e.keyCode === 8 || e.keyCode === 46) stop(true);
         });
 
-        return {isSupported: true, stop: stop, sending: sending, turnEnded: turnEnded};
+        return {
+            isSupported: true,
+            stop: stop,
+            sending: sending,
+            turnEnded: turnEnded,
+            setMode: setMode,
+            getMode: function () { return mode; }
+        };
     };
 });

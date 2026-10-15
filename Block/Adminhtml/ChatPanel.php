@@ -204,6 +204,7 @@ class ChatPanel extends Template
             'Could not save your feedback.',
             'This feedback can only be removed under Answer Feedback.',
             'Speak your message',
+            'Voice mode: %1',
             'Stop listening',
             'Listening…',
             'Recording — speak now',
