@@ -45,6 +45,14 @@ class Dashboard extends Template
         ];
     }
 
+    /**
+     * @return array{total: array{messages: int, spoken: int}, users: array<int, array{messages: int, spoken: int}>}
+     */
+    public function getVoiceShare(string $period): array
+    {
+        return $this->usageStats->getVoiceShare($period);
+    }
+
     public function getUserStats(): array
     {
         return $this->usageStats->getUserBreakdown($this->getPeriod());

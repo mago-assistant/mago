@@ -964,6 +964,7 @@ define([
                     var msgEl = m.role === 'user'
                         ? addTextMsg('user', vaultTokens.replaceTokens(m.content, tokens))
                         : addMsg('assistant', renderMd(m.content, tokens));
+                    if (m.role === 'user' && m.input_method === 'voice') markSpoken(msgEl);
                     if (m.role === 'assistant') {
                         attachFeedback(msgEl, m.entity_id, m.rating || null);
                     }
@@ -1048,6 +1049,20 @@ define([
 
     // Anything that is not the model's answer (what the admin typed, the panel's own notices) is
     // shown exactly as written: a text node, never markdown or HTML.
+    // A spoken user message carries a small microphone, so a reread conversation shows how it was asked.
+    function markSpoken(msgEl) {
+        var content = msgEl.querySelector('.mago-message-content');
+        if (!content) return;
+        // Inside the first line of text, so it flows with the words instead of taking a row of its own.
+        var host = content.querySelector('p') || content;
+        var mark = document.createElement('span');
+        mark.className = 'mago-spoken-mark';
+        mark.title = t('Spoken with voice input');
+        mark.setAttribute('aria-label', t('Spoken with voice input'));
+        mark.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>';
+        host.insertBefore(mark, host.firstChild);
+    }
+
     function addTextMsg(role, text) {
         const msgEl = addMsg(role, '');
         const paragraph = document.createElement('p');
@@ -1300,11 +1315,12 @@ define([
     // interactions are wired here once, for built-in and registered widgets alike:
     // data-mago-send sends its value as the next message, data-mago-focus moves the
     // focus to the input, and a value prompt (S10) sends the value the admin typed.
-    function askFromWidget(text) {
+    // byVoice: the option was picked by saying it; a click is typed input, whatever was dictated before.
+    function askFromWidget(text, byVoice) {
         if (!text || busy) return;
         input.value = text;
         input.dispatchEvent(new Event('input'));
-        send();
+        send(byVoice ? 'voice' : 'typed');
     }
 
     msgs.addEventListener('click', function(e) {
@@ -1571,7 +1587,7 @@ define([
             var question = this.getAttribute('data-question');
             if (!question || busy) return;
             input.value = question;
-            send();
+            send('typed');
         };
     }
 
@@ -1663,7 +1679,7 @@ define([
             item = exact.length === 1 ? exact[0] : partial.length === 1 ? partial[0] : null;
         }
         if (!item || busy) return false;
-        askFromWidget(item.label);
+        askFromWidget(item.label, true);
         return true;
     }
 
@@ -1767,7 +1783,11 @@ define([
         return true;
     }
 
-    function send() {
+    // inputMethod: "voice" or "typed" when the caller knows; otherwise the voice input says
+    // whether the text in the box came from speech.
+    function send(inputMethod) {
+        var spokenText = voiceInput ? voiceInput.takeSpoken() : false;
+        if (inputMethod !== 'voice' && inputMethod !== 'typed') inputMethod = spokenText ? 'voice' : 'typed';
         if (voiceInput) voiceInput.sending();
         var text = input.value.trim();
         if (text && answerPendingConfirm(text)) return;
@@ -1778,7 +1798,8 @@ define([
         autoGrow();
         updatePrivacyHint('');
         setBusy(true);
-        addTextMsg('user', text);
+        var userMsgEl = addTextMsg('user', text);
+        if (inputMethod === 'voice') markSpoken(userMsgEl);
 
         var msg = null;
         var content = null;
@@ -1802,7 +1823,7 @@ define([
         fetch(config.streamUrl, {
             method: 'POST',
             headers: {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
-            body: JSON.stringify({message:text, conversation_id:conversationId, form_key:formKey, page_context:buildPageContext(settled)}),
+            body: JSON.stringify({message:text, conversation_id:conversationId, form_key:formKey, page_context:buildPageContext(settled), input_method:inputMethod}),
             credentials: 'same-origin'
         }).then(function(r) {
             if (!r.ok) {

@@ -231,6 +231,7 @@ class ChatPanel extends Template
             'Speak your message',
             'Voice mode: %1',
             'Option %1',
+            'Spoken with voice input',
             'Stop listening',
             'Listening…',
             'Recording — speak now',

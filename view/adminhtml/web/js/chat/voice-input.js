@@ -77,7 +77,7 @@ define([], function () {
      *        the session only starts when the continuation is invoked
      * @param {Function} [options.onError] receives a sentence to show the administrator
      * @returns {{isSupported: boolean, stop: Function, sending: Function, turnEnded: Function,
-     *     setMode: Function, getMode: Function}}
+     *     setMode: Function, getMode: Function, takeSpoken: Function}}
      */
     return function createVoiceInput(options) {
         var input = options.input;
@@ -98,7 +98,7 @@ define([], function () {
         if (!Recognition || !input || !button) {
             if (!Recognition && input && button) explainUnsupported();
             var noop = function () {};
-            return {isSupported: false, stop: noop, sending: noop, turnEnded: noop, setMode: noop, getMode: function () { return null; }};
+            return {isSupported: false, stop: noop, sending: noop, turnEnded: noop, setMode: noop, getMode: function () { return null; }, takeSpoken: function () { return false; }};
         }
 
         // Firefox and some other browsers have no speech recognition. A greyed-out microphone that
@@ -148,6 +148,9 @@ define([], function () {
         var lastActivity = 0;
         var idleTimer = null;
         var turnJustEnded = false;
+        // Whether the text in the box came from speech, for the panel to record with the message.
+        // Emptying the box, by voice or by hand, resets it.
+        var spoken = false;
         var idleTitle = t('Speak your message');
         var activeTitle = t('Stop listening');
 
@@ -155,7 +158,14 @@ define([], function () {
 
         function setText(value) {
             input.value = value;
+            if (value.trim()) spoken = true;
             input.dispatchEvent(new Event('input', {bubbles: true}));
+        }
+
+        function takeSpoken() {
+            var was = spoken;
+            spoken = false;
+            return was;
         }
 
         function joinWithPrefix(spoken) {
@@ -600,6 +610,10 @@ define([], function () {
         // Typing means the administrator is correcting the text: drop the countdown and stop the
         // recogniser so it cannot overwrite the edit. Enter hands the text to the normal send
         // path, which hands-free keeps the session going.
+        input.addEventListener('input', function () {
+            if (!input.value.trim()) spoken = false;
+        });
+
         input.addEventListener('keydown', function (e) {
             if (!listening && !waitingForTurn && !isPrompting()) return;
             if (e.keyCode === 13 && !e.shiftKey) {
@@ -615,7 +629,8 @@ define([], function () {
             sending: sending,
             turnEnded: turnEnded,
             setMode: setMode,
-            getMode: function () { return mode; }
+            getMode: function () { return mode; },
+            takeSpoken: takeSpoken
         };
     };
 });

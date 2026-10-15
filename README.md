@@ -206,6 +206,10 @@ the option's text to send it. Digits and English number words always work; *Numb
 Saying a stop word on its own ("stop", "stop listening") turns the microphone off in either mode.
 There is no spoken "start": press the microphone.
 
+Each user message records whether it was spoken or typed (`mago_message.input_method`). Spoken
+messages show a small microphone in the chat and in the conversation view, and the Statistics
+dashboard shows how many messages were spoken today and per admin user for the chosen period.
+
 Three word lists drive this, and the English ones are built in and always work:
 
 | Command | Built-in English |

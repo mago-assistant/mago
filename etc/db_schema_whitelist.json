@@ -24,7 +24,8 @@
             "tool_call_id": true,
             "pending_confirmation": true,
             "created_at": true,
-            "page_context": true
+            "page_context": true,
+            "input_method": true
         },
         "constraint": {
             "PRIMARY": true,
