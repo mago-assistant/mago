@@ -5,10 +5,16 @@
 /**
  * Microphone button for the chat input, backed by the browser's own speech recognition (Web
  * Speech API). Recognised words land in the textarea while the administrator speaks and stay
- * editable. With auto-send on, a pause in speech starts a short visible countdown and then sends;
- * typing or pressing the microphone during the countdown cancels it, so a misheard sentence can
- * always be corrected first. Hands-free keeps the session alive across turns: after an auto-send
- * it waits for the panel to report the turn over, then listens again.
+ * editable. Three modes decide what happens once they stop talking:
+ *
+ * - dictate: nothing; they review the text and press Send.
+ * - auto_send: a short visible countdown, then the message is sent and the microphone turns off.
+ *   Typing or pressing the microphone during the countdown cancels it.
+ * - conversation: a Send / Discard / Continue bar appears, answered by clicking it or by saying
+ *   "send", "discard" or "continue"; continue goes back to dictating more of the same message.
+ *   Anything else said while the bar is up is ignored. After the send the microphone is paused
+ *   until the panel reports the turn over, then it listens for the next message. While an Allow /
+ *   Reject card waits, speech only answers that card.
  *
  * The audio never passes through Mago or the AI provider: the browser vendor handles it. The
  * resulting text is indistinguishable from typed text to the rest of the panel, which is why this
@@ -20,7 +26,11 @@ define([], function () {
     // Fallback for the configured wait between the last final result and the send. The recogniser
     // already needs a pause before it finalises, so this stays short.
     var DEFAULT_SEND_DELAY_MS = 1400;
+    // Conversation: quiet after a final result before the Send bar appears, so a breath in the
+    // middle of a sentence does not flash it.
+    var PROMPT_DELAY_MS = 700;
     var MAX_RESTARTS = 5;
+    var MODES = ['dictate', 'auto_send', 'conversation'];
 
     function recognitionClass() {
         return window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -32,12 +42,19 @@ define([], function () {
      * @param {HTMLButtonElement} options.button
      * @param {HTMLElement} [options.status] status line under the input
      * @param {HTMLElement} [options.notice] banner shown while a session is active
+     * @param {HTMLElement} [options.confirmBar] bar for conversation mode, holding buttons marked
+     *        data-voice="send", "discard" and "continue"
      * @param {string} options.lang BCP-47 tag for the recogniser
-     * @param {boolean} options.autoSend
-     * @param {number} [options.sendDelay] milliseconds after the last final result before sending
-     * @param {boolean} [options.handsFree] keep listening after an auto-send once the turn ended
+     * @param {string} options.mode dictate, auto_send or conversation
+     * @param {number} [options.sendDelay] auto_send: milliseconds after the last final result before sending
+     * @param {Function} [options.matchCommand] conversation: maps a short utterance to "send",
+     *        "discard", "continue" or null
+     * @param {Function} [options.cardPending] conversation: true while an Allow / Reject card
+     *        waits; speech then answers the card instead of filling the input
+     * @param {Function} [options.answerCard] conversation: answers the card from an utterance and
+     *        returns "answered", "locked" (acknowledgement box not ticked yet) or null
      * @param {Function} options.t translator
-     * @param {Function} [options.onSend] called when the countdown finishes
+     * @param {Function} [options.onSend] called when a spoken message should be sent
      * @param {Function} [options.requireConsent] called with a continuation on the first use;
      *        the session only starts when the continuation is invoked
      * @param {Function} [options.onError] receives a sentence to show the administrator
@@ -49,7 +66,9 @@ define([], function () {
         var status = options.status || null;
         var statusText = status ? status.querySelector('.mago-voice-text') : null;
         var notice = options.notice || null;
+        var bar = options.confirmBar || null;
         var t = options.t;
+        var mode = MODES.indexOf(options.mode) !== -1 ? options.mode : 'dictate';
         var Recognition = recognitionClass();
 
         if (!Recognition || !input || !button) {
@@ -60,16 +79,23 @@ define([], function () {
         var listening = false;
         var sendDelay = parseInt(options.sendDelay, 10);
         if (!(sendDelay >= 0)) sendDelay = DEFAULT_SEND_DELAY_MS;
-        // Hands-free: set when the administrator starts a session and cleared by anything they do
-        // to end it. waitingForTurn bridges the gap between an auto-send and the reply.
-        var handsFree = false;
+        // Conversation: set when the administrator starts a session and cleared by anything they do
+        // to end it. waitingForTurn bridges the gap between a send and the reply.
+        var inConversation = false;
         var waitingForTurn = false;
         var countdownTimer = null;
+        var promptTimer = null;
         var statusTimer = null;
         var restarts = 0;
         // Text already in the box when listening started; recognised speech is appended after it
         // so an interrupted sentence can be resumed without losing what was typed before.
         var prefix = '';
+        // Result indexes within the live recogniser's session: results before baseIndex were
+        // discarded, results from pendingFrom on arrived while the Send bar was up and are either
+        // a command or more of the message. pendingFrom is null while the bar is down.
+        var resultCount = 0;
+        var baseIndex = 0;
+        var pendingFrom = null;
         var idleTitle = t('Speak your message');
         var activeTitle = t('Stop listening');
 
@@ -82,7 +108,14 @@ define([], function () {
 
         function joinWithPrefix(spoken) {
             if (!prefix) return spoken;
+            if (!spoken) return prefix;
             return /\s$/.test(prefix) ? prefix + spoken : prefix + ' ' + spoken;
+        }
+
+        function collect(results, from, to) {
+            var text = '';
+            for (var i = from; i < to; i++) text += results[i][0].transcript;
+            return {text: text.trim(), isFinal: to > from && results[to - 1].isFinal};
         }
 
         function showStatus(sentence, modifier) {
@@ -107,6 +140,14 @@ define([], function () {
             if (notice) notice.hidden = !visible;
         }
 
+        function showBar(visible) {
+            if (bar) bar.hidden = !visible;
+        }
+
+        function isPrompting() {
+            return pendingFrom !== null;
+        }
+
         function setListening(active) {
             listening = active;
             if (active) showNotice(true);
@@ -124,23 +165,29 @@ define([], function () {
             }
         }
 
+        function cardPending() {
+            return inConversation && !!options.cardPending && options.cardPending();
+        }
+
         function recordingText() {
-            return handsFree ? t('Hands-free — speak, a pause sends') : t('Recording — speak now');
+            if (cardPending()) return t('Say “allow” or “reject” to answer the card');
+            return inConversation ? t('Your turn — speak now') : t('Recording — speak now');
         }
 
         function clearTimers() {
             clearInterval(countdownTimer);
             countdownTimer = null;
+            clearTimeout(promptTimer);
+            promptTimer = null;
         }
 
         function countdownText(remainingMs) {
             return remainingMs >= 1000 ? t('Sending in %1…', Math.ceil(remainingMs / 1000)) : t('Sending…');
         }
 
-        // Called on every final result: the recogniser only finalises after it hears a pause, so
-        // a fresh final result followed by silence is the "stopped talking" signal.
+        // auto_send, called on every final result: the recogniser only finalises after it hears a
+        // pause, so a fresh final result followed by silence is the "stopped talking" signal.
         function scheduleAutoSend() {
-            if (!options.autoSend) return;
             clearTimers();
             if (!input.value.trim()) return;
             var due = Date.now() + sendDelay;
@@ -152,17 +199,93 @@ define([], function () {
                     showStatus(countdownText(remaining), 'is-sending');
                     return;
                 }
-                clearTimers();
-                if (handsFree) {
-                    waitingForTurn = true;
-                    stopRecogniser();
-                    setListening(false);
-                    showStatus(t('Waiting for the reply…'));
-                } else {
-                    stop(true);
-                }
+                stop(true);
                 if (options.onSend) options.onSend();
             }, Math.min(250, Math.max(50, sendDelay || 50)));
+        }
+
+        // Conversation: after a pause, ask before sending.
+        function schedulePrompt() {
+            clearTimers();
+            if (!input.value.trim()) return;
+            promptTimer = setTimeout(function () {
+                promptTimer = null;
+                pendingFrom = resultCount;
+                showBar(true);
+                showStatus(t('Say “send”, “discard” or “continue”'), 'is-recording');
+            }, PROMPT_DELAY_MS);
+        }
+
+        // Conversation: the microphone is off while the assistant answers, so the reply being
+        // read aloud or the administrator thinking out loud cannot end up in the next message.
+        function park() {
+            clearTimers();
+            showBar(false);
+            pendingFrom = null;
+            waitingForTurn = true;
+            stopRecogniser();
+            setListening(false);
+            showStatus(t('Assistant is answering — microphone paused'));
+        }
+
+        function commitSend() {
+            if (!input.value.trim()) return;
+            park();
+            if (options.onSend) options.onSend();
+        }
+
+        function discard() {
+            clearTimers();
+            showBar(false);
+            pendingFrom = null;
+            baseIndex = resultCount;
+            prefix = '';
+            setText('');
+            if (listening) showStatus(recordingText(), 'is-recording');
+        }
+
+        // Back to dictating: what is in the box stays and new speech is added after it.
+        function resume() {
+            clearTimers();
+            showBar(false);
+            pendingFrom = null;
+            baseIndex = resultCount;
+            prefix = input.value.trim();
+            if (listening) showStatus(t('Keep talking — adding to your message'), 'is-recording');
+        }
+
+        // Speech that arrives while the bar is up never reaches the textarea: it is a command, or
+        // it is skipped with a nudge, so a misheard "send" cannot quietly change the message.
+        function handleWhilePrompting(results) {
+            var tail = collect(results, pendingFrom, results.length);
+            if (!tail.text || !tail.isFinal) return;
+            var command = options.matchCommand ? options.matchCommand(tail.text) : null;
+            if (command === 'send') {
+                commitSend();
+            } else if (command === 'discard') {
+                discard();
+            } else if (command === 'continue') {
+                resume();
+            } else {
+                pendingFrom = results.length;
+                showStatus(t('Not understood: “%1”. Say “send”, “discard” or “continue”', tail.text), 'is-recording');
+            }
+        }
+
+        // Speech said while a card waits is spent on the card, never written to the input. An
+        // answered card starts (allow) or ends (reject) a turn, and either ends in turnEnded().
+        function handleCardAnswer(results) {
+            var said = collect(results, baseIndex, results.length);
+            if (!said.text || !said.isFinal) return;
+            baseIndex = results.length;
+            var outcome = options.answerCard ? options.answerCard(said.text) : null;
+            if (outcome === 'answered') {
+                park();
+            } else if (outcome === 'locked') {
+                showStatus(t('Tick the box on the card first, then say “allow”'), 'is-recording');
+            } else {
+                showStatus(t('Not understood: “%1”. Say “allow” or “reject”', said.text), 'is-recording');
+            }
         }
 
         function start() {
@@ -177,25 +300,34 @@ define([], function () {
             recognition.interimResults = true;
             recognition.maxAlternatives = 1;
 
+            // A fresh recogniser numbers its results from zero again; what was said to the old one
+            // is already in the textarea and becomes the prefix.
             prefix = input.value.trim();
+            resultCount = 0;
+            baseIndex = 0;
+            if (isPrompting()) pendingFrom = 0;
 
             recognition.onresult = function (event) {
                 if (rec !== recognition) return;
-                var finalText = '';
-                var interimText = '';
-                for (var i = 0; i < event.results.length; i++) {
-                    var transcript = event.results[i][0].transcript;
-                    if (event.results[i].isFinal) finalText += transcript;
-                    else interimText += transcript;
-                }
-                var gotFinal = event.results.length > 0 && event.results[event.results.length - 1].isFinal;
-                setText(joinWithPrefix((finalText + interimText).trim()));
+                resultCount = event.results.length;
                 restarts = 0;
-                if (gotFinal) {
-                    scheduleAutoSend();
-                } else {
+                if (isPrompting()) {
+                    handleWhilePrompting(event.results);
+                    return;
+                }
+                if (cardPending()) {
+                    handleCardAnswer(event.results);
+                    return;
+                }
+                var spoken = collect(event.results, baseIndex, resultCount);
+                setText(joinWithPrefix(spoken.text));
+                if (!spoken.isFinal) {
                     clearTimers();
                     showStatus(recordingText(), 'is-recording');
+                } else if (mode === 'auto_send') {
+                    scheduleAutoSend();
+                } else if (mode === 'conversation') {
+                    schedulePrompt();
                 }
             };
 
@@ -210,7 +342,7 @@ define([], function () {
                     stop();
                     return;
                 }
-                if (handsFree && listening && !countdownTimer) {
+                if (inConversation && listening) {
                     recognition = null;
                     restart();
                     return;
@@ -218,13 +350,13 @@ define([], function () {
                 stop();
             };
 
-            // Chrome ends a continuous session on its own after a stretch of silence; in hands-free
-            // that is not the administrator's decision, so listen again. A running countdown is
-            // left alone so the message still goes out.
+            // Chrome ends a continuous session on its own after a stretch of silence; in a
+            // conversation that is not the administrator's decision, so listen again. A running
+            // auto_send countdown is left alone so the message still goes out.
             recognition.onend = function () {
                 if (rec !== recognition) return;
                 recognition = null;
-                if (handsFree && listening && !countdownTimer) {
+                if (inConversation && listening) {
                     restart();
                     return;
                 }
@@ -248,7 +380,7 @@ define([], function () {
             }
         }
 
-        // Hands-free restarts are capped so a browser that keeps failing to open the recogniser
+        // Conversation restarts are capped so a browser that keeps failing to open the recogniser
         // (no network, no device) cannot loop; a result resets the count.
         function restart() {
             if (++restarts > MAX_RESTARTS) {
@@ -256,7 +388,7 @@ define([], function () {
                 return;
             }
             setTimeout(function () {
-                if (handsFree && listening && !recognition) start();
+                if (inConversation && listening && !recognition) start();
             }, 250);
         }
 
@@ -268,13 +400,15 @@ define([], function () {
         }
 
         function stop(silent) {
-            var wasActive = listening || waitingForTurn || !!countdownTimer;
+            var wasActive = listening || waitingForTurn || !!countdownTimer || isPrompting();
             clearTimers();
-            handsFree = false;
+            inConversation = false;
             waitingForTurn = false;
+            pendingFrom = null;
             restarts = 0;
             stopRecogniser();
             setListening(false);
+            showBar(false);
             showNotice(false);
             if (silent || !wasActive) {
                 hideStatus();
@@ -284,21 +418,25 @@ define([], function () {
             }
         }
 
-        // A manual Send ends the session; an auto-send in hands-free has already parked the
-        // recogniser and must keep its state.
+        // The panel calls this on every send. In a conversation any send (the bar, Enter or the
+        // Send button) pauses the microphone until the reply; otherwise it ends the session.
         function sending() {
             if (waitingForTurn) return;
+            if (inConversation && listening) {
+                park();
+                return;
+            }
             stop(true);
         }
 
         function turnEnded() {
-            if (!handsFree || !waitingForTurn) return;
+            if (!inConversation || !waitingForTurn) return;
             waitingForTurn = false;
             start();
         }
 
         function beginSession() {
-            handsFree = !!options.handsFree && !!options.autoSend;
+            inConversation = mode === 'conversation';
             start();
         }
 
@@ -312,11 +450,25 @@ define([], function () {
             }
         });
 
+        if (bar) {
+            bar.addEventListener('click', function (e) {
+                var action = e.target.closest('[data-voice]');
+                if (!action) return;
+                if (action.dataset.voice === 'send') commitSend();
+                else if (action.dataset.voice === 'discard') discard();
+                else if (action.dataset.voice === 'continue') resume();
+            });
+        }
+
         // Typing means the administrator is correcting the text: drop the countdown and stop the
-        // recogniser so it cannot overwrite the edit. Enter hands the text to the normal send path.
+        // recogniser so it cannot overwrite the edit. Enter hands the text to the normal send
+        // path, which in a conversation keeps the session going.
         input.addEventListener('keydown', function (e) {
             if (!listening && !waitingForTurn && !countdownTimer) return;
-            if (e.keyCode === 13 && !e.shiftKey) { stop(true); return; }
+            if (e.keyCode === 13 && !e.shiftKey) {
+                if (!inConversation) stop(true);
+                return;
+            }
             if (e.key && e.key.length === 1 || e.keyCode === 8 || e.keyCode === 46) stop(true);
         });
 

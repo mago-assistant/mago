@@ -14,23 +14,17 @@
             <comment>The language the browser listens for. Speaking another language than the one selected here gives garbled text, so pick the language administrators actually speak rather than the interface language.</comment>
             <depends><field id="enabled">1</field></depends>
         </field>
-        <field id="auto_send" translate="label comment" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Send Automatically</label>
-            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-            <comment>Send the spoken message on its own after a short pause in speech. A countdown is shown first; typing or pressing the microphone cancels it. Set to No to always review and press Send yourself.</comment>
+        <field id="mode" translate="label comment" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Voice Mode</label>
+            <source_model>MagoAssistant\Mago\Model\Config\Source\VoiceMode</source_model>
+            <comment><![CDATA[<strong>Dictate</strong>: press the microphone, speak, check the text and press Send yourself.<br/><strong>Send after a pause</strong>: the message is sent on its own after a short countdown once you stop talking; the microphone then turns off.<br/><strong>Conversation</strong>: press the microphone once. After each pause a Send / Discard / Continue bar appears; say "send", "discard" or "continue" (to add more), or click it. While the assistant answers the microphone is paused, then it listens again for your next message. Press the microphone or start typing to stop.]]></comment>
             <depends><field id="enabled">1</field></depends>
         </field>
         <field id="send_delay" translate="label comment" type="text" sortOrder="35" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
             <label>Send Delay (ms)</label>
-            <comment>How long to wait after speech stops before the message is sent, in milliseconds (default 1400). The browser itself already needs a moment of silence to finish a sentence, so values below 500 rarely make a difference. A countdown is shown while waiting.</comment>
+            <comment>Send after a pause only: how long to wait after speech stops before the message is sent, in milliseconds (default 1400). The browser itself already needs a moment of silence to finish a sentence, so values below 500 rarely make a difference. A countdown is shown while waiting.</comment>
             <validate>validate-digits validate-zero-or-greater</validate>
-            <depends><field id="enabled">1</field><field id="auto_send">1</field></depends>
-        </field>
-        <field id="hands_free" translate="label comment" type="select" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Hands-free Conversation</label>
-            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-            <comment>Keep the microphone on after a spoken message is sent: once the assistant has answered it listens again for the next message, so a whole conversation can be held without touching the button. Press the microphone or start typing to stop.</comment>
-            <depends><field id="enabled">1</field><field id="auto_send">1</field></depends>
+            <depends><field id="enabled">1</field><field id="mode">auto_send</field></depends>
         </field>
     </group>
 </include>

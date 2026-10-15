@@ -967,6 +967,43 @@ html:has(body.mago-active) {
     }
 }
 
+// Conversation mode: "Send this message?" bar above the input, styled like a confirmation card
+// so it reads as a question waiting for an answer rather than another status line.
+.mago-voice-confirm {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 20px 8px;
+    padding: 8px 8px 8px 12px;
+    border-radius: 10px;
+    background: var(--mago-surface, #F7F5F3);
+    border: 1px solid var(--mago-accent, #FF7A33);
+
+    &[hidden] {
+        display: none;
+    }
+
+    .mago-voice-confirm-text {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
+        line-height: 1.35;
+        color: var(--mago-ink, #373330);
+
+        span {
+            font-size: 11px;
+            color: var(--mago-ink-muted, #9A918B);
+        }
+    }
+
+    .mago-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+}
+
 // Status line under the input while recording or counting down to an auto-send
 .mago-voice-status {
     display: flex;

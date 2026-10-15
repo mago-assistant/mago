@@ -16,9 +16,8 @@ class FakeConfigRepository implements RepositoryInterface
     private int $customerNotificationInterval = 0;
     private bool $answerWidgets = false;
     private bool $voiceInput = true;
-    private bool $voiceAutoSend = true;
+    private string $voiceMode = 'conversation';
     private string $voiceLanguage = 'auto';
-    private bool $voiceHandsFree = true;
     private int $voiceSendDelay = 1400;
     private int $maxResponseTokens = 0;
     private bool $reindexAllowed = false;
@@ -85,16 +84,16 @@ class FakeConfigRepository implements RepositoryInterface
         return $this->voiceInput;
     }
 
-    public function withVoiceAutoSend(bool $enabled): self
+    public function withVoiceMode(string $mode): self
     {
-        $this->voiceAutoSend = $enabled;
+        $this->voiceMode = $mode;
 
         return $this;
     }
 
-    public function isVoiceAutoSendEnabled(): bool
+    public function getVoiceMode(): string
     {
-        return $this->voiceAutoSend;
+        return $this->voiceMode;
     }
 
     public function withVoiceLanguage(string $language): self
@@ -107,18 +106,6 @@ class FakeConfigRepository implements RepositoryInterface
     public function getVoiceLanguage(): string
     {
         return $this->voiceLanguage;
-    }
-
-    public function withVoiceHandsFree(bool $enabled): self
-    {
-        $this->voiceHandsFree = $enabled;
-
-        return $this;
-    }
-
-    public function isVoiceHandsFreeEnabled(): bool
-    {
-        return $this->voiceHandsFree;
     }
 
     public function withVoiceSendDelay(int $milliseconds): self

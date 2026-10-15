@@ -19,6 +19,7 @@ use Magento\Framework\Serialize\Serializer\Json;
 use Magento\Framework\Stdlib\DateTime\DateTime;
 use Magento\Store\Model\StoreManagerInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepositoryInterface;
+use MagoAssistant\Mago\Model\Config\Source\VoiceMode;
 
 class Repository extends System\BaseRepository implements ConfigRepositoryInterface
 {
@@ -184,19 +185,17 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return $this->isSetFlag(self::XML_PATH_VOICE_INPUT);
     }
 
-    public function isVoiceAutoSendEnabled(): bool
+    public function getVoiceMode(): string
     {
-        return $this->isSetFlag(self::XML_PATH_VOICE_AUTO_SEND);
+        $mode = trim((string)$this->getStoreValue(self::XML_PATH_VOICE_MODE));
+        $known = [VoiceMode::DICTATE, VoiceMode::AUTO_SEND, VoiceMode::CONVERSATION];
+
+        return in_array($mode, $known, true) ? $mode : VoiceMode::CONVERSATION;
     }
 
     public function getVoiceLanguage(): string
     {
         return trim((string)$this->getStoreValue(self::XML_PATH_VOICE_LANGUAGE)) ?: 'auto';
-    }
-
-    public function isVoiceHandsFreeEnabled(): bool
-    {
-        return $this->isSetFlag(self::XML_PATH_VOICE_HANDS_FREE);
     }
 
     public function getVoiceSendDelay(): int

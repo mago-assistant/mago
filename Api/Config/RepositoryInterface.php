@@ -33,9 +33,8 @@ interface RepositoryInterface
     public const XML_PATH_LANGUAGE = 'mago/chat/language';
     public const XML_PATH_ANSWER_WIDGETS = 'mago/chat/answer_widgets';
     public const XML_PATH_VOICE_INPUT = 'mago/voice/enabled';
-    public const XML_PATH_VOICE_AUTO_SEND = 'mago/voice/auto_send';
+    public const XML_PATH_VOICE_MODE = 'mago/voice/mode';
     public const XML_PATH_VOICE_LANGUAGE = 'mago/voice/language';
-    public const XML_PATH_VOICE_HANDS_FREE = 'mago/voice/hands_free';
     public const XML_PATH_VOICE_SEND_DELAY = 'mago/voice/send_delay';
     public const XML_PATH_ADDONS_ENABLED = 'mago/addons/enabled';
     public const XML_PATH_DOCS_ENABLED = 'mago/docs/enabled';
@@ -172,11 +171,11 @@ interface RepositoryInterface
     public function isVoiceInputEnabled(): bool;
 
     /**
-     * Whether a spoken message is sent on its own once the administrator stops talking
+     * How a spoken message is sent: dictate, auto_send or conversation (see Source\VoiceMode)
      *
-     * @return bool
+     * @return string
      */
-    public function isVoiceAutoSendEnabled(): bool;
+    public function getVoiceMode(): string;
 
     /**
      * BCP-47 tag for the speech recogniser, or "auto" to follow the admin interface locale
@@ -186,14 +185,7 @@ interface RepositoryInterface
     public function getVoiceLanguage(): string;
 
     /**
-     * Whether the microphone keeps listening after a spoken message was sent and the reply arrived
-     *
-     * @return bool
-     */
-    public function isVoiceHandsFreeEnabled(): bool;
-
-    /**
-     * Milliseconds of silence after speech before a spoken message is sent
+     * Milliseconds of silence after speech before a spoken message is sent in auto_send mode
      *
      * @return int
      */

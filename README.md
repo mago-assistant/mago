@@ -173,16 +173,20 @@ The chat panel shows a microphone button next to Send in browsers with built-in 
 recognition (Chrome, Edge, Safari). The first time an administrator presses it, a card explains
 that the audio is handled by the browser vendor's speech service, outside Mago's control, and
 asks them to acknowledge that before the microphone turns on. The acknowledgement is remembered
-per admin user in that browser. After that, press it, speak, and the words appear in the input field as
-you talk. While recording, the button turns red and a status line under the input shows what is
-happening. After a short pause in speech a countdown appears and the message is sent on its own;
-typing, or pressing the microphone again, cancels it and leaves the text in the box for you to
-edit and send yourself. *Send Delay* sets how long that pause is (default 1400 ms). Set *Send
-Automatically* to No to always review first.
+per admin user in that browser. After that, press it, speak, and the words appear in the input
+field as you talk. While recording, the button turns red and a status line under the input shows
+what is happening. *Voice Mode* (`mago/voice/mode`) decides what happens once you stop talking:
 
-With *Hands-free Conversation* on (the default) the microphone stays on after a spoken message
-is sent: the panel waits for the assistant's reply and then listens again, so a whole exchange
-runs without touching the button. Press the microphone, or start typing, to stop.
+| Mode | What you do | What happens |
+|---|---|---|
+| Dictate (`dictate`) | Press the microphone, speak, press Send | The text stays in the box for you to check and send. |
+| Send after a pause (`auto_send`) | Press the microphone, speak | A countdown appears and the message is sent; the microphone then turns off. Typing or pressing the microphone cancels the countdown. *Send Delay* (`mago/voice/send_delay`, default 1400 ms) sets its length. |
+| Conversation (`conversation`, default) | Press the microphone once | After each pause a *Send this message?* bar appears. Say "send" ("verstuur") or click Send; say "discard" ("wis") or click Discard to start over; say "continue" ("verder") or click Continue to add more to the message. Anything else said while the bar is up is ignored, with a hint to repeat. While the assistant answers, the microphone is paused ("Assistant is answering"), then it listens again ("Your turn — speak now"). Press the microphone or start typing to stop. |
+
+In a conversation, while an Allow / Reject card is waiting the microphone only listens for the
+answer to that card ("allow", "toestaan", "reject", "nee", …): nothing is typed into the input until
+the card is answered. A card that needs its acknowledgement box ticked asks for that first. A translation pack can add command words through the
+`voice words: send`, `voice words: discard` and `voice words: continue` strings.
 
 When the assistant is waiting for you to allow or reject an action, a short spoken or typed
 answer presses the button for you: "allow", "yes", "ok", "toestaan", "ja" allow it, "reject",
@@ -196,7 +200,7 @@ different language than the one being listened for produces garbled text. Set *L
 The audio is processed by the browser vendor's speech service, not by Mago or the AI provider.
 The resulting text is treated exactly like typed text, including privacy mode. Turn the button
 off under `Stores > Configuration > Mago Assistant > Voice Input` (`mago/voice/enabled`, default
-Yes); auto-send is `mago/voice/auto_send`, its delay `mago/voice/send_delay`, hands-free `mago/voice/hands_free`.
+Yes).
 
 ## Documentation grounding
 

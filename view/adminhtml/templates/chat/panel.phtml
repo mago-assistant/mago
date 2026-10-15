@@ -219,6 +219,17 @@ $starterIcons = [
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         <span><?= $escaper->escapeHtml(__('Voice input is on. Your speech is converted to text by your browser\'s speech service (for example Google for Chrome), not by %1 or the AI provider. Only the resulting text is sent to the assistant. Avoid speaking customer details aloud.', $assistantName)) ?></span>
     </div>
+    <?php /* Voice conversation mode (#141): after a pause the spoken message waits here for a
+           clicked or spoken "send", so nothing reaches the assistant by accident. */ ?>
+    <div id="mago-voice-confirm" class="mago-voice-confirm" hidden role="group" aria-label="<?= $escaper->escapeHtmlAttr(__('Send this message?')) ?>">
+        <div class="mago-voice-confirm-text">
+            <strong><?= $escaper->escapeHtml(__('Send this message?')) ?></strong>
+            <span><?= $escaper->escapeHtml(__('Say “send”, “discard” or “continue” to add more')) ?></span>
+        </div>
+        <button type="button" class="mago-btn is-secondary" data-voice="discard"><?= $escaper->escapeHtml(__('Discard')) ?></button>
+        <button type="button" class="mago-btn is-secondary" data-voice="continue"><?= $escaper->escapeHtml(__('Continue')) ?></button>
+        <button type="button" class="mago-btn is-primary" data-voice="send"><?= $escaper->escapeHtml(__('Send')) ?></button>
+    </div>
     <div id="mago-input-area" class="mago-input-wrapper">
         <div id="mago-slash-menu" class="mago-slash-menu"></div>
         <label for="mago-input" class="mago-sr-only"><?= $escaper->escapeHtml(__('Message %1', $assistantName)) ?></label>

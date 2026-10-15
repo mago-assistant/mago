@@ -742,10 +742,13 @@ define([
         button: qs('#mago-mic'),
         status: qs('#mago-voice-status'),
         notice: qs('#mago-voice-notice'),
+        confirmBar: qs('#mago-voice-confirm'),
         lang: config.locale,
-        autoSend: !!config.voiceAutoSend,
-        handsFree: !!config.voiceAutoSend && !!config.voiceHandsFree,
+        mode: config.voiceMode,
         sendDelay: config.voiceSendDelay,
+        matchCommand: matchVoiceCommand,
+        cardPending: confirmCardPending,
+        answerCard: answerCardByVoice,
         requireConsent: requireVoiceConsent,
         t: t,
         onSend: function () { if (input.value.trim()) send(); },
@@ -1499,13 +1502,69 @@ define([
             'weiger', 'weigeren', 'nee', 'annuleer', 'annuleren', 'niet nu', 'afwijzen', 'wijs af', 'overslaan', 'niet doen']
     };
 
-    function confirmWordList(kind) {
-        var extra = t(kind === 'allow' ? 'voice words: allow' : 'voice words: reject');
-        var list = CONFIRM_WORDS[kind].slice();
+    // Conversation mode (#141): what the administrator says while the "Send this message?" bar
+    // is up: send it, throw it away, or continue dictating. Kept apart from the confirmation words: "yes" or "ja" is a real answer to a question
+    // from the assistant and must be able to go out as a message. The list includes what a Dutch
+    // recogniser makes of an English "send" ("sent", "zend", "zent").
+    var VOICE_COMMAND_WORDS = {
+        send: ['send', 'send it', 'send now', 'send message', 'submit', 'sent', 'zend', 'zent',
+            'verstuur', 'versturen', 'verstuur maar', 'verstuur het', 'verzend', 'verzenden', 'verzend maar',
+            'stuur', 'stuur maar', 'stuur het', 'stuur op', 'stuur door', 'opsturen', 'doorsturen'],
+        discard: ['discard', 'discard it', 'clear', 'delete', 'start over', 'scratch that',
+            'wis', 'wis het', 'wis maar', 'wissen', 'verwijder', 'verwijderen', 'weggooien', 'weg ermee',
+            'opnieuw', 'begin opnieuw'],
+        'continue': ['continue', 'add', 'add more', 'more', 'go on', 'keep going', 'resume',
+            'verder', 'ga verder', 'doorgaan', 'aanvullen', 'toevoegen', 'meer', 'nog meer']
+    };
+
+    function wordList(words, translationKey) {
+        var extra = t(translationKey);
+        var list = words.slice();
         if (extra.indexOf('voice words:') !== 0) {
             list = list.concat(extra.split(',').map(function (w) { return w.trim(); }).filter(Boolean));
         }
         return list;
+    }
+
+    function withinOneEdit(a, b) {
+        if (Math.abs(a.length - b.length) > 1) return false;
+        var i = 0, j = 0, edits = 0;
+        while (i < a.length && j < b.length) {
+            if (a[i] === b[j]) { i++; j++; continue; }
+            if (++edits > 1) return false;
+            if (a.length > b.length) i++;
+            else if (a.length < b.length) j++;
+            else { i++; j++; }
+        }
+        return edits + (a.length - i) + (b.length - j) <= 1;
+    }
+
+    // Whole words only: unlike a confirmation reply, a command is matched against anything the
+    // administrator says next, and "bestuur" must not read as "stuur". A lone word may be one
+    // letter off a command of four letters or more, which absorbs most mishearings ("sends",
+    // "zenden") without letting "is" pass for "wis".
+    function saysAny(reply, words) {
+        var padded = ' ' + reply + ' ';
+        var single = reply.indexOf(' ') === -1;
+        return words.some(function (w) {
+            w = w && w.toLowerCase();
+            if (!w) return false;
+            if (padded.indexOf(' ' + w + ' ') !== -1) return true;
+            return single && w.length >= 4 && w.indexOf(' ') === -1 && withinOneEdit(reply, w);
+        });
+    }
+
+    function matchVoiceCommand(text) {
+        var reply = normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!reply || reply.split(' ').length > 4) return null;
+        var matches = ['send', 'discard', 'continue'].filter(function (command) {
+            return saysAny(reply, wordList(VOICE_COMMAND_WORDS[command], 'voice words: ' + command));
+        });
+        return matches.length === 1 ? matches[0] : null;
+    }
+
+    function confirmWordList(kind) {
+        return wordList(CONFIRM_WORDS[kind], kind === 'allow' ? 'voice words: allow' : 'voice words: reject');
     }
 
     function normalizeReply(text) {
@@ -1531,14 +1590,35 @@ define([
         });
     }
 
-    function answerPendingConfirm(text) {
+    function confirmReplyKind(text) {
         var reply = normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+/g, ' ').trim();
-        if (!reply || reply.split(' ').length > 5) return false;
+        if (!reply || reply.split(' ').length > 5) return null;
         var allow = mentionsAny(reply, confirmWordList('allow'));
         var reject = mentionsAny(reply, confirmWordList('reject'));
-        if (allow === reject) return false;
-        var kind = allow ? 'allow' : 'reject';
+        if (allow === reject) return null;
+        return allow ? 'allow' : 'reject';
+    }
+
+    // An answered card swaps its buttons for a spinner, so only an unanswered one still has them.
+    function confirmCardPending() {
+        var cards = msgs.querySelectorAll('.mago-confirm-actions');
+        return cards.length > 0 && !!cards[cards.length - 1].querySelector('.mago-btn--confirm, .mago-btn--reject');
+    }
+
+    // Conversation mode: while a card waits, speech answers the card and nothing else. "locked"
+    // means the matching button is disabled until the acknowledgement box is ticked by hand.
+    function answerCardByVoice(text) {
+        var kind = confirmReplyKind(text);
+        if (!kind) return null;
         var btn = pendingConfirmButton(kind);
+        if (!btn) return 'locked';
+        btn.click();
+        return 'answered';
+    }
+
+    function answerPendingConfirm(text) {
+        var kind = confirmReplyKind(text);
+        var btn = kind ? pendingConfirmButton(kind) : null;
         if (!btn) return false;
         input.value = '';
         sendBtn.classList.add('is-idle');
@@ -2066,6 +2146,9 @@ define([
             addTextMsg('assistant', t('Action rejected. No changes were made.'));
         }).catch(function(e) {
             showError(addMsg('assistant', ''), e.message);
+        }).then(function() {
+            // A rejection never sets the panel busy, so setBusy(false) will not end the turn.
+            if (voiceInput) voiceInput.turnEnded();
         });
     }
 
