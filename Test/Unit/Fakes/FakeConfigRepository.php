@@ -19,6 +19,8 @@ class FakeConfigRepository implements RepositoryInterface
     private string $voiceMode = 'conversation';
     private string $voiceLanguage = 'auto';
     private int $voiceSendDelay = 1400;
+    /** @var array<string, string[]> */
+    private array $voiceWords = [];
     private int $maxResponseTokens = 0;
     private bool $reindexAllowed = false;
     private bool $isDebugEnabled = false;
@@ -118,6 +120,21 @@ class FakeConfigRepository implements RepositoryInterface
     public function getVoiceSendDelay(): int
     {
         return $this->voiceSendDelay;
+    }
+
+    /**
+     * @param array<string, string[]> $words
+     */
+    public function withVoiceWords(array $words): self
+    {
+        $this->voiceWords = $words;
+
+        return $this;
+    }
+
+    public function getVoiceWords(): array
+    {
+        return $this->voiceWords + self::VOICE_ENGLISH_WORDS;
     }
 
     public function getExtensionVersion(): string

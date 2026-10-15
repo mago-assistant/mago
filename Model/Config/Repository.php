@@ -205,6 +205,21 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return $value === '' ? 1400 : max(0, (int)$value);
     }
 
+    public function getVoiceWords(): array
+    {
+        $words = [];
+        foreach (self::VOICE_COMMANDS as $command) {
+            $list = array_map(
+                static fn (string $word): string => mb_strtolower(trim($word)),
+                explode(',', (string)$this->getStoreValue(self::XML_PATH_VOICE_WORDS . $command))
+            );
+            $list = array_merge($list, self::VOICE_ENGLISH_WORDS[$command]);
+            $words[$command] = array_values(array_unique(array_filter($list, static fn (string $word): bool => $word !== '')));
+        }
+
+        return $words;
+    }
+
     public function isAddonFeedEnabled(): bool
     {
         return $this->isSetFlag(self::XML_PATH_ADDONS_ENABLED, null, ScopeConfigInterface::SCOPE_TYPE_DEFAULT);

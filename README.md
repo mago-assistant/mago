@@ -180,18 +180,27 @@ what is happening. *Voice Mode* (`mago/voice/mode`) decides what happens once yo
 | Mode | What you do | What happens |
 |---|---|---|
 | Dictate (`dictate`) | Press the microphone, speak, press Send | The text stays in the box for you to check and send. |
-| Send after a pause (`auto_send`) | Press the microphone, speak | A countdown appears and the message is sent; the microphone then turns off. Typing or pressing the microphone cancels the countdown. *Send Delay* (`mago/voice/send_delay`, default 1400 ms) sets its length. |
-| Conversation (`conversation`, default) | Press the microphone once | After each pause a *Send this message?* bar appears. Say "send" ("verstuur") or click Send; say "discard" ("wis") or click Discard to start over; say "continue" ("verder") or click Continue to add more to the message. Anything else said while the bar is up is ignored, with a hint to repeat. While the assistant answers, the microphone is paused ("Assistant is answering"), then it listens again ("Your turn — speak now"). Press the microphone or start typing to stop. |
+| Send after a pause (`auto_send`) | Press the microphone, speak | A countdown appears and the message is sent; after the answer the microphone listens again for the next message. Typing or pressing the microphone cancels the countdown and ends the session. *Send Delay* (`mago/voice/send_delay`, default 1400 ms) sets its length. |
+| Conversation (`conversation`, default) | Press the microphone once | After each pause a *Send this message?* bar appears. Say "send" or click Send; say "discard" or click Discard to start over; say "continue" or click Continue to add more to the message. Anything else said while the bar is up is ignored, with a hint to repeat. While the assistant answers, the microphone is paused ("Assistant is answering"), then it listens again ("Your turn — speak now"). Press the microphone or start typing to stop. |
 
 In a conversation, while an Allow / Reject card is waiting the microphone only listens for the
-answer to that card ("allow", "toestaan", "reject", "nee", …): nothing is typed into the input until
-the card is answered. A card that needs its acknowledgement box ticked asks for that first. A translation pack can add command words through the
-`voice words: send`, `voice words: discard` and `voice words: continue` strings.
+answer to that card ("allow", "reject", …): nothing is typed into the input until the card is
+answered. A card that needs its acknowledgement box ticked asks for that first.
+
+Saying a stop word on its own ("stop", "stop listening") turns the microphone off in every mode.
+There is no spoken "start": press the microphone.
 
 When the assistant is waiting for you to allow or reject an action, a short spoken or typed
-answer presses the button for you: "allow", "yes", "ok", "toestaan", "ja" allow it, "reject",
-"no", "cancel", "weiger", "nee", "niet nu" reject it. An action that cannot be undone still
-needs its acknowledgement box ticked first; until then the word is sent as a normal message.
+answer presses the button for you: "allow", "yes", "ok" allow it, "reject", "no", "cancel"
+reject it. An action that cannot be undone still needs its acknowledgement box ticked first;
+until then the word is sent as a normal message.
+
+The English words above are built in and always work. A shop that speaks another language adds
+its own words under Voice Input as comma-separated lists, one per command (`mago/voice/words_send`,
+`words_discard`, `words_continue`, `words_allow`, `words_reject`, `words_stop`); for Dutch, for
+example, `verstuur, versturen, stuur maar` for send. Added words come on top of the English ones,
+so a mistyped or emptied setting never leaves voice input unusable. The first added word of each
+list is the one the panel suggests in its hints.
 
 The browser listens in one language at a time. By default that is the admin user's interface
 locale, which is usually English even for administrators who speak Dutch, and speaking a

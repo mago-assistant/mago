@@ -756,6 +756,14 @@ define([
         mode: initialVoiceMode(),
         sendDelay: config.voiceSendDelay,
         matchCommand: matchVoiceCommand,
+        isStop: isVoiceStop,
+        hintWords: {
+            send: wordsFor('send')[0],
+            discard: wordsFor('discard')[0],
+            'continue': wordsFor('continue')[0],
+            allow: wordsFor('allow')[0],
+            reject: wordsFor('reject')[0]
+        },
         cardPending: confirmCardPending,
         answerCard: answerCardByVoice,
         requireConsent: requireVoiceConsent,
@@ -1555,40 +1563,14 @@ define([
         };
     }
 
-    // Spoken (or typed) answers to a pending confirmation card (#141). A one- or two-word reply
-    // that only means "allow" or "reject" presses the matching button instead of going to the
-    // model, in English plus whatever the translation pack adds. The irreversible card keeps its
-    // acknowledgement checkbox: while it is unticked the button is disabled and the word is sent
-    // as an ordinary message, so speech never skips that step.
-    var CONFIRM_WORDS = {
-        allow: ['allow', 'yes', 'ok', 'okay', 'confirm', 'go ahead', 'do it', 'run', 'approve',
-            'toestaan', 'sta toe', 'ja', 'oke', 'oké', 'akkoord', 'bevestig', 'bevestigen', 'doe maar', 'ga door', 'uitvoeren', 'goedkeuren'],
-        reject: ['reject', 'no', 'nope', 'cancel', 'deny', 'not now', 'stop', 'skip', 'later',
-            'weiger', 'weigeren', 'nee', 'annuleer', 'annuleren', 'niet nu', 'afwijzen', 'wijs af', 'overslaan', 'niet doen']
-    };
-
-    // Conversation mode (#141): what the administrator says while the "Send this message?" bar
-    // is up: send it, throw it away, or continue dictating. Kept apart from the confirmation words: "yes" or "ja" is a real answer to a question
-    // from the assistant and must be able to go out as a message. The list includes what a Dutch
-    // recogniser makes of an English "send" ("sent", "zend", "zent").
-    var VOICE_COMMAND_WORDS = {
-        send: ['send', 'send it', 'send now', 'send message', 'submit', 'sent', 'zend', 'zent',
-            'verstuur', 'versturen', 'verstuur maar', 'verstuur het', 'verzend', 'verzenden', 'verzend maar',
-            'stuur', 'stuur maar', 'stuur het', 'stuur op', 'stuur door', 'opsturen', 'doorsturen'],
-        discard: ['discard', 'discard it', 'clear', 'delete', 'start over', 'scratch that',
-            'wis', 'wis het', 'wis maar', 'wissen', 'verwijder', 'verwijderen', 'weggooien', 'weg ermee',
-            'opnieuw', 'begin opnieuw'],
-        'continue': ['continue', 'add', 'add more', 'more', 'go on', 'keep going', 'resume',
-            'verder', 'ga verder', 'doorgaan', 'aanvullen', 'toevoegen', 'meer', 'nog meer']
-    };
-
-    function wordList(words, translationKey) {
-        var extra = t(translationKey);
-        var list = words.slice();
-        if (extra.indexOf('voice words:') !== 0) {
-            list = list.concat(extra.split(',').map(function (w) { return w.trim(); }).filter(Boolean));
-        }
-        return list;
+    // Spoken command words (#141), configured per shop under Voice Input in the shop's own
+    // language. Allow and reject also answer a confirmation card when typed as a short reply; the
+    // irreversible card keeps its acknowledgement checkbox, so while it is unticked the button is
+    // disabled and the word is sent as an ordinary message. Send, discard and continue only apply
+    // while the conversation-mode bar is up, so "yes" can still go out as a real answer.
+    // Reads config directly: the voice input set-up above calls this before this point is reached.
+    function wordsFor(command) {
+        return (config.voiceWords || {})[command] || [];
     }
 
     function withinOneEdit(a, b) {
@@ -1606,8 +1588,8 @@ define([
 
     // Whole words only: unlike a confirmation reply, a command is matched against anything the
     // administrator says next, and "bestuur" must not read as "stuur". A lone word may be one
-    // letter off a command of four letters or more, which absorbs most mishearings ("sends",
-    // "zenden") without letting "is" pass for "wis".
+    // letter off a command of four letters or more, which absorbs most mishearings ("sent" for
+    // "send") without letting "is" pass for "wis".
     function saysAny(reply, words) {
         var padded = ' ' + reply + ' ';
         var single = reply.indexOf(' ') === -1;
@@ -1619,17 +1601,24 @@ define([
         });
     }
 
+    function commandReply(text) {
+        return normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
     function matchVoiceCommand(text) {
-        var reply = normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+/g, ' ').trim();
+        var reply = commandReply(text);
         if (!reply || reply.split(' ').length > 4) return null;
         var matches = ['send', 'discard', 'continue'].filter(function (command) {
-            return saysAny(reply, wordList(VOICE_COMMAND_WORDS[command], 'voice words: ' + command));
+            return saysAny(reply, wordsFor(command));
         });
         return matches.length === 1 ? matches[0] : null;
     }
 
-    function confirmWordList(kind) {
-        return wordList(CONFIRM_WORDS[kind], kind === 'allow' ? 'voice words: allow' : 'voice words: reject');
+    // Stricter than the bar commands: only an utterance that is exactly a stop word counts, so
+    // "stop the import" stays dictation and a lone "shop" does not end the session.
+    function isVoiceStop(text) {
+        var reply = commandReply(text);
+        return !!reply && wordsFor('stop').indexOf(reply) !== -1;
     }
 
     function normalizeReply(text) {
@@ -1658,8 +1647,8 @@ define([
     function confirmReplyKind(text) {
         var reply = normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+/g, ' ').trim();
         if (!reply || reply.split(' ').length > 5) return null;
-        var allow = mentionsAny(reply, confirmWordList('allow'));
-        var reject = mentionsAny(reply, confirmWordList('reject'));
+        var allow = mentionsAny(reply, wordsFor('allow'));
+        var reject = mentionsAny(reply, wordsFor('reject'));
         if (allow === reject) return null;
         return allow ? 'allow' : 'reject';
     }

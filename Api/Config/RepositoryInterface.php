@@ -36,6 +36,20 @@ interface RepositoryInterface
     public const XML_PATH_VOICE_MODE = 'mago/voice/mode';
     public const XML_PATH_VOICE_LANGUAGE = 'mago/voice/language';
     public const XML_PATH_VOICE_SEND_DELAY = 'mago/voice/send_delay';
+    public const XML_PATH_VOICE_WORDS = 'mago/voice/words_';
+    public const VOICE_COMMANDS = ['send', 'discard', 'continue', 'allow', 'reject', 'stop'];
+    /**
+     * English command words that always work, whatever a shop adds, so a mistyped or emptied
+     * setting can never leave voice input without a way to send, answer a card or stop.
+     */
+    public const VOICE_ENGLISH_WORDS = [
+        'send' => ['send', 'send it', 'send now', 'submit'],
+        'discard' => ['discard', 'clear', 'delete', 'start over', 'scratch that'],
+        'continue' => ['continue', 'add', 'add more', 'more', 'go on', 'keep going'],
+        'allow' => ['allow', 'yes', 'ok', 'okay', 'confirm', 'go ahead', 'do it', 'approve'],
+        'reject' => ['reject', 'no', 'nope', 'cancel', 'deny', 'not now', 'skip', 'later'],
+        'stop' => ['stop', 'stop listening', 'microphone off'],
+    ];
     public const XML_PATH_ADDONS_ENABLED = 'mago/addons/enabled';
     public const XML_PATH_DOCS_ENABLED = 'mago/docs/enabled';
     public const XML_PATH_DOCS_SOURCE_REPO = 'mago/docs/source_repo';
@@ -190,6 +204,14 @@ interface RepositoryInterface
      * @return int
      */
     public function getVoiceSendDelay(): int;
+
+    /**
+     * Spoken command words per command in VOICE_COMMANDS, lower-cased: the shop's own words first
+     * (the first one is what the panel suggests), then the built-in English ones
+     *
+     * @return array<string, string[]>
+     */
+    public function getVoiceWords(): array;
 
     /**
      * Whether the dashboard may show the add-on feed

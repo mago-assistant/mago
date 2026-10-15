@@ -107,6 +107,7 @@ class ChatPanel extends Template
             'voiceInput' => $this->configRepository->isVoiceInputEnabled(),
             'voiceMode' => $this->configRepository->getVoiceMode(),
             'voiceSendDelay' => $this->configRepository->getVoiceSendDelay(),
+            'voiceWords' => $this->configRepository->getVoiceWords(),
             'locale' => $this->getSpeechLocale(),
             'formFieldCap' => self::FORM_FIELD_CAP,
             'formValueLengthCap' => self::FORM_VALUE_LENGTH_CAP,
@@ -211,26 +212,20 @@ class ChatPanel extends Template
             'Sending in %1…',
             'Sending…',
             'Recording stopped',
+            'Speech recognition stopped (%1). Press the microphone to try again.',
             'Your turn — speak now',
-            'Say “send”, “discard” or “continue”',
+            'Say “%1”, “%2” or “%3”',
             'Keep talking — adding to your message',
-            'Not understood: “%1”. Say “send”, “discard” or “continue”',
-            'Say “allow” or “reject” to answer the card',
-            'Tick the box on the card first, then say “allow”',
-            'Not understood: “%1”. Say “allow” or “reject”',
+            'Not understood: “%1”. Say “%2”, “%3” or “%4”',
+            'Say “%1” or “%2” to answer the card',
+            'Tick the box on the card first, then say “%1”',
+            'Not understood: “%1”. Say “%2” or “%3”',
             'Assistant is answering — microphone paused',
             'Voice input',
             'Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.',
             'Avoid speaking customer details aloud. You can turn voice input off at any time under Stores > Configuration > Mago Assistant > Voice Input.',
             'I understand, turn on the microphone',
             'Not now',
-            // Comma-separated words a translation pack may add for answering a confirmation card by
-            // voice; chat-panel.js ignores the value when it is left untranslated.
-            'voice words: allow',
-            'voice words: reject',
-            'voice words: send',
-            'voice words: discard',
-            'voice words: continue',
             'Microphone access was denied. Allow it in the browser to use voice input.',
         ];
 
@@ -312,6 +307,15 @@ class ChatPanel extends Template
     {
         $user = $this->adminSession->getUser();
         return $user && $user->getId() ? (int)$user->getId() : null;
+    }
+
+    /**
+     * The word the panel suggests for a spoken command: the first one configured, or the
+     * command's own name when the list was emptied
+     */
+    public function getVoiceCommandWord(string $command): string
+    {
+        return $this->configRepository->getVoiceWords()[$command][0] ?? $command;
     }
 
     public function getAdminUserName(): string

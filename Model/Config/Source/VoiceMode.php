@@ -9,9 +9,9 @@ namespace MagoAssistant\Mago\Model\Config\Source;
 use Magento\Framework\Data\OptionSourceInterface;
 
 /**
- * How a spoken message reaches the assistant. Dictate only fills the input, Send After a Pause
- * sends one message on its own after a countdown, Conversation keeps listening across turns and
- * asks for a spoken or clicked "send" before each message goes out.
+ * How a spoken message reaches the assistant. Dictate only fills the input. Send After a Pause and
+ * Conversation keep listening across turns; the first sends each message after a countdown, the
+ * second asks for a spoken or clicked "send" before each message goes out.
  */
 class VoiceMode implements OptionSourceInterface
 {
