@@ -188,9 +188,10 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
     public function getVoiceMode(): string
     {
         $mode = trim((string)$this->getStoreValue(self::XML_PATH_VOICE_MODE));
-        $known = [VoiceMode::DICTATE, VoiceMode::AUTO_SEND, VoiceMode::CONVERSATION];
+        $mode = VoiceMode::LEGACY[$mode] ?? $mode;
+        $known = [VoiceMode::DICTATE, VoiceMode::AUTO_SEND, VoiceMode::CONFIRM];
 
-        return in_array($mode, $known, true) ? $mode : VoiceMode::CONVERSATION;
+        return in_array($mode, $known, true) ? $mode : VoiceMode::CONFIRM;
     }
 
     public function getVoiceLanguage(): string
@@ -202,7 +203,7 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
     {
         $value = $this->getStoreValue(self::XML_PATH_VOICE_SEND_DELAY);
 
-        return $value === '' ? 1400 : max(0, (int)$value);
+        return $value === '' || $value === null ? 1400 : max(0, (int)$value);
     }
 
     public function getVoiceWords(): array

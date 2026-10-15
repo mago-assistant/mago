@@ -219,16 +219,13 @@ $starterIcons = [
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         <span><?= $escaper->escapeHtml(__('Voice input is on. Your speech is converted to text by your browser\'s speech service (for example Google for Chrome), not by %1 or the AI provider. Only the resulting text is sent to the assistant. Avoid speaking customer details aloud.', $assistantName)) ?></span>
     </div>
-    <?php /* Voice conversation mode (#141): after a pause the spoken message waits here for a
-           clicked or spoken "send", so nothing reaches the assistant by accident. */ ?>
-    <div id="mago-voice-confirm" class="mago-voice-confirm" hidden role="group" aria-label="<?= $escaper->escapeHtmlAttr(__('Send this message?')) ?>">
-        <div class="mago-voice-confirm-text">
-            <strong><?= $escaper->escapeHtml(__('Send this message?')) ?></strong>
-            <span><?= $escaper->escapeHtml(__('Say “%1”, “%2” or “%3” to add more', $block->getVoiceCommandWord('send'), $block->getVoiceCommandWord('discard'), $block->getVoiceCommandWord('continue'))) ?></span>
-        </div>
+    <?php /* Hands-free voice (#141): after a pause the spoken message waits here, counting down
+           (Send after a pause) or for a yes (Confirm), and can be sent or cleared by voice or click. */ ?>
+    <div id="mago-voice-confirm" class="mago-voice-confirm" hidden role="group" aria-label="<?= $escaper->escapeHtmlAttr(__('Spoken message')) ?>">
+        <strong class="mago-voice-confirm-title" aria-live="polite"></strong>
         <button type="button" class="mago-btn is-secondary" data-voice="discard"><?= $escaper->escapeHtml(__('Discard')) ?></button>
-        <button type="button" class="mago-btn is-secondary" data-voice="continue"><?= $escaper->escapeHtml(__('Continue')) ?></button>
         <button type="button" class="mago-btn is-primary" data-voice="send"><?= $escaper->escapeHtml(__('Send')) ?></button>
+        <div class="mago-voice-confirm-progress" aria-hidden="true"><span></span></div>
     </div>
     <div id="mago-input-area" class="mago-input-wrapper">
         <div id="mago-slash-menu" class="mago-slash-menu"></div>
@@ -251,11 +248,11 @@ $starterIcons = [
                 </button>
                 <button type="button" role="menuitemradio" aria-checked="false" data-mode="auto_send">
                     <svg class="mago-voice-mode-check" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span class="mago-voice-mode-label"><strong><?= $escaper->escapeHtml(__('Send after a pause')) ?></strong><span><?= $escaper->escapeHtml(__('Sends after a short pause, then listens again')) ?></span></span>
+                    <span class="mago-voice-mode-label"><strong><?= $escaper->escapeHtml(__('Send after a pause')) ?></strong><span><?= $escaper->escapeHtml(__('Sends after a short countdown, then listens again')) ?></span></span>
                 </button>
-                <button type="button" role="menuitemradio" aria-checked="false" data-mode="conversation">
+                <button type="button" role="menuitemradio" aria-checked="false" data-mode="confirm">
                     <svg class="mago-voice-mode-check" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span class="mago-voice-mode-label"><strong><?= $escaper->escapeHtml(__('Conversation')) ?></strong><span><?= $escaper->escapeHtml(__('Hands-free, confirm each message by voice')) ?></span></span>
+                    <span class="mago-voice-mode-label"><strong><?= $escaper->escapeHtml(__('Confirm each message')) ?></strong><span><?= $escaper->escapeHtml(__('Hands-free, say “yes” or press Send for each message')) ?></span></span>
                 </button>
             </div>
         </div>

@@ -16,7 +16,7 @@ class FakeConfigRepository implements RepositoryInterface
     private int $customerNotificationInterval = 0;
     private bool $answerWidgets = false;
     private bool $voiceInput = true;
-    private string $voiceMode = 'conversation';
+    private string $voiceMode = 'confirm';
     private string $voiceLanguage = 'auto';
     private int $voiceSendDelay = 1400;
     /** @var array<string, string[]> */

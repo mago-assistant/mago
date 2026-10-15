@@ -17,43 +17,28 @@
         <field id="mode" translate="label comment" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
             <label>Voice Mode</label>
             <source_model>MagoAssistant\Mago\Model\Config\Source\VoiceMode</source_model>
-            <comment><![CDATA[<strong>Dictate</strong>: press the microphone, speak, check the text and press Send yourself.<br/><strong>Send after a pause</strong>: press the microphone once. The message is sent on its own after a short countdown once you stop talking; after the answer the microphone listens again for your next message.<br/><strong>Conversation</strong>: press the microphone once. After each pause a Send / Discard / Continue bar appears; say "send", "discard" or "continue" (to add more), or click it. While the assistant answers the microphone is paused, then it listens again for your next message. Press the microphone or start typing to stop.]]></comment>
+            <comment><![CDATA[<strong>Dictate</strong>: press the microphone, speak, check the text and press Send yourself.<br/><strong>Send after a pause</strong>: press the microphone once. After each pause a bar counts down and sends the message; say a yes word to send at once, a no word to clear it, or keep talking to add more.<br/><strong>Confirm each message</strong>: press the microphone once. After each pause a bar asks "Send this message?" and waits: say a yes word (or click Send) to send, a no word (or Discard) to clear it, or keep talking to add more.<br/>In both, the microphone is paused while the assistant answers and then listens again for your next message. Press the microphone, start typing or say a stop word to end it. Admins can also switch mode from the chat itself.]]></comment>
             <depends><field id="enabled">1</field></depends>
         </field>
         <field id="send_delay" translate="label comment" type="text" sortOrder="35" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
             <label>Send Delay (ms)</label>
-            <comment>Send after a pause only: how long to wait after speech stops before the message is sent, in milliseconds (default 1400). The browser itself already needs a moment of silence to finish a sentence, so values below 500 rarely make a difference. A countdown is shown while waiting.</comment>
+            <comment>Used by Send after a pause (also when an admin picks it in the chat): how long the bar counts down after you stop talking before the message is sent, in milliseconds (default 1400). Gives time to say a no word or keep talking. 0 sends at once.</comment>
             <validate>validate-digits validate-zero-or-greater</validate>
-            <depends><field id="enabled">1</field><field id="mode">auto_send</field></depends>
-        </field>
-        <field id="words_send" translate="label comment" type="text" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Send Words</label>
-            <comment>Conversation mode: words that send the message while the "Send this message?" bar is up. Comma-separated words in your own language (the one set under Language above), added to the built-in English words, which always keep working. The first word you enter is the one the panel suggests.</comment>
             <depends><field id="enabled">1</field></depends>
         </field>
-        <field id="words_discard" translate="label comment" type="text" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Discard Words</label>
-            <comment>Conversation mode: words that throw the message away and start over. Comma-separated, added to the built-in English words.</comment>
+        <field id="words_yes" translate="label comment" type="text" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Yes Words</label>
+            <comment>Send the message while the bar is up, and press Allow on a confirmation card (spoken, or typed as a short reply; a card that cannot be undone still needs its box ticked by hand first). Comma-separated words in your own language (the one set under Language above), added to the built-in English words, which always keep working. The first word you enter is the one the panel suggests. Use ordinary words the speech recognition knows: invented words or phrases are written down differently each time and will not be recognised.</comment>
             <depends><field id="enabled">1</field></depends>
         </field>
-        <field id="words_continue" translate="label comment" type="text" sortOrder="70" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Continue Words</label>
-            <comment>Conversation mode: words that close the bar and go back to dictating more of the same message. Comma-separated, added to the built-in English words.</comment>
+        <field id="words_no" translate="label comment" type="text" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>No Words</label>
+            <comment>Clear the message while the bar is up, and press Reject on a confirmation card. Comma-separated words in your own language (the one set under Language above), added to the built-in English words, which always keep working. The first word you enter is the one the panel suggests. Use ordinary words the speech recognition knows: invented words or phrases are written down differently each time and will not be recognised.</comment>
             <depends><field id="enabled">1</field></depends>
         </field>
-        <field id="words_allow" translate="label comment" type="text" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Allow Words</label>
-            <comment>Words that press Allow on a confirmation card, spoken or typed as a short reply. A card that cannot be undone still needs its box ticked by hand first. Comma-separated, added to the built-in English words.</comment>
-            <depends><field id="enabled">1</field></depends>
-        </field>
-        <field id="words_reject" translate="label comment" type="text" sortOrder="90" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Reject Words</label>
-            <comment>Words that press Reject on a confirmation card, spoken or typed as a short reply. Comma-separated, added to the built-in English words.</comment>
-            <depends><field id="enabled">1</field></depends>
-        </field>
-        <field id="words_stop" translate="label comment" type="text" sortOrder="100" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+        <field id="words_stop" translate="label comment" type="text" sortOrder="70" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
             <label>Stop Words</label>
-            <comment>Said on their own, these turn the microphone off in any mode, also while a card or the Send bar is waiting. There is deliberately no spoken "start". Comma-separated, added to the built-in English words.</comment>
+            <comment>Said on their own, these turn the microphone off in any mode. There is deliberately no spoken "start". Comma-separated words in your own language (the one set under Language above), added to the built-in English words, which always keep working. The first word you enter is the one the panel suggests. Use ordinary words the speech recognition knows: invented words or phrases are written down differently each time and will not be recognised.</comment>
             <depends><field id="enabled">1</field></depends>
         </field>
     </group>

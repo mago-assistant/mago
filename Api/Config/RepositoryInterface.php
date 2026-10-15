@@ -37,17 +37,14 @@ interface RepositoryInterface
     public const XML_PATH_VOICE_LANGUAGE = 'mago/voice/language';
     public const XML_PATH_VOICE_SEND_DELAY = 'mago/voice/send_delay';
     public const XML_PATH_VOICE_WORDS = 'mago/voice/words_';
-    public const VOICE_COMMANDS = ['send', 'discard', 'continue', 'allow', 'reject', 'stop'];
+    public const VOICE_COMMANDS = ['yes', 'no', 'stop'];
     /**
      * English command words that always work, whatever a shop adds, so a mistyped or emptied
      * setting can never leave voice input without a way to send, answer a card or stop.
      */
     public const VOICE_ENGLISH_WORDS = [
-        'send' => ['send', 'send it', 'send now', 'submit'],
-        'discard' => ['discard', 'clear', 'delete', 'start over', 'scratch that'],
-        'continue' => ['continue', 'add', 'add more', 'more', 'go on', 'keep going'],
-        'allow' => ['allow', 'yes', 'ok', 'okay', 'confirm', 'go ahead', 'do it', 'approve'],
-        'reject' => ['reject', 'no', 'nope', 'cancel', 'deny', 'not now', 'skip', 'later'],
+        'yes' => ['yes', 'send', 'send it', 'send now', 'submit', 'allow', 'ok', 'okay', 'confirm', 'go ahead', 'do it', 'approve'],
+        'no' => ['no', 'discard', 'clear', 'delete', 'start over', 'scratch that', 'reject', 'nope', 'cancel', 'deny', 'not now', 'skip'],
         'stop' => ['stop', 'stop listening', 'microphone off'],
     ];
     public const XML_PATH_ADDONS_ENABLED = 'mago/addons/enabled';
@@ -185,7 +182,7 @@ interface RepositoryInterface
     public function isVoiceInputEnabled(): bool;
 
     /**
-     * How a spoken message is sent: dictate, auto_send or conversation (see Source\VoiceMode)
+     * How a spoken message is sent: dictate, auto_send or confirm (see Source\VoiceMode)
      *
      * @return string
      */
@@ -199,7 +196,7 @@ interface RepositoryInterface
     public function getVoiceLanguage(): string;
 
     /**
-     * Milliseconds of silence after speech before a spoken message is sent in auto_send mode
+     * Milliseconds the auto_send countdown runs after speech before a spoken message is sent
      *
      * @return int
      */

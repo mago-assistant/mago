@@ -737,13 +737,14 @@ define([
         msgs.scrollTop = msgs.scrollHeight;
     }
 
-    var VOICE_MODES = ['dictate', 'auto_send', 'conversation'];
+    // conversation and hands_free are earlier names of the two hands-free modes.
+    var VOICE_MODES = {dictate: 'dictate', auto_send: 'auto_send', confirm: 'confirm', conversation: 'confirm', hands_free: 'auto_send'};
     var voiceModeKey = 'mago-voice-mode:' + String(config.adminLogin || config.adminUser || '');
 
     function initialVoiceMode() {
         var stored = null;
         try { stored = window.localStorage.getItem(voiceModeKey); } catch (e) { /* private mode */ }
-        return VOICE_MODES.indexOf(stored) !== -1 ? stored : config.voiceMode;
+        return VOICE_MODES.hasOwnProperty(stored) ? VOICE_MODES[stored] : config.voiceMode;
     }
 
     var voiceInput = config.voiceInput ? createVoiceInput({
@@ -757,13 +758,9 @@ define([
         sendDelay: config.voiceSendDelay,
         matchCommand: matchVoiceCommand,
         isStop: isVoiceStop,
-        hintWords: {
-            send: wordsFor('send')[0],
-            discard: wordsFor('discard')[0],
-            'continue': wordsFor('continue')[0],
-            allow: wordsFor('allow')[0],
-            reject: wordsFor('reject')[0]
-        },
+        pickSuggestion: pickSuggestionByVoice,
+        onListening: numberVoiceSuggestions,
+        hintWords: {yes: wordsFor('yes')[0], no: wordsFor('no')[0]},
         cardPending: confirmCardPending,
         answerCard: answerCardByVoice,
         requireConsent: requireVoiceConsent,
@@ -1563,11 +1560,11 @@ define([
         };
     }
 
-    // Spoken command words (#141), configured per shop under Voice Input in the shop's own
-    // language. Allow and reject also answer a confirmation card when typed as a short reply; the
-    // irreversible card keeps its acknowledgement checkbox, so while it is unticked the button is
-    // disabled and the word is sent as an ordinary message. Send, discard and continue only apply
-    // while the conversation-mode bar is up, so "yes" can still go out as a real answer.
+    // Spoken command words (#141): yes, no and stop, configured per shop under Voice Input on top of
+    // built-in English. Yes and no also answer a confirmation card, spoken or typed as a short
+    // reply; the irreversible card keeps its acknowledgement checkbox, so while it is unticked the
+    // button is disabled and the word is sent as an ordinary message. As send / clear they only
+    // apply while the hands-free bar is up, so "yes" can still go out as a real answer.
     // Reads config directly: the voice input set-up above calls this before this point is reached.
     function wordsFor(command) {
         return (config.voiceWords || {})[command] || [];
@@ -1586,29 +1583,99 @@ define([
         return edits + (a.length - i) + (b.length - j) <= 1;
     }
 
+    // Suggestions by voice (#141): while a hands-free session listens, the pickable options get a
+    // small "Option 1" line under their text: the starter questions while the chat is empty,
+    // otherwise the suggestion cards, chips and choices of the latest answer. Saying that number
+    // ("2", "two", "option 2") or the option's text sends it as if it was clicked. Number words are
+    // English; digits work in any language, which is what most recognisers write for a number.
+    var NUMBER_WORDS = {
+        one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+        first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10
+    };
+
+    // [{label: what is sent, host: where the "Option n" line goes}]
+    function voicePickables() {
+        if (chat.classList.contains('is-empty')) {
+            return Array.prototype.map.call(chat.querySelectorAll('.mago-starter[data-question]'), function (el) {
+                return {label: el.getAttribute('data-question').trim(), host: el.querySelector('.mago-starter-text') || el};
+            });
+        }
+        var answers = msgs.querySelectorAll('.mago-message.is-assistant');
+        if (!answers.length) return [];
+        return Array.prototype.map.call(answers[answers.length - 1].querySelectorAll('[' + UI.sendAttr + ']'), function (el) {
+            return {label: el.getAttribute(UI.sendAttr).trim(), host: el.querySelector('.mago-suggestion-label') || el};
+        });
+    }
+
+    function numberVoiceSuggestions(active) {
+        Array.prototype.forEach.call(chat.querySelectorAll('.mago-voice-option'), function (el) { el.remove(); });
+        if (!active) return;
+        voicePickables().forEach(function (item, i) {
+            var caption = document.createElement('span');
+            caption.className = 'mago-voice-option';
+            caption.setAttribute('aria-hidden', 'true');
+            caption.textContent = t('Option %1', i + 1);
+            item.host.appendChild(caption);
+        });
+    }
+
+    function spokenNumber(word) {
+        if (/^\d+$/.test(word)) return parseInt(word, 10);
+        return NUMBER_WORDS.hasOwnProperty(word) ? NUMBER_WORDS[word] : null;
+    }
+
+    // A number only counts in a short reply ("2", "option 2", "number two"), so "show 2 orders
+    // from yesterday" still goes out as a message. Text counts when the reply is the whole label,
+    // or a part of at least two words that only one option contains.
+    function pickSuggestionByVoice(text) {
+        var items = voicePickables();
+        var reply = commandReply(text);
+        if (!items.length || !reply) return false;
+        var words = reply.split(' ');
+        var item = null;
+        if (words.length <= 3) {
+            var numbers = words.map(spokenNumber).filter(function (n) { return n !== null; });
+            if (numbers.length === 1 && numbers[0] >= 1 && numbers[0] <= items.length) item = items[numbers[0] - 1];
+        }
+        if (!item) {
+            var exact = items.filter(function (it) { return commandReply(it.label) === reply; });
+            var partial = words.length >= 2 ? items.filter(function (it) {
+                return (' ' + commandReply(it.label) + ' ').indexOf(' ' + reply + ' ') !== -1;
+            }) : [];
+            item = exact.length === 1 ? exact[0] : partial.length === 1 ? partial[0] : null;
+        }
+        if (!item || busy) return false;
+        askFromWidget(item.label);
+        return true;
+    }
+
     // Whole words only: unlike a confirmation reply, a command is matched against anything the
     // administrator says next, and "bestuur" must not read as "stuur". A lone word may be one
     // letter off a command of four letters or more, which absorbs most mishearings ("sent" for
     // "send") without letting "is" pass for "wis".
+    // A whole reply also counts with its spaces and hyphens taken out, as recognisers write some
+    // words joined or split ("oké" / "o ké", "start-over").
     function saysAny(reply, words) {
         var padded = ' ' + reply + ' ';
         var single = reply.indexOf(' ') === -1;
+        var compactReply = reply.replace(/[\s-]+/g, '');
         return words.some(function (w) {
             w = w && w.toLowerCase();
             if (!w) return false;
             if (padded.indexOf(' ' + w + ' ') !== -1) return true;
-            return single && w.length >= 4 && w.indexOf(' ') === -1 && withinOneEdit(reply, w);
+            if (single && w.length >= 4 && w.indexOf(' ') === -1 && withinOneEdit(reply, w)) return true;
+            return compactReply === w.replace(/[\s-]+/g, '');
         });
     }
 
     function commandReply(text) {
-        return normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+/g, ' ').trim();
+        return normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+-\s+|\s+/g, ' ').trim();
     }
 
     function matchVoiceCommand(text) {
         var reply = commandReply(text);
         if (!reply || reply.split(' ').length > 4) return null;
-        var matches = ['send', 'discard', 'continue'].filter(function (command) {
+        var matches = ['yes', 'no'].filter(function (command) {
             return saysAny(reply, wordsFor(command));
         });
         return matches.length === 1 ? matches[0] : null;
@@ -1647,8 +1714,8 @@ define([
     function confirmReplyKind(text) {
         var reply = normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+/g, ' ').trim();
         if (!reply || reply.split(' ').length > 5) return null;
-        var allow = mentionsAny(reply, wordsFor('allow'));
-        var reject = mentionsAny(reply, wordsFor('reject'));
+        var allow = mentionsAny(reply, wordsFor('yes'));
+        var reject = mentionsAny(reply, wordsFor('no'));
         if (allow === reject) return null;
         return allow ? 'allow' : 'reject';
     }

@@ -891,6 +891,17 @@ html:has(body.mago-active) {
     }
 }
 
+// Hands-free voice: the "Option 1" line under a suggestion's text while the microphone listens
+.mago-voice-option {
+    display: block;
+    margin-top: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    color: var(--mago-accent-ink, #B84000);
+}
+
 // Microphone plus its voice mode toggle, joined into one split button when the toggle shows
 .mago-mic-group {
     position: relative;
@@ -1084,14 +1095,16 @@ html:has(body.mago-active) {
     }
 }
 
-// Conversation mode: "Send this message?" bar above the input, styled like a confirmation card
-// so it reads as a question waiting for an answer rather than another status line.
+// Hands-free countdown bar above the input: the spoken message is about to be sent, with a line
+// filling up to the moment it goes and buttons to send it now or clear it.
 .mago-voice-confirm {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     gap: 8px;
     margin: 0 20px 8px;
-    padding: 8px 8px 8px 12px;
+    padding: 8px 8px 10px 12px;
     border-radius: 10px;
     background: var(--mago-surface, #F7F5F3);
     border: 1px solid var(--mago-accent, #FF7A33);
@@ -1100,24 +1113,34 @@ html:has(body.mago-active) {
         display: none;
     }
 
-    .mago-voice-confirm-text {
-        display: flex;
-        flex-direction: column;
+    .mago-voice-confirm-title {
         flex: 1;
         min-width: 0;
         font-size: 12px;
+        font-weight: 600;
         line-height: 1.35;
         color: var(--mago-ink, #373330);
-
-        span {
-            font-size: 11px;
-            color: var(--mago-ink-muted, #9A918B);
-        }
     }
 
     .mago-btn {
         padding: 6px 12px;
         font-size: 12px;
+    }
+
+    .mago-voice-confirm-progress {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 3px;
+        background: rgba(var(--mago-accent-rgb, 255, 122, 51), 0.15);
+
+        span {
+            display: block;
+            width: 0;
+            height: 100%;
+            background: var(--mago-accent, #FF7A33);
+        }
     }
 }
 

@@ -20,7 +20,7 @@
             <voice>
                 <enabled>1</enabled>
                 <language>auto</language>
-                <mode>conversation</mode>
+                <mode>confirm</mode>
                 <send_delay>1400</send_delay>
             </voice>
             <tools>

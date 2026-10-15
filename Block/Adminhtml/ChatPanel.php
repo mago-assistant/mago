@@ -206,6 +206,7 @@ class ChatPanel extends Template
             'This feedback can only be removed under Answer Feedback.',
             'Speak your message',
             'Voice mode: %1',
+            'Option %1',
             'Stop listening',
             'Listening…',
             'Recording — speak now',
@@ -214,9 +215,10 @@ class ChatPanel extends Template
             'Recording stopped',
             'Speech recognition stopped (%1). Press the microphone to try again.',
             'Your turn — speak now',
-            'Say “%1”, “%2” or “%3”',
+            'Say “%1” to send now, “%2” to clear, or keep talking to add more',
+            'Say “%1” to send, “%2” to clear, or keep talking to add more',
+            'Send this message?',
             'Keep talking — adding to your message',
-            'Not understood: “%1”. Say “%2”, “%3” or “%4”',
             'Say “%1” or “%2” to answer the card',
             'Tick the box on the card first, then say “%1”',
             'Not understood: “%1”. Say “%2” or “%3”',
@@ -307,15 +309,6 @@ class ChatPanel extends Template
     {
         $user = $this->adminSession->getUser();
         return $user && $user->getId() ? (int)$user->getId() : null;
-    }
-
-    /**
-     * The word the panel suggests for a spoken command: the first one configured, or the
-     * command's own name when the list was emptied
-     */
-    public function getVoiceCommandWord(string $command): string
-    {
-        return $this->configRepository->getVoiceWords()[$command][0] ?? $command;
     }
 
     public function getAdminUserName(): string
