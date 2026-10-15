@@ -1601,8 +1601,8 @@ define([
     // Suggestions by voice (#141): while a hands-free session listens, the pickable options get a
     // small "Option 1" line under their text: the starter questions while the chat is empty,
     // otherwise the suggestion cards, chips and choices of the latest answer. Saying that number
-    // ("2", "two", "option 2") or the option's text sends it as if it was clicked. Number words are
-    // English; digits work in any language, which is what most recognisers write for a number.
+    // ("2", "two", "option 2") or the option's text sends it as if it was clicked. Digits and
+    // English number words are built in; a shop adds its own language under Voice Input.
     var NUMBER_WORDS = {
         one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
         first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10
@@ -1636,11 +1636,13 @@ define([
 
     function spokenNumber(word) {
         if (/^\d+$/.test(word)) return parseInt(word, 10);
+        var own = config.voiceNumberWords || {};
+        if (Object.prototype.hasOwnProperty.call(own, word)) return own[word];
         return NUMBER_WORDS.hasOwnProperty(word) ? NUMBER_WORDS[word] : null;
     }
 
-    // A number only counts in a short reply ("2", "option 2", "number two"), so "show 2 orders
-    // from yesterday" still goes out as a message. Text counts when the reply is the whole label,
+    // A number only counts in a short reply that ends on it ("2", "option 2", "de tweede"), so
+    // "show 2 orders" or "toon een order" (Dutch "een" is also "a") still goes out as a message. Text counts when the reply is the whole label,
     // or a part of at least two words that only one option contains.
     function pickSuggestionByVoice(text) {
         var items = voicePickables();
@@ -1650,7 +1652,8 @@ define([
         var item = null;
         if (words.length <= 3) {
             var numbers = words.map(spokenNumber).filter(function (n) { return n !== null; });
-            if (numbers.length === 1 && numbers[0] >= 1 && numbers[0] <= items.length) item = items[numbers[0] - 1];
+            var last = spokenNumber(words[words.length - 1]);
+            if (numbers.length === 1 && last !== null && last >= 1 && last <= items.length) item = items[last - 1];
         }
         if (!item) {
             var exact = items.filter(function (it) { return commandReply(it.label) === reply; });

@@ -38,6 +38,7 @@ interface RepositoryInterface
     public const XML_PATH_VOICE_SEND_DELAY = 'mago/voice/send_delay';
     public const XML_PATH_VOICE_IDLE_TIMEOUT = 'mago/voice/idle_timeout';
     public const XML_PATH_VOICE_WORDS = 'mago/voice/words_';
+    public const XML_PATH_VOICE_NUMBER_WORDS = 'mago/voice/number_words';
     public const VOICE_COMMANDS = ['yes', 'no', 'stop'];
     /**
      * English command words that always work, whatever a shop adds, so a mistyped or emptied
@@ -217,6 +218,14 @@ interface RepositoryInterface
      * @return array<string, string[]>
      */
     public function getVoiceWords(): array;
+
+    /**
+     * The shop's own words for the numbers that pick a suggestion, lower-cased: number => words.
+     * Configured as "one/first, two/second, …"; English and digits are built into the panel.
+     *
+     * @return array<int, string[]>
+     */
+    public function getVoiceNumberWords(): array;
 
     /**
      * Whether the dashboard may show the add-on feed

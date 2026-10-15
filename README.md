@@ -199,7 +199,9 @@ that card: a yes word allows, a no word rejects, and nothing is typed into the i
 card is answered. A card that needs its acknowledgement box ticked asks for that first. The same
 short replies also work typed. Suggestions in the latest answer (or the starter questions in an
 empty chat) show a small "Option 1", "Option 2"… while the microphone listens; say the number or
-the option's text to send it.
+the option's text to send it. Digits and English number words always work; *Number Words*
+(`mago/voice/number_words`) adds a shop's own, in order, with alternatives after a slash
+(`een/één/eerste, twee/tweede, drie/derde, …`).
 
 Saying a stop word on its own ("stop", "stop listening") turns the microphone off in either mode.
 There is no spoken "start": press the microphone.

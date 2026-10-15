@@ -213,6 +213,24 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return $value === '' || $value === null ? 8 : max(0, (int)$value);
     }
 
+    public function getVoiceNumberWords(): array
+    {
+        $numbers = [];
+        $position = 0;
+        foreach (explode(',', (string)$this->getStoreValue(self::XML_PATH_VOICE_NUMBER_WORDS)) as $group) {
+            $position++;
+            $words = array_values(array_filter(array_map(
+                static fn (string $word): string => mb_strtolower(trim($word)),
+                explode('/', $group)
+            ), static fn (string $word): bool => $word !== ''));
+            if ($words !== []) {
+                $numbers[$position] = $words;
+            }
+        }
+
+        return $numbers;
+    }
+
     public function getVoiceWords(): array
     {
         $words = [];

@@ -145,6 +145,11 @@ class FakeConfigRepository implements RepositoryInterface
         return $this;
     }
 
+    public function getVoiceNumberWords(): array
+    {
+        return [];
+    }
+
     public function getVoiceWords(): array
     {
         return $this->voiceWords + self::VOICE_ENGLISH_WORDS;

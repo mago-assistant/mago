@@ -114,6 +114,7 @@ class ChatPanel extends Template
             'voiceSendDelay' => $this->configRepository->getVoiceSendDelay(),
             'voiceIdleTimeout' => $this->configRepository->getVoiceIdleTimeout(),
             'voiceWords' => $this->configRepository->getVoiceWords(),
+            'voiceNumberWords' => $this->getVoiceNumberWordMap(),
             'locale' => $this->getSpeechLocale(),
             'formFieldCap' => self::FORM_FIELD_CAP,
             'formValueLengthCap' => self::FORM_VALUE_LENGTH_CAP,
@@ -123,6 +124,23 @@ class ChatPanel extends Template
             'formDenyRoutes' => $this->formPolicy->getDeniedRoutePatterns(),
             'i18n' => $this->getPanelTranslations(),
         ]);
+    }
+
+    /**
+     * The shop's number words as word => number, the shape the panel looks them up in
+     *
+     * @return array<string, int>
+     */
+    private function getVoiceNumberWordMap(): array
+    {
+        $map = [];
+        foreach ($this->configRepository->getVoiceNumberWords() as $number => $words) {
+            foreach ($words as $word) {
+                $map[$word] = $number;
+            }
+        }
+
+        return $map;
     }
 
     /**

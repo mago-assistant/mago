@@ -47,5 +47,10 @@
             <comment>Said on their own, these turn the microphone off in any mode. There is deliberately no spoken "start". Comma-separated words in your own language (the one set under Language above), added to the built-in English words, which always keep working. The first word you enter is the one the panel suggests. Use ordinary words the speech recognition knows: invented words or phrases are written down differently each time and will not be recognised.</comment>
             <depends><field id="enabled">1</field></depends>
         </field>
+        <field id="number_words" translate="label comment" type="text" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Number Words</label>
+            <comment>While the hands-free microphone listens, suggestions show "Option 1", "Option 2"…, and saying the number picks one. Digits and English number words (one, two, first, second…) always work. Add your own language here: the numbers in order, separated by commas, with alternatives for the same number separated by a slash. For example: een/één/eerste, twee/tweede, drie/derde.</comment>
+            <depends><field id="enabled">1</field></depends>
+        </field>
     </group>
 </include>
