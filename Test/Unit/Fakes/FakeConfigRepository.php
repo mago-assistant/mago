@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Test\Unit\Fakes;
 
 use Magento\Store\Api\Data\StoreInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface;
+use MagoAssistant\Mago\Model\Voice\CommandWords;
 
 class FakeConfigRepository implements RepositoryInterface
 {
@@ -152,7 +153,12 @@ class FakeConfigRepository implements RepositoryInterface
 
     public function getVoiceWords(): array
     {
-        return $this->voiceWords + self::VOICE_ENGLISH_WORDS;
+        $words = [];
+        foreach (CommandWords::COMMANDS as $command) {
+            $words[$command] = CommandWords::withEnglish($command, implode(',', $this->voiceWords[$command] ?? []));
+        }
+
+        return $words;
     }
 
     public function getExtensionVersion(): string

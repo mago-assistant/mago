@@ -91,7 +91,7 @@ class ChatPanel extends Template
 
     public function getJsConfig(): string
     {
-        return (string)$this->json->serialize([
+        return (string)$this->json->serialize(array_merge([
             'streamUrl' => $this->getUrl('mago/chat/stream'),
             'historyUrl' => $this->getUrl('mago/chat/history'),
             'loadUrl' => $this->getUrl('mago/chat/load'),
@@ -107,15 +107,6 @@ class ChatPanel extends Template
             'adminPath' => $this->adminPath->get(),
             'isStreamingEnabled' => $this->configRepository->isStreamingEnabled(),
             'voiceInput' => $this->configRepository->isVoiceInputEnabled(),
-            'voiceConsent' => $this->voicePreferenceRepository->hasConsented((int)$this->getAdminUserId()),
-            'voiceUserMode' => $this->voicePreferenceRepository->getMode((int)$this->getAdminUserId()),
-            'voicePreferenceUrl' => $this->getUrl('mago/voice/preference'),
-            'voiceMode' => $this->configRepository->getVoiceMode(),
-            'voiceSendDelay' => $this->configRepository->getVoiceSendDelay(),
-            'voiceIdleTimeout' => $this->configRepository->getVoiceIdleTimeout(),
-            'voiceWords' => $this->configRepository->getVoiceWords(),
-            'voiceNumberWords' => $this->getVoiceNumberWordMap(),
-            'locale' => $this->getSpeechLocale(),
             'formFieldCap' => self::FORM_FIELD_CAP,
             'formValueLengthCap' => self::FORM_VALUE_LENGTH_CAP,
             'formOptionCap' => self::FORM_OPTION_CAP,
@@ -123,7 +114,34 @@ class ChatPanel extends Template
             'formDenyNamespaces' => $this->formPolicy->getDeniedNamespacePatterns(),
             'formDenyRoutes' => $this->formPolicy->getDeniedRoutePatterns(),
             'i18n' => $this->getPanelTranslations(),
-        ]);
+        ], $this->getVoiceJsConfig()));
+    }
+
+    /**
+     * Only read while voice input is on: the panel renders on every admin page, and the admin's
+     * own voice settings cost a query.
+     *
+     * @return array<string, mixed>
+     */
+    private function getVoiceJsConfig(): array
+    {
+        if (!$this->configRepository->isVoiceInputEnabled()) {
+            return [];
+        }
+
+        $adminUserId = (int)$this->getAdminUserId();
+
+        return [
+            'voiceConsent' => $this->voicePreferenceRepository->hasConsented($adminUserId),
+            'voiceUserMode' => $this->voicePreferenceRepository->getMode($adminUserId),
+            'voicePreferenceUrl' => $this->getUrl('mago/voice/preference'),
+            'voiceMode' => $this->configRepository->getVoiceMode(),
+            'voiceSendDelay' => $this->configRepository->getVoiceSendDelay(),
+            'voiceIdleTimeout' => $this->configRepository->getVoiceIdleTimeout(),
+            'voiceWords' => $this->configRepository->getVoiceWords(),
+            'voiceNumberWords' => $this->getVoiceNumberWordMap(),
+            'locale' => $this->getSpeechLocale(),
+        ];
     }
 
     /**

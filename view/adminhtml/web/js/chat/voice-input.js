@@ -27,24 +27,15 @@
 define([], function () {
     'use strict';
 
-    // Fallback for the configured countdown between the end of speech and the send.
-    var DEFAULT_SEND_DELAY_MS = 1400;
     var MAX_RESTARTS = 5;
     // A recogniser that listened at least this long without an error ended normally (Chrome closes
     // a session after a stretch of silence), so its restart does not count as a failure.
     var HEALTHY_SESSION_MS = 3000;
     var IDLE_CHECK_MS = 1000;
     var MODES = ['dictate', 'auto_send', 'confirm'];
-    // Earlier names of the two hands-free modes, still found in stored settings.
-    var LEGACY_MODES = {conversation: 'confirm', hands_free: 'auto_send'};
 
     function recognitionClass() {
         return window.SpeechRecognition || window.webkitSpeechRecognition || null;
-    }
-
-    function normalizeMode(value) {
-        if (LEGACY_MODES.hasOwnProperty(value)) return LEGACY_MODES[value];
-        return MODES.indexOf(value) !== -1 ? value : null;
     }
 
     /**
@@ -76,7 +67,7 @@ define([], function () {
      * @param {Function} [options.requireConsent] called with a continuation on the first use;
      *        the session only starts when the continuation is invoked
      * @param {Function} [options.onError] receives a sentence to show the administrator
-     * @returns {{isSupported: boolean, stop: Function, sending: Function, turnEnded: Function,
+     * @returns {{isSupported: boolean, stop: Function, turnStarted: Function, turnEnded: Function,
      *     setMode: Function, getMode: Function, takeSpoken: Function}}
      */
     return function createVoiceInput(options) {
@@ -89,16 +80,14 @@ define([], function () {
         var barTitle = bar ? bar.querySelector('.mago-voice-confirm-title') : null;
         var barProgress = bar ? bar.querySelector('.mago-voice-confirm-progress span') : null;
         var t = options.t;
-        var mode = normalizeMode(options.mode) || 'dictate';
+        var mode = MODES.indexOf(options.mode) !== -1 ? options.mode : 'dictate';
         var hint = options.hintWords || {};
-        if (!hint.yes) hint.yes = 'yes';
-        if (!hint.no) hint.no = 'no';
         var Recognition = recognitionClass();
 
         if (!Recognition || !input || !button) {
             if (!Recognition && input && button) explainUnsupported();
             var noop = function () {};
-            return {isSupported: false, stop: noop, sending: noop, turnEnded: noop, setMode: noop, getMode: function () { return null; }, takeSpoken: function () { return false; }};
+            return {isSupported: false, stop: noop, turnStarted: noop, turnEnded: noop, setMode: noop, getMode: function () { return null; }, takeSpoken: function () { return false; }};
         }
 
         // Firefox and some other browsers have no speech recognition. A greyed-out microphone that
@@ -121,8 +110,7 @@ define([], function () {
 
         var recognition = null;
         var listening = false;
-        var sendDelay = parseInt(options.sendDelay, 10);
-        if (!(sendDelay >= 0)) sendDelay = DEFAULT_SEND_DELAY_MS;
+        var sendDelay = Math.max(0, parseInt(options.sendDelay, 10) || 0);
         // Hands-free: set when the administrator starts a session and cleared by anything they do
         // to end it. waitingForTurn bridges a send and the reply.
         var handsFree = false;
@@ -151,6 +139,7 @@ define([], function () {
         // Whether the text in the box came from speech, for the panel to record with the message.
         // Emptying the box, by voice or by hand, resets it.
         var spoken = false;
+        var spokenAtStart = false;
         var idleTitle = t('Speak your message');
         var activeTitle = t('Stop listening');
 
@@ -158,7 +147,6 @@ define([], function () {
 
         function setText(value) {
             input.value = value;
-            if (value.trim()) spoken = true;
             input.dispatchEvent(new Event('input', {bubbles: true}));
         }
 
@@ -359,6 +347,7 @@ define([], function () {
             } else {
                 pendingFrom = null;
                 showBar(false);
+                spoken = true;
                 setText(joinWithPrefix(collect(results, baseIndex, results.length).text));
                 showPrompt();
             }
@@ -399,6 +388,7 @@ define([], function () {
             resultCount = 0;
             baseIndex = 0;
             spokeSinceStart = false;
+            spokenAtStart = spoken;
             lastError = '';
             if (isPrompting()) pendingFrom = 0;
             // A restart after a silence timeout is not activity, only the start of a session or turn.
@@ -416,7 +406,11 @@ define([], function () {
                 var last = event.results[resultCount - 1];
                 if (last && last.isFinal && resultCount > baseIndex && options.isStop && options.isStop(last[0].transcript)) {
                     if (!isPrompting() && !cardPending()) {
-                        setText(joinWithPrefix(collect(event.results, baseIndex, resultCount - 1).text));
+                        var kept = collect(event.results, baseIndex, resultCount - 1).text;
+                        // The interim "stop" already counted as speech; a box that only holds
+                        // typed text plus that word is typed text again.
+                        spoken = spokenAtStart || !!kept;
+                        setText(joinWithPrefix(kept));
                     }
                     stop();
                     return;
@@ -429,15 +423,15 @@ define([], function () {
                     handleCardAnswer(event.results);
                     return;
                 }
-                var spoken = collect(event.results, baseIndex, resultCount);
-                if (spoken.text) spokeSinceStart = true;
+                var heard = collect(event.results, baseIndex, resultCount);
+                if (heard.text) spokeSinceStart = spoken = true;
                 // A picked suggestion is sent by the panel, whose send parks the microphone.
-                if (spoken.isFinal && handsFree && options.pickSuggestion && options.pickSuggestion(spoken.text)) {
+                if (heard.isFinal && handsFree && options.pickSuggestion && options.pickSuggestion(heard.text)) {
                     baseIndex = resultCount;
                     return;
                 }
-                setText(joinWithPrefix(spoken.text));
-                if (!spoken.isFinal) {
+                setText(joinWithPrefix(heard.text));
+                if (!heard.isFinal) {
                     showStatus(recordingText(), 'is-recording');
                 } else if (handsFree) {
                     showPrompt();
@@ -484,13 +478,15 @@ define([], function () {
                 input.focus();
             };
 
+            // start() throws while a previous instance is still shutting down. Hands-free, that is
+            // a failed restart like any other; otherwise the session ends cleanly.
             try {
                 recognition.start();
                 setListening(true);
             } catch (e) {
                 recognition = null;
-                setListening(false);
-                hideStatus();
+                if (handsFree && listening) restart();
+                else stop(true);
             }
         }
 
@@ -519,10 +515,14 @@ define([], function () {
             }
         }
 
-        // Only listening time counts: a parked microphone is off, and the reply that ends the wait
-        // starts a fresh stretch through start().
+        // Only open-ended listening counts: a parked microphone is off, the bar is waiting for a
+        // decision rather than for speech, and the reply that ends a wait starts a fresh stretch.
         function checkIdle() {
             if (!handsFree || !listening || waitingForTurn) return;
+            if (isPrompting()) {
+                lastActivity = Date.now();
+                return;
+            }
             if (Date.now() - lastActivity < idleSeconds * 1000) return;
             stop(true);
             showStatus(t('Microphone turned off after %1 seconds without speech.', idleSeconds));
@@ -557,15 +557,16 @@ define([], function () {
             }
         }
 
-        // The panel calls this on every send. Hands-free, any send (the bar, Enter or the Send
-        // button) pauses the microphone until the reply; otherwise it ends the session.
-        function sending() {
+        // The panel calls this whenever a turn starts, however it started (a send, a clicked or
+        // spoken Allow or Reject). Hands-free, the microphone pauses until turnEnded(); a dictate
+        // session ends.
+        function turnStarted() {
             if (waitingForTurn) return;
             if (handsFree && listening) {
                 park();
                 return;
             }
-            stop(true);
+            if (listening) stop(true);
         }
 
         function turnEnded() {
@@ -577,8 +578,7 @@ define([], function () {
 
         // Switching mode ends a running session: its timers, bar and parked state belong to the old one.
         function setMode(next) {
-            next = normalizeMode(next);
-            if (!next || next === mode) return;
+            if (MODES.indexOf(next) === -1 || next === mode) return;
             stop(true);
             mode = next;
         }
@@ -626,7 +626,7 @@ define([], function () {
         return {
             isSupported: true,
             stop: stop,
-            sending: sending,
+            turnStarted: turnStarted,
             turnEnded: turnEnded,
             setMode: setMode,
             getMode: function () { return mode; },

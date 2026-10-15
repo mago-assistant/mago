@@ -261,12 +261,12 @@ $starterIcons = [
         </button>
     </div>
     <div id="mago-announcer" class="mago-sr-only" role="status"></div>
-    <?php /* Privacy mode (#97 decision 3): non-blocking hint for FP-prone patterns the silent scrub
-           does not cover; certain classes (email, IBAN, BSN, VAT, phone) are tokenised server-side. */ ?>
     <div id="mago-voice-status" class="mago-voice-status" hidden aria-live="polite">
         <span class="mago-voice-dot"></span>
         <span class="mago-voice-text"></span>
     </div>
+    <?php /* Privacy mode (#97 decision 3): non-blocking hint for FP-prone patterns the silent scrub
+           does not cover; certain classes (email, IBAN, BSN, VAT, phone) are tokenised server-side. */ ?>
     <div id="mago-privacy-hint" class="mago-privacy-hint" hidden>
         <?= $escaper->escapeHtml(__('This looks like personal data. It is filtered best-effort before reaching the AI provider; avoid pasting customer details.')) ?>
     </div>

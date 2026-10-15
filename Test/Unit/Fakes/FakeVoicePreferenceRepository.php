@@ -16,6 +16,13 @@ class FakeVoicePreferenceRepository implements VoicePreferenceRepositoryInterfac
     /** @var array<int, string|null> */
     private array $modes = [];
 
+    private int $writes = 0;
+
+    public function writes(): int
+    {
+        return $this->writes;
+    }
+
     public function hasConsented(int $adminUserId): bool
     {
         return isset($this->consented[$adminUserId]);
@@ -23,6 +30,7 @@ class FakeVoicePreferenceRepository implements VoicePreferenceRepositoryInterfac
 
     public function recordConsent(int $adminUserId): void
     {
+        $this->writes++;
         if ($adminUserId > 0) {
             $this->consented[$adminUserId] = true;
         }
@@ -35,6 +43,7 @@ class FakeVoicePreferenceRepository implements VoicePreferenceRepositoryInterfac
 
     public function setMode(int $adminUserId, ?string $mode): void
     {
+        $this->writes++;
         if ($adminUserId > 0) {
             $this->modes[$adminUserId] = $mode;
         }

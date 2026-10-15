@@ -36,6 +36,10 @@
         <index referenceId="MAGO_MESSAGE_ROLE" indexType="btree">
             <column name="role"/>
         </index>
+        <index referenceId="MAGO_MESSAGE_ROLE_CREATED_AT" indexType="btree">
+            <column name="role"/>
+            <column name="created_at"/>
+        </index>
     </table>
 
     <table name="mago_flag" resource="default" engine="innodb" comment="Admin Assistant Answer Feedback">

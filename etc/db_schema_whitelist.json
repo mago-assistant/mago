@@ -33,7 +33,8 @@
         },
         "index": {
             "MAGO_MESSAGE_CONVERSATION_ID": true,
-            "MAGO_MESSAGE_ROLE": true
+            "MAGO_MESSAGE_ROLE": true,
+            "MAGO_MESSAGE_ROLE_CREATED_AT": true
         }
     },
     "mago_skill_permission": {

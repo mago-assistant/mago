@@ -68,12 +68,21 @@ final class PreferenceTest extends TestCase
     }
 
     #[Test]
+    public function itClearsTheModeBackToTheConfiguredDefault(): void
+    {
+        $this->controller(7, ['mode' => 'dictate'])->execute();
+        $this->controller(7, ['mode' => null])->execute();
+
+        self::assertNull($this->repository->getMode(7));
+    }
+
+    #[Test]
     public function itStoresNothingWithoutALoggedInAdmin(): void
     {
         $this->controller(null, ['consent' => true, 'mode' => 'confirm'])->execute();
 
         self::assertSame([['error' => 'Not authorized']], $this->responses);
-        self::assertFalse($this->repository->hasConsented(0));
+        self::assertSame(0, $this->repository->writes());
     }
 
     /**

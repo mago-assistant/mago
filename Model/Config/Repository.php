@@ -20,6 +20,7 @@ use Magento\Framework\Stdlib\DateTime\DateTime;
 use Magento\Store\Model\StoreManagerInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepositoryInterface;
 use MagoAssistant\Mago\Model\Config\Source\VoiceMode;
+use MagoAssistant\Mago\Model\Voice\CommandWords;
 
 class Repository extends System\BaseRepository implements ConfigRepositoryInterface
 {
@@ -188,10 +189,8 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
     public function getVoiceMode(): string
     {
         $mode = trim((string)$this->getStoreValue(self::XML_PATH_VOICE_MODE));
-        $mode = VoiceMode::LEGACY[$mode] ?? $mode;
-        $known = [VoiceMode::DICTATE, VoiceMode::AUTO_SEND, VoiceMode::CONFIRM];
 
-        return in_array($mode, $known, true) ? $mode : VoiceMode::CONFIRM;
+        return in_array($mode, VoiceMode::ALL, true) ? $mode : VoiceMode::CONFIRM;
     }
 
     public function getVoiceLanguage(): string
@@ -215,32 +214,17 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
 
     public function getVoiceNumberWords(): array
     {
-        $numbers = [];
-        $position = 0;
-        foreach (explode(',', (string)$this->getStoreValue(self::XML_PATH_VOICE_NUMBER_WORDS)) as $group) {
-            $position++;
-            $words = array_values(array_filter(array_map(
-                static fn (string $word): string => mb_strtolower(trim($word)),
-                explode('/', $group)
-            ), static fn (string $word): bool => $word !== ''));
-            if ($words !== []) {
-                $numbers[$position] = $words;
-            }
-        }
-
-        return $numbers;
+        return CommandWords::numbers((string)$this->getStoreValue(self::XML_PATH_VOICE_NUMBER_WORDS));
     }
 
     public function getVoiceWords(): array
     {
         $words = [];
-        foreach (self::VOICE_COMMANDS as $command) {
-            $list = array_map(
-                static fn (string $word): string => mb_strtolower(trim($word)),
-                explode(',', (string)$this->getStoreValue(self::XML_PATH_VOICE_WORDS . $command))
+        foreach (CommandWords::COMMANDS as $command) {
+            $words[$command] = CommandWords::withEnglish(
+                $command,
+                (string)$this->getStoreValue(self::XML_PATH_VOICE_WORDS . $command)
             );
-            $list = array_merge($list, self::VOICE_ENGLISH_WORDS[$command]);
-            $words[$command] = array_values(array_unique(array_filter($list, static fn (string $word): bool => $word !== '')));
         }
 
         return $words;

@@ -39,16 +39,6 @@ interface RepositoryInterface
     public const XML_PATH_VOICE_IDLE_TIMEOUT = 'mago/voice/idle_timeout';
     public const XML_PATH_VOICE_WORDS = 'mago/voice/words_';
     public const XML_PATH_VOICE_NUMBER_WORDS = 'mago/voice/number_words';
-    public const VOICE_COMMANDS = ['yes', 'no', 'stop'];
-    /**
-     * English command words that always work, whatever a shop adds, so a mistyped or emptied
-     * setting can never leave voice input without a way to send, answer a card or stop.
-     */
-    public const VOICE_ENGLISH_WORDS = [
-        'yes' => ['yes', 'send', 'send it', 'send now', 'submit', 'allow', 'ok', 'okay', 'confirm', 'go ahead', 'do it', 'approve'],
-        'no' => ['no', 'discard', 'clear', 'delete', 'start over', 'scratch that', 'reject', 'nope', 'cancel', 'deny', 'not now', 'skip'],
-        'stop' => ['stop', 'stop listening', 'microphone off'],
-    ];
     public const XML_PATH_ADDONS_ENABLED = 'mago/addons/enabled';
     public const XML_PATH_DOCS_ENABLED = 'mago/docs/enabled';
     public const XML_PATH_DOCS_SOURCE_REPO = 'mago/docs/source_repo';
@@ -212,7 +202,7 @@ interface RepositoryInterface
     public function getVoiceIdleTimeout(): int;
 
     /**
-     * Spoken command words per command in VOICE_COMMANDS, lower-cased: the shop's own words first
+     * Spoken command words per command in Model\Voice\CommandWords::COMMANDS, lower-cased: the shop's own words first
      * (the first one is what the panel suggests), then the built-in English ones
      *
      * @return array<string, string[]>

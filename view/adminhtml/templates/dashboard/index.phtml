@@ -20,8 +20,9 @@ $userStats = $block->getUserStats();
 $skillStats = $block->getSkillStats();
 $dailyTrend = $block->getDailyTrend();
 $currentPeriod = $block->getPeriod();
-$todayVoice = $block->getVoiceShare('today')['total'];
-$periodVoice = $block->getVoiceShare($currentPeriod)['users'];
+$periodVoiceShare = $block->getVoiceShare($currentPeriod);
+$todayVoice = ($currentPeriod === 'today' ? $periodVoiceShare : $block->getVoiceShare('today'))['total'];
+$periodVoice = $periodVoiceShare['users'];
 $dashboardUrl = $block->getUrl('mago/statistics/index');
 ?>
 

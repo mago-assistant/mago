@@ -18,10 +18,7 @@ class VoiceMode implements OptionSourceInterface
     public const DICTATE = 'dictate';
     public const AUTO_SEND = 'auto_send';
     public const CONFIRM = 'confirm';
-    /**
-     * Earlier names still found in stored settings, mapped to the mode they became
-     */
-    public const LEGACY = ['conversation' => self::CONFIRM, 'hands_free' => self::AUTO_SEND];
+    public const ALL = [self::DICTATE, self::AUTO_SEND, self::CONFIRM];
 
     /**
      * @return array[]

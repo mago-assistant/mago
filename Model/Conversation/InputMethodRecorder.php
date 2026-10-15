@@ -26,9 +26,6 @@ class InputMethodRecorder
     ) {
     }
 
-    /**
-     * Anything the panel sent other than "voice" counts as typed.
-     */
     public static function fromRequest(mixed $value): string
     {
         return $value === self::VOICE ? self::VOICE : self::TYPED;

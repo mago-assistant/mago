@@ -5,9 +5,10 @@ define([
     'MagoAssistant_Mago/js/chat/session-log',
     'MagoAssistant_Mago/js/chat/confirm-text',
     'MagoAssistant_Mago/js/chat/voice-input',
+    'MagoAssistant_Mago/js/chat/voice-commands',
     'MagoAssistant_Mago/js/markdown',
     'MagoAssistant_Mago/js/vault-tokens'
-], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, createVoiceInput, markdownRenderer, vaultTokens) {
+], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, createVoiceInput, createVoiceCommands, markdownRenderer, vaultTokens) {
     'use strict';
 
     var isPlainObject = text.isPlainObject;
@@ -367,7 +368,12 @@ define([
         chat.classList.toggle('is-busy', state);
         loading.style.display = state ? '' : 'none';
         sendBtn.disabled = state;
-        if (!state && voiceInput) voiceInput.turnEnded();
+        // Every turn passes through here, whichever way it started (send, Allow, Reject, a spoken
+        // or clicked answer), so it is where a hands-free microphone pauses and resumes.
+        if (voiceInput) {
+            if (state) voiceInput.turnStarted();
+            else voiceInput.turnEnded();
+        }
     }
 
     // The header icon is the only way in or out of the panel, so its tooltip,
@@ -700,10 +706,11 @@ define([
     };
     sendBtn.onclick = send;
 
-    // Voice input (#141): browser speech recognition fills the textarea; the module hides itself
-    // when the browser has no recogniser, and the setting removes the button altogether.
-    // The admin's own voice settings (#141), stored server-side so they follow them into every
-    // browser: the consent card's acknowledgement and the mode picked in the menu.
+    // Voice input (#141): browser speech recognition fills the textarea; a browser without a
+    // recogniser gets a greyed-out button, and the setting removes the button altogether.
+
+    // The admin's own voice settings, stored server-side so they follow them into every browser:
+    // the consent card's acknowledgement and the mode picked in the menu.
     function saveVoicePreference(data) {
         data.form_key = formKey;
         return fetch(config.voicePreferenceUrl, {
@@ -725,6 +732,11 @@ define([
         if (hasVoiceConsent()) { proceed(); return; }
         if (msgs.querySelector('.mago-voice-consent')) return;
         var holder = addMsg('assistant', '');
+        // Either answer takes the card away again, and an otherwise empty chat gets its welcome back.
+        var removeCard = function () {
+            holder.remove();
+            if (!msgs.querySelector('.mago-message')) chat.classList.add('is-empty');
+        };
         var card = UI.skillAsk({
             title: t('Voice input'),
             text: {html: renderMd(
@@ -737,29 +749,21 @@ define([
             onAllow: function () {
                 saveVoicePreference({consent: true}).then(function () {
                     config.voiceConsent = true;
-                    holder.remove();
+                    removeCard();
                     proceed();
                 }).catch(function () {
-                    holder.remove();
+                    removeCard();
                     addMsg('assistant', esc(t('Could not save your choice. Please try again.')));
                 });
             },
-            onLater: function () {
-                holder.remove();
-                if (!msgs.querySelector('.mago-message')) chat.classList.add('is-empty');
-            }
+            onLater: removeCard
         });
         card.classList.add('mago-voice-consent');
         holder.querySelector('.mago-message-content').appendChild(card);
         msgs.scrollTop = msgs.scrollHeight;
     }
 
-    // conversation and hands_free are earlier names of the two hands-free modes.
-    var VOICE_MODES = {dictate: 'dictate', auto_send: 'auto_send', confirm: 'confirm', conversation: 'confirm', hands_free: 'auto_send'};
-    function initialVoiceMode() {
-        var stored = config.voiceUserMode;
-        return VOICE_MODES.hasOwnProperty(stored) ? VOICE_MODES[stored] : config.voiceMode;
-    }
+    var voiceCommands = createVoiceCommands({words: config.voiceWords, numberWords: config.voiceNumberWords});
 
     var voiceInput = config.voiceInput ? createVoiceInput({
         input: input,
@@ -768,15 +772,15 @@ define([
         notice: qs('#mago-voice-notice'),
         confirmBar: qs('#mago-voice-confirm'),
         lang: config.locale,
-        mode: initialVoiceMode(),
+        mode: config.voiceUserMode || config.voiceMode,
         sendDelay: config.voiceSendDelay,
         idleSeconds: config.voiceIdleTimeout,
-        matchCommand: matchVoiceCommand,
-        isStop: isVoiceStop,
+        matchCommand: voiceCommands.barReply,
+        isStop: voiceCommands.isStop,
         pickSuggestion: pickSuggestionByVoice,
         onListening: numberVoiceSuggestions,
-        hintWords: {yes: wordsFor('yes')[0], no: wordsFor('no')[0]},
-        cardPending: confirmCardPending,
+        hintWords: {yes: voiceCommands.firstWord('yes'), no: voiceCommands.firstWord('no')},
+        cardPending: function () { return !!pendingConfirmActions(); },
         answerCard: answerCardByVoice,
         requireConsent: requireVoiceConsent,
         t: t,
@@ -1047,8 +1051,6 @@ define([
     }
 
 
-    // Anything that is not the model's answer (what the admin typed, the panel's own notices) is
-    // shown exactly as written: a text node, never markdown or HTML.
     // A spoken user message carries a small microphone, so a reread conversation shows how it was asked.
     function markSpoken(msgEl) {
         var content = msgEl.querySelector('.mago-message-content');
@@ -1063,6 +1065,8 @@ define([
         host.insertBefore(mark, host.firstChild);
     }
 
+    // Anything that is not the model's answer (what the admin typed, the panel's own notices) is
+    // shown exactly as written: a text node, never markdown or HTML.
     function addTextMsg(role, text) {
         const msgEl = addMsg(role, '');
         const paragraph = document.createElement('p');
@@ -1591,40 +1595,10 @@ define([
         };
     }
 
-    // Spoken command words (#141): yes, no and stop, configured per shop under Voice Input on top of
-    // built-in English. Yes and no also answer a confirmation card, spoken or typed as a short
-    // reply; the irreversible card keeps its acknowledgement checkbox, so while it is unticked the
-    // button is disabled and the word is sent as an ordinary message. As send / clear they only
-    // apply while the hands-free bar is up, so "yes" can still go out as a real answer.
-    // Reads config directly: the voice input set-up above calls this before this point is reached.
-    function wordsFor(command) {
-        return (config.voiceWords || {})[command] || [];
-    }
-
-    function withinOneEdit(a, b) {
-        if (Math.abs(a.length - b.length) > 1) return false;
-        var i = 0, j = 0, edits = 0;
-        while (i < a.length && j < b.length) {
-            if (a[i] === b[j]) { i++; j++; continue; }
-            if (++edits > 1) return false;
-            if (a.length > b.length) i++;
-            else if (a.length < b.length) j++;
-            else { i++; j++; }
-        }
-        return edits + (a.length - i) + (b.length - j) <= 1;
-    }
-
     // Suggestions by voice (#141): while a hands-free session listens, the pickable options get a
     // small "Option 1" line under their text: the starter questions while the chat is empty,
     // otherwise the suggestion cards, chips and choices of the latest answer. Saying that number
-    // ("2", "two", "option 2") or the option's text sends it as if it was clicked. Digits and
-    // English number words are built in; a shop adds its own language under Voice Input.
-    var NUMBER_WORDS = {
-        one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-        first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10
-    };
-
-    // [{label: what is sent, host: where the "Option n" line goes}]
+    // or the option's text sends it as if it was clicked.
     function voicePickables() {
         if (chat.classList.contains('is-empty')) {
             return Array.prototype.map.call(chat.querySelectorAll('.mago-starter[data-question]'), function (el) {
@@ -1650,120 +1624,33 @@ define([
         });
     }
 
-    function spokenNumber(word) {
-        if (/^\d+$/.test(word)) return parseInt(word, 10);
-        var own = config.voiceNumberWords || {};
-        if (Object.prototype.hasOwnProperty.call(own, word)) return own[word];
-        return NUMBER_WORDS.hasOwnProperty(word) ? NUMBER_WORDS[word] : null;
-    }
-
-    // A number only counts in a short reply that ends on it ("2", "option 2", "de tweede"), so
-    // "show 2 orders" or "toon een order" (Dutch "een" is also "a") still goes out as a message. Text counts when the reply is the whole label,
-    // or a part of at least two words that only one option contains.
     function pickSuggestionByVoice(text) {
         var items = voicePickables();
-        var reply = commandReply(text);
-        if (!items.length || !reply) return false;
-        var words = reply.split(' ');
-        var item = null;
-        if (words.length <= 3) {
-            var numbers = words.map(spokenNumber).filter(function (n) { return n !== null; });
-            var last = spokenNumber(words[words.length - 1]);
-            if (numbers.length === 1 && last !== null && last >= 1 && last <= items.length) item = items[last - 1];
-        }
-        if (!item) {
-            var exact = items.filter(function (it) { return commandReply(it.label) === reply; });
-            var partial = words.length >= 2 ? items.filter(function (it) {
-                return (' ' + commandReply(it.label) + ' ').indexOf(' ' + reply + ' ') !== -1;
-            }) : [];
-            item = exact.length === 1 ? exact[0] : partial.length === 1 ? partial[0] : null;
-        }
-        if (!item || busy) return false;
-        askFromWidget(item.label, true);
+        var index = voiceCommands.pick(text, items.map(function (item) { return item.label; }));
+        if (index < 0 || busy) return false;
+        askFromWidget(items[index].label, true);
         return true;
     }
 
-    // Whole words only: unlike a confirmation reply, a command is matched against anything the
-    // administrator says next, and "bestuur" must not read as "stuur". A lone word may be one
-    // letter off a command of four letters or more, which absorbs most mishearings ("sent" for
-    // "send") without letting "is" pass for "wis".
-    // A whole reply also counts with its spaces and hyphens taken out, as recognisers write some
-    // words joined or split ("oké" / "o ké", "start-over").
-    function saysAny(reply, words) {
-        var padded = ' ' + reply + ' ';
-        var single = reply.indexOf(' ') === -1;
-        var compactReply = reply.replace(/[\s-]+/g, '');
-        return words.some(function (w) {
-            w = w && w.toLowerCase();
-            if (!w) return false;
-            if (padded.indexOf(' ' + w + ' ') !== -1) return true;
-            if (single && w.length >= 4 && w.indexOf(' ') === -1 && withinOneEdit(reply, w)) return true;
-            return compactReply === w.replace(/[\s-]+/g, '');
-        });
-    }
-
-    function commandReply(text) {
-        return normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+-\s+|\s+/g, ' ').trim();
-    }
-
-    function matchVoiceCommand(text) {
-        var reply = commandReply(text);
-        if (!reply || reply.split(' ').length > 4) return null;
-        var matches = ['yes', 'no'].filter(function (command) {
-            return saysAny(reply, wordsFor(command));
-        });
-        return matches.length === 1 ? matches[0] : null;
-    }
-
-    // Stricter than the bar commands: only an utterance that is exactly a stop word counts, so
-    // "stop the import" stays dictation and a lone "shop" does not end the session.
-    function isVoiceStop(text) {
-        var reply = commandReply(text);
-        return !!reply && wordsFor('stop').indexOf(reply) !== -1;
-    }
-
-    function normalizeReply(text) {
-        return String(text || '').toLowerCase().replace(/[.!?,;:…]+$/g, '').replace(/\s+/g, ' ').trim();
+    // Only a card in the latest message still waits for an answer: one the admin moved past by
+    // asking something else must not be answered by a later "ok". An answered card swaps its
+    // buttons for a spinner.
+    function pendingConfirmActions() {
+        var messages = msgs.querySelectorAll('.mago-message');
+        var actions = messages.length ? messages[messages.length - 1].querySelector('.mago-confirm-actions') : null;
+        return actions && actions.querySelector('.mago-btn--confirm, .mago-btn--reject') ? actions : null;
     }
 
     function pendingConfirmButton(kind) {
-        var cards = msgs.querySelectorAll('.mago-confirm-actions');
-        if (!cards.length) return null;
-        var actions = cards[cards.length - 1];
-        var btn = actions.querySelector(kind === 'allow' ? '.mago-btn--confirm' : '.mago-btn--reject');
+        var actions = pendingConfirmActions();
+        var btn = actions ? actions.querySelector(kind === 'allow' ? '.mago-btn--confirm' : '.mago-btn--reject') : null;
         return btn && !btn.disabled ? btn : null;
     }
 
-    // Speech recognisers pad a one-word answer ("Ja, toestaan.", "toe staan"), so a short reply
-    // counts when it contains a word from exactly one of the two lists, compared with spaces and
-    // punctuation removed. Anything longer than five words is a real message for the model.
-    function mentionsAny(reply, words) {
-        var compact = reply.replace(/[^a-z0-9\u00C0-\u024F]/g, '');
-        return words.some(function (w) {
-            var cw = w.replace(/[^a-z0-9\u00C0-\u024F]/g, '');
-            return cw && (compact === cw || new RegExp('(^|\\s)' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)').test(reply) || (compact.length <= cw.length + 4 && compact.indexOf(cw) !== -1));
-        });
-    }
-
-    function confirmReplyKind(text) {
-        var reply = normalizeReply(text).replace(/[.!?,;:…]/g, ' ').replace(/\s+/g, ' ').trim();
-        if (!reply || reply.split(' ').length > 5) return null;
-        var allow = mentionsAny(reply, wordsFor('yes'));
-        var reject = mentionsAny(reply, wordsFor('no'));
-        if (allow === reject) return null;
-        return allow ? 'allow' : 'reject';
-    }
-
-    // An answered card swaps its buttons for a spinner, so only an unanswered one still has them.
-    function confirmCardPending() {
-        var cards = msgs.querySelectorAll('.mago-confirm-actions');
-        return cards.length > 0 && !!cards[cards.length - 1].querySelector('.mago-btn--confirm, .mago-btn--reject');
-    }
-
-    // Conversation mode: while a card waits, speech answers the card and nothing else. "locked"
-    // means the matching button is disabled until the acknowledgement box is ticked by hand.
+    // Hands-free: while a card waits, speech answers the card and nothing else. "locked" means
+    // the matching button is disabled until the acknowledgement box is ticked by hand.
     function answerCardByVoice(text) {
-        var kind = confirmReplyKind(text);
+        var kind = voiceCommands.cardReply(text);
         if (!kind) return null;
         var btn = pendingConfirmButton(kind);
         if (!btn) return 'locked';
@@ -1772,7 +1659,7 @@ define([
     }
 
     function answerPendingConfirm(text) {
-        var kind = confirmReplyKind(text);
+        var kind = voiceCommands.cardReply(text);
         var btn = kind ? pendingConfirmButton(kind) : null;
         if (!btn) return false;
         input.value = '';
@@ -1786,12 +1673,14 @@ define([
     // inputMethod: "voice" or "typed" when the caller knows; otherwise the voice input says
     // whether the text in the box came from speech.
     function send(inputMethod) {
-        var spokenText = voiceInput ? voiceInput.takeSpoken() : false;
-        if (inputMethod !== 'voice' && inputMethod !== 'typed') inputMethod = spokenText ? 'voice' : 'typed';
-        if (voiceInput) voiceInput.sending();
         var text = input.value.trim();
-        if (text && answerPendingConfirm(text)) return;
+        if (text && answerPendingConfirm(text)) {
+            if (voiceInput) voiceInput.takeSpoken();
+            return;
+        }
         if (!text || busy) return;
+        var spoken = voiceInput ? voiceInput.takeSpoken() : false;
+        if (inputMethod !== 'voice' && inputMethod !== 'typed') inputMethod = spoken ? 'voice' : 'typed';
         hideSlashMenu();
         input.value = '';
         sendBtn.classList.add('is-idle');
@@ -2293,6 +2182,7 @@ define([
     }
 
     function handleReject(messageId) {
+        setBusy(true);
         fetch(config.rejectUrl, {
             method: 'POST',
             headers: {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
@@ -2307,8 +2197,7 @@ define([
         }).catch(function(e) {
             showError(addMsg('assistant', ''), e.message);
         }).then(function() {
-            // A rejection never sets the panel busy, so setBusy(false) will not end the turn.
-            if (voiceInput) voiceInput.turnEnded();
+            setBusy(false);
         });
     }
 

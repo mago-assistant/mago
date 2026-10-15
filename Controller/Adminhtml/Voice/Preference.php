@@ -20,15 +20,14 @@ use MagoAssistant\Mago\Service\Error\ErrorReporter;
 
 /**
  * Saves the logged-in admin's own voice settings from the chat panel: {"consent": true} from the
- * consent card, {"mode": "confirm"} from the voice mode menu. Only ever for the session's user.
+ * consent card, {"mode": "confirm"} from the voice mode menu ({"mode": null} goes back to the
+ * configured default). Only ever for the session's user.
  */
 class Preference extends Action implements HttpPostActionInterface
 {
     use FormKeyJsonValidation;
 
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::assistant_read';
-
-    private const MODES = [VoiceMode::DICTATE, VoiceMode::AUTO_SEND, VoiceMode::CONFIRM];
 
     public function __construct(
         Context $context,
@@ -55,7 +54,7 @@ class Preference extends Action implements HttpPostActionInterface
             $body = $this->json->unserialize((string)$this->getRequest()->getContent());
             $body = is_array($body) ? $body : [];
 
-            if (array_key_exists('mode', $body) && !in_array($body['mode'], self::MODES, true)) {
+            if (isset($body['mode']) && !in_array($body['mode'], VoiceMode::ALL, true)) {
                 return $result->setData(['error' => 'Unknown voice mode']);
             }
 
