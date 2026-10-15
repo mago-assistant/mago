@@ -22,6 +22,7 @@
                 <language>auto</language>
                 <mode>confirm</mode>
                 <send_delay>1400</send_delay>
+                <idle_timeout>8</idle_timeout>
             </voice>
             <tools>
                 <max_response_tokens>4000</max_response_tokens>

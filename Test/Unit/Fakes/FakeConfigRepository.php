@@ -19,6 +19,7 @@ class FakeConfigRepository implements RepositoryInterface
     private string $voiceMode = 'confirm';
     private string $voiceLanguage = 'auto';
     private int $voiceSendDelay = 1400;
+    private int $voiceIdleTimeout = 8;
     /** @var array<string, string[]> */
     private array $voiceWords = [];
     private int $maxResponseTokens = 0;
@@ -120,6 +121,18 @@ class FakeConfigRepository implements RepositoryInterface
     public function getVoiceSendDelay(): int
     {
         return $this->voiceSendDelay;
+    }
+
+    public function withVoiceIdleTimeout(int $seconds): self
+    {
+        $this->voiceIdleTimeout = $seconds;
+
+        return $this;
+    }
+
+    public function getVoiceIdleTimeout(): int
+    {
+        return $this->voiceIdleTimeout;
     }
 
     /**

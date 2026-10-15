@@ -26,6 +26,12 @@
             <validate>validate-digits validate-zero-or-greater</validate>
             <depends><field id="enabled">1</field></depends>
         </field>
+        <field id="idle_timeout" translate="label comment" type="text" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+            <label>Turn Off After Silence (seconds)</label>
+            <comment>Send after a pause and Confirm each message keep the microphone open between messages. After this many seconds without any speech it turns itself off, so it does not keep listening to the room when nobody is talking to the assistant. Time spent waiting for an answer does not count. 0 keeps it on until it is turned off by hand (default 8).</comment>
+            <validate>validate-digits validate-zero-or-greater</validate>
+            <depends><field id="enabled">1</field></depends>
+        </field>
         <field id="words_yes" translate="label comment" type="text" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
             <label>Yes Words</label>
             <comment>Send the message while the bar is up, and press Allow on a confirmation card (spoken, or typed as a short reply; a card that cannot be undone still needs its box ticked by hand first). Comma-separated words in your own language (the one set under Language above), added to the built-in English words, which always keep working. The first word you enter is the one the panel suggests. Use ordinary words the speech recognition knows: invented words or phrases are written down differently each time and will not be recognised.</comment>

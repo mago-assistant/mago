@@ -756,6 +756,7 @@ define([
         lang: config.locale,
         mode: initialVoiceMode(),
         sendDelay: config.voiceSendDelay,
+        idleSeconds: config.voiceIdleTimeout,
         matchCommand: matchVoiceCommand,
         isStop: isVoiceStop,
         pickSuggestion: pickSuggestionByVoice,

@@ -206,6 +206,13 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return $value === '' || $value === null ? 1400 : max(0, (int)$value);
     }
 
+    public function getVoiceIdleTimeout(): int
+    {
+        $value = $this->getStoreValue(self::XML_PATH_VOICE_IDLE_TIMEOUT);
+
+        return $value === '' || $value === null ? 8 : max(0, (int)$value);
+    }
+
     public function getVoiceWords(): array
     {
         $words = [];

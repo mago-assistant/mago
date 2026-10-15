@@ -36,6 +36,7 @@ interface RepositoryInterface
     public const XML_PATH_VOICE_MODE = 'mago/voice/mode';
     public const XML_PATH_VOICE_LANGUAGE = 'mago/voice/language';
     public const XML_PATH_VOICE_SEND_DELAY = 'mago/voice/send_delay';
+    public const XML_PATH_VOICE_IDLE_TIMEOUT = 'mago/voice/idle_timeout';
     public const XML_PATH_VOICE_WORDS = 'mago/voice/words_';
     public const VOICE_COMMANDS = ['yes', 'no', 'stop'];
     /**
@@ -201,6 +202,13 @@ interface RepositoryInterface
      * @return int
      */
     public function getVoiceSendDelay(): int;
+
+    /**
+     * Seconds without speech after which a hands-free microphone turns itself off; 0 never does
+     *
+     * @return int
+     */
+    public function getVoiceIdleTimeout(): int;
 
     /**
      * Spoken command words per command in VOICE_COMMANDS, lower-cased: the shop's own words first

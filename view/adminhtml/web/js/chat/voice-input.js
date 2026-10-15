@@ -33,6 +33,7 @@ define([], function () {
     // A recogniser that listened at least this long without an error ended normally (Chrome closes
     // a session after a stretch of silence), so its restart does not count as a failure.
     var HEALTHY_SESSION_MS = 3000;
+    var IDLE_CHECK_MS = 1000;
     var MODES = ['dictate', 'auto_send', 'confirm'];
     // Earlier names of the two hands-free modes, still found in stored settings.
     var LEGACY_MODES = {conversation: 'confirm', hands_free: 'auto_send'};
@@ -58,6 +59,8 @@ define([], function () {
      * @param {string} options.lang BCP-47 tag for the recogniser
      * @param {string} options.mode dictate, auto_send or confirm
      * @param {number} [options.sendDelay] auto_send: milliseconds the countdown runs before a send
+     * @param {number} [options.idleSeconds] hands-free: seconds without speech before the
+     *        microphone turns itself off; 0 or missing never does
      * @param {Function} [options.matchCommand] maps a short utterance to "yes", "no" or null
      * @param {Function} [options.isStop] true when an utterance is only a stop word
      * @param {Object} [options.hintWords] first configured word per command, for the status hints
@@ -121,6 +124,11 @@ define([], function () {
         // an early end can still send what was heard or say why it stopped.
         var spokeSinceStart = false;
         var lastError = '';
+        // Hands-free auto-off: the last moment speech was heard or a listening stretch began.
+        var idleSeconds = Math.max(0, parseInt(options.idleSeconds, 10) || 0);
+        var lastActivity = 0;
+        var idleTimer = null;
+        var turnJustEnded = false;
         var idleTitle = t('Speak your message');
         var activeTitle = t('Stop listening');
 
@@ -364,11 +372,16 @@ define([], function () {
             spokeSinceStart = false;
             lastError = '';
             if (isPrompting()) pendingFrom = 0;
+            // A restart after a silence timeout is not activity, only the start of a session or turn.
+            if (!lastActivity || turnJustEnded) lastActivity = Date.now();
+            turnJustEnded = false;
+            if (handsFree && idleSeconds && !idleTimer) idleTimer = setInterval(checkIdle, IDLE_CHECK_MS);
 
             recognition.onresult = function (event) {
                 if (rec !== recognition) return;
                 resultCount = event.results.length;
                 restarts = 0;
+                lastActivity = Date.now();
                 // A stop word said on its own ends the session from any state, and is dropped
                 // from the message rather than typed into it.
                 var last = event.results[resultCount - 1];
@@ -477,6 +490,16 @@ define([], function () {
             }
         }
 
+        // Only listening time counts: a parked microphone is off, and the reply that ends the wait
+        // starts a fresh stretch through start().
+        function checkIdle() {
+            if (!handsFree || !listening || waitingForTurn) return;
+            if (Date.now() - lastActivity < idleSeconds * 1000) return;
+            stop(true);
+            showStatus(t('Microphone turned off after %1 seconds without speech.', idleSeconds));
+            hideStatus(10000);
+        }
+
         function stopRecogniser() {
             if (recognition) {
                 try { recognition.stop(); } catch (e) { /* already stopped */ }
@@ -487,6 +510,9 @@ define([], function () {
         function stop(silent) {
             var wasActive = listening || waitingForTurn || isPrompting();
             clearTimers();
+            clearInterval(idleTimer);
+            idleTimer = null;
+            lastActivity = 0;
             handsFree = false;
             waitingForTurn = false;
             pendingFrom = null;
@@ -516,6 +542,7 @@ define([], function () {
         function turnEnded() {
             if (!handsFree || !waitingForTurn) return;
             waitingForTurn = false;
+            turnJustEnded = true;
             start();
         }
 

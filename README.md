@@ -190,7 +190,9 @@ and talking on adds to it (holding the countdown). The recogniser starts afresh 
 appears, so a short "wis" or "yes" is heard on its own rather than as the end of the sentence
 before it. While the assistant answers, the microphone is paused ("Assistant is answering"), then
 it listens again ("Your turn — speak now"). Press the microphone or start typing to end the
-session.
+session. After *Turn Off After Silence* (`mago/voice/idle_timeout`, default 8 seconds)
+without any speech the microphone turns itself off, so it does not keep listening to the room;
+time spent waiting for an answer does not count, and 0 keeps it on.
 
 In both bar modes, while an Allow / Reject card is waiting the microphone only listens for the answer to
 that card: a yes word allows, a no word rejects, and nothing is typed into the input until the
