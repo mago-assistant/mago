@@ -119,7 +119,7 @@ $dashboardUrl = $block->getUrl('mago/statistics/index');
     </div>
 
     <div class="mago-section">
-        <h3><?= $escaper->escapeHtml(__('Daily Trend')) ?></h3>
+        <h3><?= $escaper->escapeHtml($currentPeriod === 'today' ? __('Hourly Trend') : __('Daily Trend')) ?></h3>
         <?php if (!empty($dailyTrend)): ?>
             <?php
             $trendCount = count($dailyTrend);
@@ -183,9 +183,12 @@ $dashboardUrl = $block->getUrl('mago/statistics/index');
             </div>
             <div class="mago-chart-labels">
                 <?php foreach ($dailyTrend as $i => $day):
-                    $showLabel = ($trendCount <= 7) || ($i === 0 || $i === $trendCount - 1 || $i % 7 === 0);
+                    $isHourly = $currentPeriod === 'today';
+                    $step = $isHourly ? 3 : 7;
+                    $showLabel = ($trendCount <= 7) || ($i === 0 || $i === $trendCount - 1 || $i % $step === 0);
+                    $labelText = $isHourly ? substr($day['date'] ?? '', 11) : substr($day['date'] ?? '', 5);
                 ?>
-                    <span><?= $showLabel ? $escaper->escapeHtml(substr($day['date'] ?? '', 5)) : '' ?></span>
+                    <span><?= $showLabel ? $escaper->escapeHtml($labelText) : '' ?></span>
                 <?php endforeach; ?>
             </div>
         <?php else: ?>

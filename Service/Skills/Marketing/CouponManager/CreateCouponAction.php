@@ -15,7 +15,8 @@ class CreateCouponAction implements ActionInterface
 {
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly RuleState $ruleState
     ) {
     }
 
@@ -100,10 +101,14 @@ class CreateCouponAction implements ActionInterface
             return $rule;
         }
 
-        $couponType = (int)($rule['coupon_type'] ?? 1);
-        if ($couponType === 1) {
-            return ['error' => 'Rule "' . ($rule['name'] ?? $ruleId) . '" does not use coupon codes (coupon_type is "no_coupon"). '
-                . 'Change the rule to use specific coupons first.'];
+        $couponType = $this->ruleState->couponType($rule);
+        if ($couponType === RuleState::NO_COUPON) {
+            return ['error' => 'Rule "' . ($rule['name'] ?? $ruleId) . '" does not use coupon codes (coupon_type is '
+                . '"no_coupon"). Change the rule to use specific coupons first.'];
+        }
+        if ($couponType === RuleState::SPECIFIC_COUPON) {
+            return ['error' => 'Rule "' . ($rule['name'] ?? $ruleId) . '" has one fixed coupon code. Codes can only '
+                . 'be generated when "Use Auto Generation" is enabled on the rule.'];
         }
 
         $quantity = (int)($params['quantity'] ?? 1);

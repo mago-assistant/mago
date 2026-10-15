@@ -58,8 +58,10 @@ class Dashboard extends Template
     public function getDailyTrend(): array
     {
         $period = $this->getPeriod();
+        if ($period === 'today') {
+            return $this->usageStats->getHourlyTrend();
+        }
         $days = match ($period) {
-            'today' => 1,
             '7days' => 7,
             '30days' => 30,
             'all' => 90,

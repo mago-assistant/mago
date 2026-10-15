@@ -13,9 +13,12 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class GetRuleAction implements ActionInterface
 {
+    private const SAMPLE_SIZE = 5;
+
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly RuleState $ruleState
     ) {
     }
 
@@ -26,7 +29,8 @@ class GetRuleAction implements ActionInterface
 
     public function getDescription(): string
     {
-        return 'Get details of a specific cart price rule';
+        return 'Get details of a specific cart price rule, including its coupon code(s) and whether it '
+            . 'applies today';
     }
 
     public function getParameterSchema(): array
@@ -59,11 +63,15 @@ class GetRuleAction implements ActionInterface
             'name' => [PiiClass::PUBLIC],
             'description' => [PiiClass::PUBLIC],
             'is_active' => [PiiClass::PUBLIC],
+            'effective_status' => [PiiClass::PUBLIC],
             'discount_amount' => [PiiClass::PUBLIC],
             'discount_type' => [PiiClass::PUBLIC],
             'simple_action' => [PiiClass::PUBLIC],
             'coupon_type' => [PiiClass::PUBLIC],
             'coupon_code' => [PiiClass::PUBLIC],
+            'coupon_count' => [PiiClass::PUBLIC],
+            'coupon_codes' => [PiiClass::PUBLIC],
+            'coupon_lookup_error' => [PiiClass::PUBLIC],
             'uses_per_coupon' => [PiiClass::PUBLIC],
             'uses_per_customer' => [PiiClass::PUBLIC],
             'times_used' => [PiiClass::PUBLIC],
@@ -89,6 +97,10 @@ class GetRuleAction implements ActionInterface
         return '';
     }
 
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
     public function execute(array $params, int $adminUserId): array
     {
         $ruleId = (int)($params['rule_id'] ?? 0);
@@ -112,14 +124,8 @@ class GetRuleAction implements ActionInterface
             'cart_fixed' => 'fixed_cart',
         ];
 
-        $couponTypeMap = [
-            1 => 'no_coupon',
-            2 => 'specific_coupon',
-            3 => 'auto_generated',
-        ];
-
         $simpleAction = $result['simple_action'] ?? '';
-        $couponType = (int)($result['coupon_type'] ?? 1);
+        $couponType = $this->ruleState->couponType($result);
 
         return [
             'rule' => [
@@ -127,11 +133,12 @@ class GetRuleAction implements ActionInterface
                 'name' => $result['name'] ?? '',
                 'description' => $result['description'] ?? '',
                 'is_active' => (bool)($result['is_active'] ?? false),
+                'effective_status' => $this->ruleState->effectiveStatus($result),
                 'discount_amount' => round((float)($result['discount_amount'] ?? 0), 2),
                 'discount_type' => $discountTypeMap[$simpleAction] ?? $simpleAction,
                 'simple_action' => $simpleAction,
-                'coupon_type' => $couponTypeMap[$couponType] ?? 'unknown',
-                'coupon_code' => $result['coupon_code'] ?? null,
+                'coupon_type' => $couponType,
+                ...$this->coupons($ruleId, $couponType, $adminUserId),
                 'uses_per_coupon' => (int)($result['uses_per_coupon'] ?? 0),
                 'uses_per_customer' => (int)($result['uses_per_customer'] ?? 0),
                 'times_used' => (int)($result['times_used'] ?? 0),
@@ -149,6 +156,54 @@ class GetRuleAction implements ActionInterface
                     ['id' => (int)($result['rule_id'] ?? 0)]
                 ),
             ],
+        ];
+    }
+
+    /**
+     * The rule payload has no coupon code: codes live in salesrule_coupon and are read through
+     * coupons/search. A specific-coupon rule has one primary code; a generated one has many, so the
+     * count and a few of them are returned instead.
+     *
+     * @return array<string, mixed>
+     */
+    private function coupons(int $ruleId, string $couponType, int $adminUserId): array
+    {
+        if ($couponType === RuleState::NO_COUPON) {
+            return ['coupon_code' => null];
+        }
+
+        $result = $this->apiClient->get('coupons/search', $this->apiClient->buildSearchCriteria(
+            [['field' => 'rule_id', 'value' => (string)$ruleId, 'condition_type' => 'eq']],
+            self::SAMPLE_SIZE,
+            1,
+            [['field' => 'is_primary', 'direction' => 'DESC']]
+        ), $adminUserId);
+
+        if (isset($result['error'])) {
+            return ['coupon_code' => null, 'coupon_lookup_error' => (string)$result['error']];
+        }
+
+        $primary = null;
+        $codes = [];
+        foreach ($result['items'] ?? [] as $coupon) {
+            $code = (string)($coupon['code'] ?? '');
+            if ($code === '') {
+                continue;
+            }
+            $codes[] = $code;
+            if ($primary === null && !empty($coupon['is_primary'])) {
+                $primary = $code;
+            }
+        }
+
+        if ($couponType === RuleState::SPECIFIC_COUPON) {
+            return ['coupon_code' => $primary ?? ($codes[0] ?? null)];
+        }
+
+        return [
+            'coupon_code' => $primary,
+            'coupon_count' => (int)($result['total_count'] ?? count($codes)),
+            'coupon_codes' => $codes,
         ];
     }
 }

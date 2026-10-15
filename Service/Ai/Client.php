@@ -26,6 +26,11 @@ use MagoAssistant\Mago\Service\Privacy\EgressTripwire;
 class Client
 {
     /**
+     * The name MageOS_AiBase attributes this module's calls to on its usage dashboard and report.
+     */
+    public const CONSUMER = 'mago_assistant';
+
+    /**
      * @param AiClientFactoryInterface $clientFactory
      * @param ConfigRepository $configRepository
      * @param RequestFactory $requestFactory
@@ -51,8 +56,8 @@ class Client
 
         try {
             return $serviceId === ''
-                ? $this->clientFactory->create()
-                : $this->clientFactory->createById($serviceId);
+                ? $this->clientFactory->create(consumer: self::CONSUMER)
+                : $this->clientFactory->createById($serviceId, self::CONSUMER);
         } catch (LocalizedException $e) {
             // Only the factory's own setup messages; a subclass (or a replacement factory that
             // probes the endpoint) may carry request details and is reported generically.

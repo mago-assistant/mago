@@ -1005,7 +1005,7 @@
     padding: @mago-size__13 @mago-size__16;
     border-bottom: @mago-size__1 solid var(--mago-track);
     font-size: @mago-font-size__13-5;
-    align-items: center;
+    align-items: baseline;
 
     &:last-child {
         border-bottom: none;
@@ -1027,11 +1027,19 @@
     }
 }
 
+// Text wraps: an ellipsis here hides the rest of the answer with no way to read it (#275).
+// Numbers and right-aligned columns stay on one line.
 .mago-table-cell {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+
+    &.is-right,
+    &.mago-num {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 
     &.is-right {
         text-align: right;
