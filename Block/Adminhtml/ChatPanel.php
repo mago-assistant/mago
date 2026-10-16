@@ -12,6 +12,7 @@ use Magento\Backend\Model\Auth\Session as AdminSession;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Api\Tool\PresentableToolInterface;
+use MagoAssistant\Mago\Model\Voice\PanelConfig as VoicePanelConfig;
 use MagoAssistant\Mago\Service\Command\CommandRegistry;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
@@ -60,6 +61,7 @@ class ChatPanel extends Template
         private readonly CommandRunner $commandRunner,
         private readonly FormPolicy $formPolicy,
         private readonly ExampleQuestions $exampleQuestions,
+        private readonly VoicePanelConfig $voicePanelConfig,
         private readonly AdminPath $adminPath,
         array $data = []
     ) {
@@ -87,7 +89,7 @@ class ChatPanel extends Template
 
     public function getJsConfig(): string
     {
-        return (string)$this->json->serialize([
+        return (string)$this->json->serialize(array_merge([
             'streamUrl' => $this->getUrl('mago/chat/stream'),
             'historyUrl' => $this->getUrl('mago/chat/history'),
             'loadUrl' => $this->getUrl('mago/chat/load'),
@@ -109,7 +111,7 @@ class ChatPanel extends Template
             'formDenyNamespaces' => $this->formPolicy->getDeniedNamespacePatterns(),
             'formDenyRoutes' => $this->formPolicy->getDeniedRoutePatterns(),
             'i18n' => $this->getPanelTranslations(),
-        ]);
+        ], $this->voicePanelConfig->getJsConfig()));
     }
 
     /**
@@ -182,6 +184,16 @@ class ChatPanel extends Template
             'Feedback removed.',
             'Could not save your feedback.',
             'This feedback can only be removed under Answer Feedback.',
+            'Speak your message',
+            'Stop listening',
+            'Voice input',
+            'Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.',
+            'Avoid speaking customer details aloud.',
+            'I understand, turn on the microphone',
+            'Not now',
+            'Microphone access was denied. Allow it in the browser to use voice input.',
+            'Speech recognition stopped (%1). Press the microphone to try again.',
+            'Could not start the microphone. Please try again.',
         ];
 
         return array_combine($sentences, array_map(static fn (string $sentence): string => (string)__($sentence), $sentences));

@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<include xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_include.xsd">
+    <group id="voice" translate="label" type="text" sortOrder="35" showInDefault="1" showInWebsite="0" showInStore="0">
+        <label>Voice Input</label>
+        <field id="enabled" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
+            <label>Enabled</label>
+            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+            <comment>Show a microphone button in the chat panel to dictate a message. Speech is turned into text by the browser's own speech recognition, so the audio goes to the browser vendor (for example Google for Chrome), not to Mago or the AI provider. The text lands in the input to check and send yourself. The browser listens in the admin user's interface locale (Account Settings). Only shown in browsers with built-in speech recognition, such as Chrome, Edge and Safari.</comment>
+        </field>
+    </group>
+</include>

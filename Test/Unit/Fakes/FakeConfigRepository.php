@@ -14,7 +14,9 @@ class FakeConfigRepository implements RepositoryInterface
     private bool $addonFeedEnabled = true;
     private int $maxToolIterations = 0;
     private int $customerNotificationInterval = 0;
-    private bool $answerWidgets = false;    private int $maxResponseTokens = 0;
+    private bool $answerWidgets = false;
+    private bool $voiceInput = false;
+    private int $maxResponseTokens = 0;
     private bool $reindexAllowed = false;
     private bool $isDebugEnabled = false;
     private int $debugEnabledReads = 0;
@@ -65,6 +67,18 @@ class FakeConfigRepository implements RepositoryInterface
     public function isAnswerWidgetsEnabled(): bool
     {
         return $this->answerWidgets;
+    }
+
+    public function withVoiceInput(bool $enabled): self
+    {
+        $this->voiceInput = $enabled;
+
+        return $this;
+    }
+
+    public function isVoiceInputEnabled(): bool
+    {
+        return $this->voiceInput;
     }
 
     public function getExtensionVersion(): string

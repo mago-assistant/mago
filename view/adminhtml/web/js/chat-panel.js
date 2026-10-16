@@ -4,9 +4,10 @@ define([
     'MagoAssistant_Mago/js/chat/navigate-intent',
     'MagoAssistant_Mago/js/chat/session-log',
     'MagoAssistant_Mago/js/chat/confirm-text',
+    'MagoAssistant_Mago/js/chat/voice-input',
     'MagoAssistant_Mago/js/markdown',
     'MagoAssistant_Mago/js/vault-tokens'
-], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, markdownRenderer, vaultTokens) {
+], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, createVoiceInput, markdownRenderer, vaultTokens) {
     'use strict';
 
     var isPlainObject = text.isPlainObject;
@@ -697,6 +698,77 @@ define([
         if (e.keyCode === 13 && !e.shiftKey) { e.preventDefault(); send(); }
     };
     sendBtn.onclick = send;
+
+    // Voice input (#141): the browser's speech recognition adds the spoken words to the input. The
+    // acknowledgement of the privacy card is remembered per browser; without storage it is asked again.
+    var VOICE_CONSENT_KEY = 'mago-voice-consent';
+
+    function hasVoiceConsent() {
+        try {
+            return localStorage.getItem(VOICE_CONSENT_KEY) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function rememberVoiceConsent() {
+        try {
+            localStorage.setItem(VOICE_CONSENT_KEY, '1');
+        } catch (e) {
+            // Storage is blocked: the card is simply shown again next time.
+        }
+    }
+
+    function voiceConsentText() {
+        var wrap = document.createElement('div');
+        [
+            t('Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.', config.assistantName),
+            t('Avoid speaking customer details aloud.')
+        ].forEach(function (sentence) {
+            var paragraph = document.createElement('p');
+            paragraph.textContent = sentence;
+            wrap.appendChild(paragraph);
+        });
+        return wrap;
+    }
+
+    function requireVoiceConsent(proceed) {
+        if (hasVoiceConsent()) {
+            proceed();
+            return;
+        }
+        if (msgs.querySelector('.mago-voice-consent')) return;
+        var holder = addMsg('assistant', '');
+        var removeCard = function () {
+            holder.remove();
+            if (!msgs.querySelector('.mago-message')) chat.classList.add('is-empty');
+        };
+        var card = UI.skillAsk({
+            title: t('Voice input'),
+            text: voiceConsentText(),
+            params: [],
+            allowLabel: t('I understand, turn on the microphone'),
+            laterLabel: t('Not now'),
+            onAllow: function () {
+                rememberVoiceConsent();
+                removeCard();
+                proceed();
+            },
+            onLater: removeCard
+        });
+        card.classList.add('mago-voice-consent');
+        holder.querySelector('.mago-message-content').appendChild(card);
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    var voiceInput = config.voiceInput ? createVoiceInput({
+        input: input,
+        button: qs('#mago-mic'),
+        lang: config.voiceLocale,
+        t: t,
+        requireConsent: requireVoiceConsent,
+        onError: function (sentence) { addTextMsg('assistant', sentence); }
+    }) : null;
 
 
 
@@ -1436,6 +1508,7 @@ define([
     function send() {
         var text = input.value.trim();
         if (!text || busy) return;
+        if (voiceInput) voiceInput.cancel();
         hideSlashMenu();
         input.value = '';
         sendBtn.classList.add('is-idle');

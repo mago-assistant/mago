@@ -130,6 +130,20 @@ chatting: the route's ACL resources are checked against that admin's role, and n
 HTTP. There is no internal URL to configure and no admin token is created. The former `Internal API
 URL` and `Verify TLS Certificate` settings are removed, along with their saved values.
 
+### Voice input (off by default)
+
+`Stores > Configuration > Mago Assistant > Voice Input > Enabled` adds a microphone button next to
+Send. Press it, speak, and the words are added to the input as you talk. Recording stops at the
+first pause or when you press the button again, and the cursor goes back to the input: check the
+text and press Enter or Send yourself. Nothing is sent by voice alone.
+
+The browser does the speech recognition, so the audio goes to the browser vendor's speech service
+(Google for Chrome), not to Mago or the AI provider. That is why the setting is **off by default**,
+and why each administrator sees a short notice the first time they press the button in a browser.
+The browser listens in the administrator's own interface locale (`Account Settings > Interface
+Locale`): someone with an English admin who speaks Dutch should switch that to Dutch. The button
+only appears in browsers with built-in speech recognition, such as Chrome, Edge and Safari.
+
 ## Built-in Skills
 
 | Skill area | Tools | Access |
@@ -257,7 +271,8 @@ Mago stores nothing outside your Magento installation. Every request goes direct
 store to the AI provider you configured, using your own API key; what that provider does with
 the request is governed by its API terms. The only other outbound call the module can make is the
 add-on feed, which is off unless you switch it on — see
-[New add-ons in the chat panel](#new-add-ons-in-the-chat-panel-off-by-default). Mago only reads what the current admin's role allows
+[New add-ons in the chat panel](#new-add-ons-in-the-chat-panel-off-by-default). With [voice input](#voice-input-off-by-default)
+switched on, the spoken audio goes from the administrator's browser to its vendor's speech service. Mago only reads what the current admin's role allows
 and never writes without an explicit confirmation. Details in
 [docs/skills-architecture.md](docs/skills-architecture.md#data--privacy).
 

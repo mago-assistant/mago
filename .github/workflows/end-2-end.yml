@@ -65,6 +65,8 @@ jobs:
           docker exec mage-os-community-edition /bin/bash ./change-base-url $BASE_URL
           docker exec mage-os-community-edition /bin/bash ./disable-2fa
           docker exec mage-os-community-edition ./retry "bin/magento config:set mago/general/enabled 1"
+          # The voice input spec stubs the browser's speech recognition, but needs the button rendered.
+          docker exec mage-os-community-edition ./retry "bin/magento config:set mago/voice/enabled 1"
           # One MageOS_AiBase service row on the LM Studio bridge, whose base URL is a local
           # runtime address by design, so nothing has to be redirected to make this work. It speaks
           # OpenAI chat-completions and appends /v1/chat/completions itself, so the base URL stops

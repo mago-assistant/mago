@@ -17,6 +17,9 @@
                 <accent_color>#F26322</accent_color>
                 <text_color>#FFFFFF</text_color>
             </chat>
+            <voice>
+                <enabled>0</enabled>
+            </voice>
             <tools>
                 <max_response_tokens>4000</max_response_tokens>
                 <allow_reindex>0</allow_reindex>
