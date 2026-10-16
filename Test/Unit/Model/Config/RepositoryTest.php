@@ -67,6 +67,28 @@ class RepositoryTest extends TestCase
         self::assertSame('#FFFFFF', $repository->getTextColor());
     }
 
+    #[Test]
+    public function itKeepsVoiceInputOffWhenNothingIsConfigured(): void
+    {
+        self::assertFalse($this->repository([])->isVoiceInputEnabled());
+    }
+
+    #[Test]
+    public function itTurnsVoiceInputOnWhenEnabled(): void
+    {
+        $repository = $this->repository([RepositoryInterface::XML_PATH_VOICE_INPUT => '1']);
+
+        self::assertTrue($repository->isVoiceInputEnabled());
+    }
+
+    #[Test]
+    public function itKeepsVoiceInputOffWhenDisabled(): void
+    {
+        $repository = $this->repository([RepositoryInterface::XML_PATH_VOICE_INPUT => '0']);
+
+        self::assertFalse($repository->isVoiceInputEnabled());
+    }
+
     /**
      * @return array<string, array{string}>
      */

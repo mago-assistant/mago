@@ -18,11 +18,7 @@
                 <text_color>#FFFFFF</text_color>
             </chat>
             <voice>
-                <enabled>1</enabled>
-                <language>auto</language>
-                <mode>confirm</mode>
-                <send_delay>1400</send_delay>
-                <idle_timeout>8</idle_timeout>
+                <enabled>0</enabled>
             </voice>
             <tools>
                 <max_response_tokens>4000</max_response_tokens>

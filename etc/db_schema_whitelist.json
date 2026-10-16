@@ -24,8 +24,7 @@
             "tool_call_id": true,
             "pending_confirmation": true,
             "created_at": true,
-            "page_context": true,
-            "input_method": true
+            "page_context": true
         },
         "constraint": {
             "PRIMARY": true,
@@ -33,8 +32,7 @@
         },
         "index": {
             "MAGO_MESSAGE_CONVERSATION_ID": true,
-            "MAGO_MESSAGE_ROLE": true,
-            "MAGO_MESSAGE_ROLE_CREATED_AT": true
+            "MAGO_MESSAGE_ROLE": true
         }
     },
     "mago_skill_permission": {
@@ -146,18 +144,6 @@
             "MAGO_FLAG_FULLTEXT": true,
             "MAGO_FLAG_RATING": true,
             "MAGO_FLAG_STATUS": true
-        }
-    },
-    "mago_voice_preference": {
-        "column": {
-            "admin_user_id": true,
-            "consented_at": true,
-            "mode": true,
-            "updated_at": true
-        },
-        "constraint": {
-            "PRIMARY": true,
-            "MAGO_VOICE_PREFERENCE_ADMIN_USER_ID": true
         }
     }
 }

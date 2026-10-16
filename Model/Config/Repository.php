@@ -19,8 +19,6 @@ use Magento\Framework\Serialize\Serializer\Json;
 use Magento\Framework\Stdlib\DateTime\DateTime;
 use Magento\Store\Model\StoreManagerInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepositoryInterface;
-use MagoAssistant\Mago\Model\Config\Source\VoiceMode;
-use MagoAssistant\Mago\Model\Voice\CommandWords;
 
 class Repository extends System\BaseRepository implements ConfigRepositoryInterface
 {
@@ -183,51 +181,7 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
 
     public function isVoiceInputEnabled(): bool
     {
-        return $this->isSetFlag(self::XML_PATH_VOICE_INPUT);
-    }
-
-    public function getVoiceMode(): string
-    {
-        $mode = trim((string)$this->getStoreValue(self::XML_PATH_VOICE_MODE));
-
-        return in_array($mode, VoiceMode::ALL, true) ? $mode : VoiceMode::CONFIRM;
-    }
-
-    public function getVoiceLanguage(): string
-    {
-        return trim((string)$this->getStoreValue(self::XML_PATH_VOICE_LANGUAGE)) ?: 'auto';
-    }
-
-    public function getVoiceSendDelay(): int
-    {
-        $value = $this->getStoreValue(self::XML_PATH_VOICE_SEND_DELAY);
-
-        return $value === '' || $value === null ? 1400 : max(0, (int)$value);
-    }
-
-    public function getVoiceIdleTimeout(): int
-    {
-        $value = $this->getStoreValue(self::XML_PATH_VOICE_IDLE_TIMEOUT);
-
-        return $value === '' || $value === null ? 8 : max(0, (int)$value);
-    }
-
-    public function getVoiceNumberWords(): array
-    {
-        return CommandWords::numbers((string)$this->getStoreValue(self::XML_PATH_VOICE_NUMBER_WORDS));
-    }
-
-    public function getVoiceWords(): array
-    {
-        $words = [];
-        foreach (CommandWords::COMMANDS as $command) {
-            $words[$command] = CommandWords::withEnglish(
-                $command,
-                (string)$this->getStoreValue(self::XML_PATH_VOICE_WORDS . $command)
-            );
-        }
-
-        return $words;
+        return $this->isSetFlag(self::XML_PATH_VOICE_INPUT, null, ScopeConfigInterface::SCOPE_TYPE_DEFAULT);
     }
 
     public function isAddonFeedEnabled(): bool

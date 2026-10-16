@@ -37,6 +37,7 @@ The module has to be switched on, otherwise the panel is not rendered at all:
 
 ```bash
 bin/magento config:set mago/general/enabled 1
+bin/magento config:set mago/voice/enabled 1
 bin/magento cache:flush
 ```
 

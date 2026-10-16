@@ -213,58 +213,19 @@ $starterIcons = [
             <span><?= $escaper->escapeHtml(__('Thinking…')) ?></span>
         </div>
     </div>
-    <?php /* Voice input (#141): shown while the microphone is on. The audio leaves the browser for
-           its vendor's speech service, which is worth saying every time, not once in a setting. */ ?>
-    <div id="mago-voice-notice" class="mago-voice-notice" hidden role="status">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span><?= $escaper->escapeHtml(__('Voice input is on. Your speech is converted to text by your browser\'s speech service (for example Google for Chrome), not by %1 or the AI provider. Only the resulting text is sent to the assistant. Avoid speaking customer details aloud.', $assistantName)) ?></span>
-    </div>
-    <?php /* Hands-free voice (#141): after a pause the spoken message waits here, counting down
-           (Send after a pause) or for a yes (Confirm), and can be sent or cleared by voice or click. */ ?>
-    <div id="mago-voice-confirm" class="mago-voice-confirm" hidden role="group" aria-label="<?= $escaper->escapeHtmlAttr(__('Spoken message')) ?>">
-        <strong class="mago-voice-confirm-title" aria-live="polite"></strong>
-        <button type="button" class="mago-btn is-secondary" data-voice="discard"><?= $escaper->escapeHtml(__('Discard')) ?></button>
-        <button type="button" class="mago-btn is-primary" data-voice="send"><?= $escaper->escapeHtml(__('Send')) ?></button>
-        <div class="mago-voice-confirm-progress" aria-hidden="true"><span></span></div>
-    </div>
     <div id="mago-input-area" class="mago-input-wrapper">
         <div id="mago-slash-menu" class="mago-slash-menu"></div>
         <label for="mago-input" class="mago-sr-only"><?= $escaper->escapeHtml(__('Message %1', $assistantName)) ?></label>
         <textarea id="mago-input" class="mago-input" placeholder="<?= $escaper->escapeHtmlAttr(__('Ask anything…')) ?>" rows="1" aria-autocomplete="list"></textarea>
-        <?php /* Voice mode menu (#141): the configured Voice Mode is the default, the choice made here
-               is stored per admin user, so it follows them into every browser. Opens upward: the input sits at the bottom. */ ?>
-        <div class="mago-mic-group">
-            <button type="button" id="mago-mic" class="mago-mic-btn" hidden title="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>" aria-label="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>" aria-pressed="false">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
-            </button>
-            <button type="button" id="mago-voice-mode" class="mago-voice-mode-btn" hidden aria-haspopup="true" aria-expanded="false" aria-controls="mago-voice-mode-menu" title="<?= $escaper->escapeHtmlAttr(__('Voice mode')) ?>" aria-label="<?= $escaper->escapeHtmlAttr(__('Voice mode')) ?>">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
-            </button>
-            <div id="mago-voice-mode-menu" class="mago-voice-mode-menu" role="menu" aria-label="<?= $escaper->escapeHtmlAttr(__('Voice mode')) ?>" hidden>
-                <div class="mago-voice-mode-title"><?= $escaper->escapeHtml(__('Voice mode')) ?></div>
-                <button type="button" role="menuitemradio" aria-checked="false" data-mode="dictate">
-                    <svg class="mago-voice-mode-check" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span class="mago-voice-mode-label"><strong><?= $escaper->escapeHtml(__('Dictate')) ?></strong><span><?= $escaper->escapeHtml(__('Fills the input, you press Send')) ?></span></span>
-                </button>
-                <button type="button" role="menuitemradio" aria-checked="false" data-mode="auto_send">
-                    <svg class="mago-voice-mode-check" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span class="mago-voice-mode-label"><strong><?= $escaper->escapeHtml(__('Send after a pause')) ?></strong><span><?= $escaper->escapeHtml(__('Sends after a short countdown, then listens again')) ?></span></span>
-                </button>
-                <button type="button" role="menuitemradio" aria-checked="false" data-mode="confirm">
-                    <svg class="mago-voice-mode-check" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span class="mago-voice-mode-label"><strong><?= $escaper->escapeHtml(__('Confirm each message')) ?></strong><span><?= $escaper->escapeHtml(__('Hands-free, say “yes” or press Send for each message')) ?></span></span>
-                </button>
-            </div>
-        </div>
+        <?php /* Voice input (#141): hidden until voice-input.js finds speech recognition in the browser. */ ?>
+        <button type="button" id="mago-mic" class="mago-mic-btn" hidden title="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>" aria-label="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>" aria-pressed="false">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
+        </button>
         <button type="button" id="mago-send" class="mago-send-btn is-idle" title="<?= $escaper->escapeHtmlAttr(__('Send')) ?>">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="13 5 20 12 13 19"/></svg>
         </button>
     </div>
     <div id="mago-announcer" class="mago-sr-only" role="status"></div>
-    <div id="mago-voice-status" class="mago-voice-status" hidden aria-live="polite">
-        <span class="mago-voice-dot"></span>
-        <span class="mago-voice-text"></span>
-    </div>
     <?php /* Privacy mode (#97 decision 3): non-blocking hint for FP-prone patterns the silent scrub
            does not cover; certain classes (email, IBAN, BSN, VAT, phone) are tokenised server-side. */ ?>
     <div id="mago-privacy-hint" class="mago-privacy-hint" hidden>

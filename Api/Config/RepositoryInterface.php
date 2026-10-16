@@ -33,12 +33,6 @@ interface RepositoryInterface
     public const XML_PATH_LANGUAGE = 'mago/chat/language';
     public const XML_PATH_ANSWER_WIDGETS = 'mago/chat/answer_widgets';
     public const XML_PATH_VOICE_INPUT = 'mago/voice/enabled';
-    public const XML_PATH_VOICE_MODE = 'mago/voice/mode';
-    public const XML_PATH_VOICE_LANGUAGE = 'mago/voice/language';
-    public const XML_PATH_VOICE_SEND_DELAY = 'mago/voice/send_delay';
-    public const XML_PATH_VOICE_IDLE_TIMEOUT = 'mago/voice/idle_timeout';
-    public const XML_PATH_VOICE_WORDS = 'mago/voice/words_';
-    public const XML_PATH_VOICE_NUMBER_WORDS = 'mago/voice/number_words';
     public const XML_PATH_ADDONS_ENABLED = 'mago/addons/enabled';
     public const XML_PATH_DOCS_ENABLED = 'mago/docs/enabled';
     public const XML_PATH_DOCS_SOURCE_REPO = 'mago/docs/source_repo';
@@ -172,50 +166,6 @@ interface RepositoryInterface
      * @return bool
      */
     public function isVoiceInputEnabled(): bool;
-
-    /**
-     * How a spoken message is sent: dictate, auto_send or confirm (see Source\VoiceMode)
-     *
-     * @return string
-     */
-    public function getVoiceMode(): string;
-
-    /**
-     * BCP-47 tag for the speech recogniser, or "auto" to follow the admin interface locale
-     *
-     * @return string
-     */
-    public function getVoiceLanguage(): string;
-
-    /**
-     * Milliseconds the auto_send countdown runs after speech before a spoken message is sent
-     *
-     * @return int
-     */
-    public function getVoiceSendDelay(): int;
-
-    /**
-     * Seconds without speech after which a hands-free microphone turns itself off; 0 never does
-     *
-     * @return int
-     */
-    public function getVoiceIdleTimeout(): int;
-
-    /**
-     * Spoken command words per command in Model\Voice\CommandWords::COMMANDS, lower-cased: the shop's own words first
-     * (the first one is what the panel suggests), then the built-in English ones
-     *
-     * @return array<string, string[]>
-     */
-    public function getVoiceWords(): array;
-
-    /**
-     * The shop's own words for the numbers that pick a suggestion, lower-cased: number => words.
-     * Configured as "one/first, two/second, …"; English and digits are built into the panel.
-     *
-     * @return array<int, string[]>
-     */
-    public function getVoiceNumberWords(): array;
 
     /**
      * Whether the dashboard may show the add-on feed

@@ -130,6 +130,20 @@ chatting: the route's ACL resources are checked against that admin's role, and n
 HTTP. There is no internal URL to configure and no admin token is created. The former `Internal API
 URL` and `Verify TLS Certificate` settings are removed, along with their saved values.
 
+### Voice input (off by default)
+
+`Stores > Configuration > Mago Assistant > Voice Input > Enabled` adds a microphone button next to
+Send. Press it, speak, and the words are added to the input as you talk. Recording stops at the
+first pause or when you press the button again, and the cursor goes back to the input: check the
+text and press Enter or Send yourself. Nothing is sent by voice alone.
+
+The browser does the speech recognition, so the audio goes to the browser vendor's speech service
+(Google for Chrome), not to Mago or the AI provider. That is why the setting is **off by default**,
+and why each administrator sees a short notice the first time they press the button in a browser.
+The browser listens in the administrator's own interface locale (`Account Settings > Interface
+Locale`): someone with an English admin who speaks Dutch should switch that to Dutch. The button
+only appears in browsers with built-in speech recognition, such as Chrome, Edge and Safari.
+
 ## Built-in Skills
 
 | Skill area | Tools | Access |
@@ -166,74 +180,6 @@ the administrator to confirm — it never writes to the database itself, only in
 the administrator would type into, so their own Save button is what persists anything. See
 [docs/form-access.md](docs/form-access.md) for what it can see, which forms are excluded, and the
 directive contract it uses to reach the browser.
-
-### Voice input
-
-The chat panel shows a microphone button next to Send in browsers with built-in speech
-recognition (Chrome, Edge, Safari); in others, such as Firefox, it is greyed out and says why. The first time an administrator presses it, a card explains
-that the audio is handled by the browser vendor's speech service, outside Mago's control, and
-asks them to acknowledge that before the microphone turns on. The acknowledgement is stored per
-admin user (`mago_voice_preference`, with the moment it was given), so it is asked once, in any browser. After that, press it, speak, and the words appear in the input
-field as you talk. While recording, the button turns red and a status line under the input shows
-what is happening. *Voice Mode* (`mago/voice/mode`) decides what happens once you stop talking;
-the admin can also switch it from the menu next to the microphone; that choice is stored per admin
-user and follows them into every browser:
-
-| Mode | What you do | What happens |
-|---|---|---|
-| Dictate (`dictate`) | Press the microphone, speak, press Send | The text stays in the box for you to check and send. |
-| Send after a pause (`auto_send`) | Press the microphone once | After each pause a bar counts down and sends the message (*Send Delay*, `mago/voice/send_delay`, default 1400 ms). |
-| Confirm each message (`confirm`, default) | Press the microphone once | After each pause a bar asks *Send this message?* and waits for you. |
-
-In both bar modes a yes word or *Send* sends the message at once, a no word or *Discard* clears it,
-and talking on adds to it (holding the countdown). The recogniser starts afresh when the bar
-appears, so a short "wis" or "yes" is heard on its own rather than as the end of the sentence
-before it. While the assistant answers, the microphone is paused ("Assistant is answering"), then
-it listens again ("Your turn — speak now"). Press the microphone or start typing to end the
-session. After *Turn Off After Silence* (`mago/voice/idle_timeout`, default 8 seconds)
-without any speech the microphone turns itself off, so it does not keep listening to the room;
-time spent waiting for an answer does not count, and 0 keeps it on.
-
-In both bar modes, while an Allow / Reject card is waiting the microphone only listens for the answer to
-that card: a yes word allows, a no word rejects, and nothing is typed into the input until the
-card is answered. A card that needs its acknowledgement box ticked asks for that first. The same
-short replies also work typed. Suggestions in the latest answer (or the starter questions in an
-empty chat) show a small "Option 1", "Option 2"… while the microphone listens; say the number or
-the option's text to send it. Digits and English number words always work; *Number Words*
-(`mago/voice/number_words`) adds a shop's own, in order, with alternatives after a slash
-(`een/één/eerste, twee/tweede, drie/derde, …`).
-
-Saying a stop word on its own ("stop", "stop listening") turns the microphone off in either mode.
-There is no spoken "start": press the microphone.
-
-Each user message records whether it was spoken or typed (`mago_message.input_method`). Spoken
-messages show a small microphone in the chat and in the conversation view, and the Statistics
-dashboard shows how many messages were spoken today and per admin user for the chosen period.
-
-Three word lists drive this, and the English ones are built in and always work:
-
-| Command | Built-in English |
-|---|---|
-| Yes: send, allow a card | yes, send, send it, send now, submit, allow, ok, okay, confirm, go ahead, do it, approve |
-| No: clear, reject a card | no, discard, clear, delete, start over, scratch that, reject, nope, cancel, deny, not now, skip |
-| Stop: microphone off | stop, stop listening, microphone off |
-
-A shop that speaks another language adds its own words under Voice Input as comma-separated lists
-(`mago/voice/words_yes`, `words_no`, `words_stop`); for Dutch, for example, `ja, verstuur,
-toestaan` for yes and `nee, wis, weiger` for no. Added words come on top of the English ones, so
-a mistyped or emptied setting never leaves voice input unusable. Use ordinary words the browser's
-speech recognition knows: invented words or phrases come back spelled differently each time and
-are not recognised. The first added word of each
-list is the one the panel suggests in its hints.
-
-The browser listens in one language at a time. By default that is the admin user's interface
-locale, which is usually English even for administrators who speak Dutch, and speaking a
-different language than the one being listened for produces garbled text. Set *Language* under Voice Input (`mago/voice/language`) to the language administrators actually speak.
-
-The audio is processed by the browser vendor's speech service, not by Mago or the AI provider.
-The resulting text is treated exactly like typed text, including privacy mode. Turn the button
-off under `Stores > Configuration > Mago Assistant > Voice Input` (`mago/voice/enabled`, default
-Yes).
 
 ## Documentation grounding
 
@@ -325,7 +271,8 @@ Mago stores nothing outside your Magento installation. Every request goes direct
 store to the AI provider you configured, using your own API key; what that provider does with
 the request is governed by its API terms. The only other outbound call the module can make is the
 add-on feed, which is off unless you switch it on — see
-[New add-ons in the chat panel](#new-add-ons-in-the-chat-panel-off-by-default). Mago only reads what the current admin's role allows
+[New add-ons in the chat panel](#new-add-ons-in-the-chat-panel-off-by-default). With [voice input](#voice-input-off-by-default)
+switched on, the spoken audio goes from the administrator's browser to its vendor's speech service. Mago only reads what the current admin's role allows
 and never writes without an explicit confirmation. Details in
 [docs/skills-architecture.md](docs/skills-architecture.md#data--privacy).
 

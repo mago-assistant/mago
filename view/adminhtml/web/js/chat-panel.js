@@ -5,10 +5,9 @@ define([
     'MagoAssistant_Mago/js/chat/session-log',
     'MagoAssistant_Mago/js/chat/confirm-text',
     'MagoAssistant_Mago/js/chat/voice-input',
-    'MagoAssistant_Mago/js/chat/voice-commands',
     'MagoAssistant_Mago/js/markdown',
     'MagoAssistant_Mago/js/vault-tokens'
-], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, createVoiceInput, createVoiceCommands, markdownRenderer, vaultTokens) {
+], function (text, createTranslator, navigateIntent, createSessionLog, createConfirmText, createVoiceInput, markdownRenderer, vaultTokens) {
     'use strict';
 
     var isPlainObject = text.isPlainObject;
@@ -368,12 +367,6 @@ define([
         chat.classList.toggle('is-busy', state);
         loading.style.display = state ? '' : 'none';
         sendBtn.disabled = state;
-        // Every turn passes through here, whichever way it started (send, Allow, Reject, a spoken
-        // or clicked answer), so it is where a hands-free microphone pauses and resumes.
-        if (voiceInput) {
-            if (state) voiceInput.turnStarted();
-            else voiceInput.turnEnded();
-        }
     }
 
     // The header icon is the only way in or out of the panel, so its tooltip,
@@ -706,55 +699,60 @@ define([
     };
     sendBtn.onclick = send;
 
-    // Voice input (#141): browser speech recognition fills the textarea; a browser without a
-    // recogniser gets a greyed-out button, and the setting removes the button altogether.
-
-    // The admin's own voice settings, stored server-side so they follow them into every browser:
-    // the consent card's acknowledgement and the mode picked in the menu.
-    function saveVoicePreference(data) {
-        data.form_key = formKey;
-        return fetch(config.voicePreferenceUrl, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-            body: JSON.stringify(data),
-            credentials: 'same-origin'
-        }).then(function (r) { return r.json(); }).then(function (d) {
-            if (!d || !d.success) throw new Error(d && d.error);
-            return d;
-        });
-    }
+    // Voice input (#141): the browser's speech recognition adds the spoken words to the input. The
+    // acknowledgement of the privacy card is remembered per browser; without storage it is asked again.
+    var VOICE_CONSENT_KEY = 'mago-voice-consent';
 
     function hasVoiceConsent() {
-        return !!config.voiceConsent;
+        try {
+            return localStorage.getItem(VOICE_CONSENT_KEY) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function rememberVoiceConsent() {
+        try {
+            localStorage.setItem(VOICE_CONSENT_KEY, '1');
+        } catch (e) {
+            // Storage is blocked: the card is simply shown again next time.
+        }
+    }
+
+    function voiceConsentText() {
+        var wrap = document.createElement('div');
+        [
+            t('Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.', config.assistantName),
+            t('Avoid speaking customer details aloud.')
+        ].forEach(function (sentence) {
+            var paragraph = document.createElement('p');
+            paragraph.textContent = sentence;
+            wrap.appendChild(paragraph);
+        });
+        return wrap;
     }
 
     function requireVoiceConsent(proceed) {
-        if (hasVoiceConsent()) { proceed(); return; }
+        if (hasVoiceConsent()) {
+            proceed();
+            return;
+        }
         if (msgs.querySelector('.mago-voice-consent')) return;
         var holder = addMsg('assistant', '');
-        // Either answer takes the card away again, and an otherwise empty chat gets its welcome back.
         var removeCard = function () {
             holder.remove();
             if (!msgs.querySelector('.mago-message')) chat.classList.add('is-empty');
         };
         var card = UI.skillAsk({
             title: t('Voice input'),
-            text: {html: renderMd(
-                t('Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.', config.assistantName || 'Mago')
-                + '\n\n' + t('Avoid speaking customer details aloud. You can turn voice input off at any time under Stores > Configuration > Mago Assistant > Voice Input.')
-            )},
+            text: voiceConsentText(),
             params: [],
             allowLabel: t('I understand, turn on the microphone'),
             laterLabel: t('Not now'),
             onAllow: function () {
-                saveVoicePreference({consent: true}).then(function () {
-                    config.voiceConsent = true;
-                    removeCard();
-                    proceed();
-                }).catch(function () {
-                    removeCard();
-                    addMsg('assistant', esc(t('Could not save your choice. Please try again.')));
-                });
+                rememberVoiceConsent();
+                removeCard();
+                proceed();
             },
             onLater: removeCard
         });
@@ -763,86 +761,14 @@ define([
         msgs.scrollTop = msgs.scrollHeight;
     }
 
-    var voiceCommands = createVoiceCommands({words: config.voiceWords, numberWords: config.voiceNumberWords});
-
     var voiceInput = config.voiceInput ? createVoiceInput({
         input: input,
         button: qs('#mago-mic'),
-        status: qs('#mago-voice-status'),
-        notice: qs('#mago-voice-notice'),
-        confirmBar: qs('#mago-voice-confirm'),
-        lang: config.locale,
-        mode: config.voiceUserMode || config.voiceMode,
-        sendDelay: config.voiceSendDelay,
-        idleSeconds: config.voiceIdleTimeout,
-        matchCommand: voiceCommands.barReply,
-        isStop: voiceCommands.isStop,
-        pickSuggestion: pickSuggestionByVoice,
-        onListening: numberVoiceSuggestions,
-        hintWords: {yes: voiceCommands.firstWord('yes'), no: voiceCommands.firstWord('no')},
-        cardPending: function () { return !!pendingConfirmActions(); },
-        answerCard: answerCardByVoice,
-        requireConsent: requireVoiceConsent,
+        lang: config.voiceLocale,
         t: t,
-        onSend: function () { if (input.value.trim()) send(); },
-        onError: function (sentence) { addMsg('assistant', esc(sentence)); }
+        requireConsent: requireVoiceConsent,
+        onError: function (sentence) { addTextMsg('assistant', sentence); }
     }) : null;
-
-    // Voice mode menu next to the microphone; only offered where the microphone itself is.
-    (function initVoiceModeMenu() {
-        var toggle = qs('#mago-voice-mode');
-        var menu = qs('#mago-voice-mode-menu');
-        if (!voiceInput || !voiceInput.isSupported || !toggle || !menu) return;
-        var items = Array.prototype.slice.call(menu.querySelectorAll('[data-mode]'));
-
-        function mark(mode) {
-            items.forEach(function (item) {
-                var on = item.dataset.mode === mode;
-                item.setAttribute('aria-checked', on ? 'true' : 'false');
-                if (on) toggle.title = t('Voice mode: %1', item.querySelector('strong').textContent);
-            });
-        }
-
-        function setOpen(open) {
-            menu.hidden = !open;
-            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            if (open) {
-                var current = menu.querySelector('[aria-checked="true"]') || items[0];
-                current.focus();
-            }
-        }
-
-        toggle.hidden = false;
-        mark(voiceInput.getMode());
-        toggle.addEventListener('click', function () { setOpen(menu.hidden); });
-        menu.addEventListener('click', function (e) {
-            var item = e.target.closest('[data-mode]');
-            if (!item) return;
-            voiceInput.setMode(item.dataset.mode);
-            saveVoicePreference({mode: item.dataset.mode}).catch(function () { /* still applies to this page */ });
-            mark(item.dataset.mode);
-            setOpen(false);
-            toggle.focus();
-        });
-        // Escape is claimed here so the panel's own Escape handler does not close the chat.
-        menu.addEventListener('keydown', function (e) {
-            var index = items.indexOf(document.activeElement);
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                setOpen(false);
-                toggle.focus();
-            } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                e.preventDefault();
-                var step = e.key === 'ArrowDown' ? 1 : -1;
-                items[(index + step + items.length) % items.length].focus();
-            } else if (e.key === 'Tab') {
-                setOpen(false);
-            }
-        });
-        document.addEventListener('click', function (e) {
-            if (!menu.hidden && !menu.contains(e.target) && !toggle.contains(e.target)) setOpen(false);
-        });
-    })();
 
 
 
@@ -968,7 +894,6 @@ define([
                     var msgEl = m.role === 'user'
                         ? addTextMsg('user', vaultTokens.replaceTokens(m.content, tokens))
                         : addMsg('assistant', renderMd(m.content, tokens));
-                    if (m.role === 'user' && m.input_method === 'voice') markSpoken(msgEl);
                     if (m.role === 'assistant') {
                         attachFeedback(msgEl, m.entity_id, m.rating || null);
                     }
@@ -1050,20 +975,6 @@ define([
         }
     }
 
-
-    // A spoken user message carries a small microphone, so a reread conversation shows how it was asked.
-    function markSpoken(msgEl) {
-        var content = msgEl.querySelector('.mago-message-content');
-        if (!content) return;
-        // Inside the first line of text, so it flows with the words instead of taking a row of its own.
-        var host = content.querySelector('p') || content;
-        var mark = document.createElement('span');
-        mark.className = 'mago-spoken-mark';
-        mark.title = t('Spoken with voice input');
-        mark.setAttribute('aria-label', t('Spoken with voice input'));
-        mark.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>';
-        host.insertBefore(mark, host.firstChild);
-    }
 
     // Anything that is not the model's answer (what the admin typed, the panel's own notices) is
     // shown exactly as written: a text node, never markdown or HTML.
@@ -1319,12 +1230,11 @@ define([
     // interactions are wired here once, for built-in and registered widgets alike:
     // data-mago-send sends its value as the next message, data-mago-focus moves the
     // focus to the input, and a value prompt (S10) sends the value the admin typed.
-    // byVoice: the option was picked by saying it; a click is typed input, whatever was dictated before.
-    function askFromWidget(text, byVoice) {
+    function askFromWidget(text) {
         if (!text || busy) return;
         input.value = text;
         input.dispatchEvent(new Event('input'));
-        send(byVoice ? 'voice' : 'typed');
+        send();
     }
 
     msgs.addEventListener('click', function(e) {
@@ -1591,104 +1501,21 @@ define([
             var question = this.getAttribute('data-question');
             if (!question || busy) return;
             input.value = question;
-            send('typed');
+            send();
         };
     }
 
-    // Suggestions by voice (#141): while a hands-free session listens, the pickable options get a
-    // small "Option 1" line under their text: the starter questions while the chat is empty,
-    // otherwise the suggestion cards, chips and choices of the latest answer. Saying that number
-    // or the option's text sends it as if it was clicked.
-    function voicePickables() {
-        if (chat.classList.contains('is-empty')) {
-            return Array.prototype.map.call(chat.querySelectorAll('.mago-starter[data-question]'), function (el) {
-                return {label: el.getAttribute('data-question').trim(), host: el.querySelector('.mago-starter-text') || el};
-            });
-        }
-        var answers = msgs.querySelectorAll('.mago-message.is-assistant');
-        if (!answers.length) return [];
-        return Array.prototype.map.call(answers[answers.length - 1].querySelectorAll('[' + UI.sendAttr + ']'), function (el) {
-            return {label: el.getAttribute(UI.sendAttr).trim(), host: el.querySelector('.mago-suggestion-label') || el};
-        });
-    }
-
-    function numberVoiceSuggestions(active) {
-        Array.prototype.forEach.call(chat.querySelectorAll('.mago-voice-option'), function (el) { el.remove(); });
-        if (!active) return;
-        voicePickables().forEach(function (item, i) {
-            var caption = document.createElement('span');
-            caption.className = 'mago-voice-option';
-            caption.setAttribute('aria-hidden', 'true');
-            caption.textContent = t('Option %1', i + 1);
-            item.host.appendChild(caption);
-        });
-    }
-
-    function pickSuggestionByVoice(text) {
-        var items = voicePickables();
-        var index = voiceCommands.pick(text, items.map(function (item) { return item.label; }));
-        if (index < 0 || busy) return false;
-        askFromWidget(items[index].label, true);
-        return true;
-    }
-
-    // Only a card in the latest message still waits for an answer: one the admin moved past by
-    // asking something else must not be answered by a later "ok". An answered card swaps its
-    // buttons for a spinner.
-    function pendingConfirmActions() {
-        var messages = msgs.querySelectorAll('.mago-message');
-        var actions = messages.length ? messages[messages.length - 1].querySelector('.mago-confirm-actions') : null;
-        return actions && actions.querySelector('.mago-btn--confirm, .mago-btn--reject') ? actions : null;
-    }
-
-    function pendingConfirmButton(kind) {
-        var actions = pendingConfirmActions();
-        var btn = actions ? actions.querySelector(kind === 'allow' ? '.mago-btn--confirm' : '.mago-btn--reject') : null;
-        return btn && !btn.disabled ? btn : null;
-    }
-
-    // Hands-free: while a card waits, speech answers the card and nothing else. "locked" means
-    // the matching button is disabled until the acknowledgement box is ticked by hand.
-    function answerCardByVoice(text) {
-        var kind = voiceCommands.cardReply(text);
-        if (!kind) return null;
-        var btn = pendingConfirmButton(kind);
-        if (!btn) return 'locked';
-        btn.click();
-        return 'answered';
-    }
-
-    function answerPendingConfirm(text) {
-        var kind = voiceCommands.cardReply(text);
-        var btn = kind ? pendingConfirmButton(kind) : null;
-        if (!btn) return false;
-        input.value = '';
-        sendBtn.classList.add('is-idle');
-        autoGrow();
-        updatePrivacyHint('');
-        btn.click();
-        return true;
-    }
-
-    // inputMethod: "voice" or "typed" when the caller knows; otherwise the voice input says
-    // whether the text in the box came from speech.
-    function send(inputMethod) {
+    function send() {
         var text = input.value.trim();
-        if (text && answerPendingConfirm(text)) {
-            if (voiceInput) voiceInput.takeSpoken();
-            return;
-        }
         if (!text || busy) return;
-        var spoken = voiceInput ? voiceInput.takeSpoken() : false;
-        if (inputMethod !== 'voice' && inputMethod !== 'typed') inputMethod = spoken ? 'voice' : 'typed';
+        if (voiceInput) voiceInput.cancel();
         hideSlashMenu();
         input.value = '';
         sendBtn.classList.add('is-idle');
         autoGrow();
         updatePrivacyHint('');
         setBusy(true);
-        var userMsgEl = addTextMsg('user', text);
-        if (inputMethod === 'voice') markSpoken(userMsgEl);
+        addTextMsg('user', text);
 
         var msg = null;
         var content = null;
@@ -1712,7 +1539,7 @@ define([
         fetch(config.streamUrl, {
             method: 'POST',
             headers: {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
-            body: JSON.stringify({message:text, conversation_id:conversationId, form_key:formKey, page_context:buildPageContext(settled), input_method:inputMethod}),
+            body: JSON.stringify({message:text, conversation_id:conversationId, form_key:formKey, page_context:buildPageContext(settled)}),
             credentials: 'same-origin'
         }).then(function(r) {
             if (!r.ok) {
@@ -2182,7 +2009,6 @@ define([
     }
 
     function handleReject(messageId) {
-        setBusy(true);
         fetch(config.rejectUrl, {
             method: 'POST',
             headers: {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
@@ -2196,8 +2022,6 @@ define([
             addTextMsg('assistant', t('Action rejected. No changes were made.'));
         }).catch(function(e) {
             showError(addMsg('assistant', ''), e.message);
-        }).then(function() {
-            setBusy(false);
         });
     }
 

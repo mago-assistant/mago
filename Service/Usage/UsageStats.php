@@ -106,44 +106,6 @@ class UsageStats
         return $users;
     }
 
-    /**
-     * User messages in the period and how many of them were spoken, per admin user and in total:
-     * ['total' => ['messages' => n, 'spoken' => n], 'users' => [admin_user_id => [...]]]
-     */
-    public function getVoiceShare(string $period): array
-    {
-        $connection = $this->resourceConnection->getConnection();
-        $from = $this->getFromDate($period);
-
-        $select = $connection->select()
-            ->from(['m' => $this->resourceConnection->getTableName('mago_message')], [
-                'messages' => new Expression('COUNT(*)'),
-                'spoken' => new Expression("SUM(m.input_method = 'voice')"),
-            ])
-            ->join(
-                ['c' => $this->resourceConnection->getTableName('mago_conversation')],
-                'c.entity_id = m.conversation_id',
-                ['admin_user_id']
-            )
-            ->where('m.role = ?', 'user')
-            ->group('c.admin_user_id');
-
-        if ($from) {
-            $select->where('m.created_at >= ?', $from);
-        }
-
-        $share = ['total' => ['messages' => 0, 'spoken' => 0], 'users' => []];
-        foreach ($connection->fetchAll($select) as $row) {
-            $messages = (int)$row['messages'];
-            $spoken = (int)$row['spoken'];
-            $share['users'][(int)$row['admin_user_id']] = ['messages' => $messages, 'spoken' => $spoken];
-            $share['total']['messages'] += $messages;
-            $share['total']['spoken'] += $spoken;
-        }
-
-        return $share;
-    }
-
     public function getSkillBreakdown(string $period): array
     {
         $connection = $this->resourceConnection->getConnection();

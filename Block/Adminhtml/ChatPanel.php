@@ -9,11 +9,10 @@ namespace MagoAssistant\Mago\Block\Adminhtml;
 use Magento\Backend\Block\Template;
 use Magento\Backend\Block\Template\Context;
 use Magento\Backend\Model\Auth\Session as AdminSession;
-use Magento\Framework\Locale\ResolverInterface as LocaleResolver;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
-use MagoAssistant\Mago\Api\VoicePreferenceRepositoryInterface;
 use MagoAssistant\Mago\Api\Tool\PresentableToolInterface;
+use MagoAssistant\Mago\Model\Voice\PanelConfig as VoicePanelConfig;
 use MagoAssistant\Mago\Service\Command\CommandRegistry;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
@@ -61,9 +60,8 @@ class ChatPanel extends Template
         private readonly CommandRegistry $commandRegistry,
         private readonly CommandRunner $commandRunner,
         private readonly FormPolicy $formPolicy,
-        private readonly LocaleResolver $localeResolver,
         private readonly ExampleQuestions $exampleQuestions,
-        private readonly VoicePreferenceRepositoryInterface $voicePreferenceRepository,
+        private readonly VoicePanelConfig $voicePanelConfig,
         private readonly AdminPath $adminPath,
         array $data = []
     ) {
@@ -106,7 +104,6 @@ class ChatPanel extends Template
             'apiBaseUrl' => $this->getUrl('rest/V1/assistant'),
             'adminPath' => $this->adminPath->get(),
             'isStreamingEnabled' => $this->configRepository->isStreamingEnabled(),
-            'voiceInput' => $this->configRepository->isVoiceInputEnabled(),
             'formFieldCap' => self::FORM_FIELD_CAP,
             'formValueLengthCap' => self::FORM_VALUE_LENGTH_CAP,
             'formOptionCap' => self::FORM_OPTION_CAP,
@@ -114,66 +111,7 @@ class ChatPanel extends Template
             'formDenyNamespaces' => $this->formPolicy->getDeniedNamespacePatterns(),
             'formDenyRoutes' => $this->formPolicy->getDeniedRoutePatterns(),
             'i18n' => $this->getPanelTranslations(),
-        ], $this->getVoiceJsConfig()));
-    }
-
-    /**
-     * Only read while voice input is on: the panel renders on every admin page, and the admin's
-     * own voice settings cost a query.
-     *
-     * @return array<string, mixed>
-     */
-    private function getVoiceJsConfig(): array
-    {
-        if (!$this->configRepository->isVoiceInputEnabled()) {
-            return [];
-        }
-
-        $adminUserId = (int)$this->getAdminUserId();
-
-        return [
-            'voiceConsent' => $this->voicePreferenceRepository->hasConsented($adminUserId),
-            'voiceUserMode' => $this->voicePreferenceRepository->getMode($adminUserId),
-            'voicePreferenceUrl' => $this->getUrl('mago/voice/preference'),
-            'voiceMode' => $this->configRepository->getVoiceMode(),
-            'voiceSendDelay' => $this->configRepository->getVoiceSendDelay(),
-            'voiceIdleTimeout' => $this->configRepository->getVoiceIdleTimeout(),
-            'voiceWords' => $this->configRepository->getVoiceWords(),
-            'voiceNumberWords' => $this->getVoiceNumberWordMap(),
-            'locale' => $this->getSpeechLocale(),
-        ];
-    }
-
-    /**
-     * The shop's number words as word => number, the shape the panel looks them up in
-     *
-     * @return array<string, int>
-     */
-    private function getVoiceNumberWordMap(): array
-    {
-        $map = [];
-        foreach ($this->configRepository->getVoiceNumberWords() as $number => $words) {
-            foreach ($words as $word) {
-                $map[$word] = $number;
-            }
-        }
-
-        return $map;
-    }
-
-    /**
-     * BCP-47 tag for the browser's speech recognition: the Voice Input Language setting, or the
-     * admin's interface locale (nl_NL becomes nl-NL) when that is left on "auto". The Response
-     * Language setting is a display name meant for the model, so it cannot drive the recogniser.
-     */
-    private function getSpeechLocale(): string
-    {
-        $configured = $this->configRepository->getVoiceLanguage();
-        if ($configured !== '' && $configured !== 'auto') {
-            return $configured;
-        }
-
-        return str_replace('_', '-', (string)$this->localeResolver->getLocale());
+        ], $this->voicePanelConfig->getJsConfig()));
     }
 
     /**
@@ -247,34 +185,15 @@ class ChatPanel extends Template
             'Could not save your feedback.',
             'This feedback can only be removed under Answer Feedback.',
             'Speak your message',
-            'Voice mode: %1',
-            'Option %1',
-            'Spoken with voice input',
             'Stop listening',
-            'Listening…',
-            'Recording — speak now',
-            'Sending in %1…',
-            'Sending…',
-            'Recording stopped',
-            'Microphone turned off after %1 seconds without speech.',
-            'Speech recognition stopped (%1). Press the microphone to try again.',
-            'Your turn — speak now',
-            'Say “%1” to send now, “%2” to clear, or keep talking to add more',
-            'Say “%1” to send, “%2” to clear, or keep talking to add more',
-            'Send this message?',
-            'Keep talking — adding to your message',
-            'Say “%1” or “%2” to answer the card',
-            'Tick the box on the card first, then say “%1”',
-            'Not understood: “%1”. Say “%2” or “%3”',
-            'Assistant is answering — microphone paused',
             'Voice input',
             'Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.',
-            'Avoid speaking customer details aloud. You can turn voice input off at any time under Stores > Configuration > Mago Assistant > Voice Input.',
+            'Avoid speaking customer details aloud.',
             'I understand, turn on the microphone',
             'Not now',
             'Microphone access was denied. Allow it in the browser to use voice input.',
-            'Voice input is not available in this browser. Use Chrome, Edge or Safari.',
-            'Could not save your choice. Please try again.',
+            'Speech recognition stopped (%1). Press the microphone to try again.',
+            'Could not start the microphone. Please try again.',
         ];
 
         return array_combine($sentences, array_map(static fn (string $sentence): string => (string)__($sentence), $sentences));

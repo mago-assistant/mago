@@ -20,9 +20,6 @@ $userStats = $block->getUserStats();
 $skillStats = $block->getSkillStats();
 $dailyTrend = $block->getDailyTrend();
 $currentPeriod = $block->getPeriod();
-$periodVoiceShare = $block->getVoiceShare($currentPeriod);
-$todayVoice = ($currentPeriod === 'today' ? $periodVoiceShare : $block->getVoiceShare('today'))['total'];
-$periodVoice = $periodVoiceShare['users'];
 $dashboardUrl = $block->getUrl('mago/statistics/index');
 ?>
 
@@ -119,10 +116,6 @@ $dashboardUrl = $block->getUrl('mago/statistics/index');
             <div class="mago-stat-card-value"><?= $escaper->escapeHtml($todayCacheShare !== '' ? $todayCacheShare : __('n/a')) ?></div>
             <div class="mago-stat-card-label"><?= $escaper->escapeHtml(__('Cached Today')) ?></div>
         </div>
-        <div class="mago-stat-card">
-            <div class="mago-stat-card-value"><?= (int)$todayVoice['spoken'] ?> / <?= (int)$todayVoice['messages'] ?></div>
-            <div class="mago-stat-card-label"><?= $escaper->escapeHtml(__('Messages Spoken Today')) ?></div>
-        </div>
     </div>
 
     <div class="mago-section">
@@ -212,7 +205,6 @@ $dashboardUrl = $block->getUrl('mago/statistics/index');
                     <tr>
                         <th><?= $escaper->escapeHtml(__('User')) ?></th>
                         <th class="mago-right"><?= $escaper->escapeHtml(__('Requests')) ?></th>
-                        <th class="mago-right" title="<?= $escaper->escapeHtmlAttr(__('Messages spoken with voice input, of all messages sent')) ?>"><?= $escaper->escapeHtml(__('Spoken')) ?></th>
                         <th class="mago-right"><?= $escaper->escapeHtml(__('Tokens')) ?></th>
                         <th class="mago-right"><?= $escaper->escapeHtml(__('Est. Cost')) ?></th>
                     </tr>
@@ -227,8 +219,6 @@ $dashboardUrl = $block->getUrl('mago/statistics/index');
                                 <?php endif; ?>
                             </td>
                             <td class="mago-right"><?= (int)$user['request_count'] ?></td>
-                            <?php $userVoice = $periodVoice[$user['admin_user_id']] ?? ['messages' => 0, 'spoken' => 0]; ?>
-                            <td class="mago-right"><?= (int)$userVoice['spoken'] ?> / <?= (int)$userVoice['messages'] ?></td>
                             <td class="mago-right"><?= $escaper->escapeHtml($block->formatTokens($user['total_tokens'])) ?></td>
                             <td class="mago-right"><?= $escaper->escapeHtml($block->formatCost($user['estimated_cost'])) ?></td>
                         </tr>

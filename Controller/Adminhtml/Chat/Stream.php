@@ -17,7 +17,6 @@ use MagoAssistant\Mago\Api\ChatServiceInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
 use MagoAssistant\Mago\Logger\DebugLogger;
-use MagoAssistant\Mago\Model\Conversation\InputMethodRecorder;
 use MagoAssistant\Mago\Model\Conversation\PageLocationRecorder;
 use MagoAssistant\Mago\Service\Ai\Client;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
@@ -50,8 +49,7 @@ class Stream extends Action implements HttpPostActionInterface
         private readonly PageContextHolder $pageContextHolder,
         private readonly NavigationNoteInjector $navigationNoteInjector,
         private readonly PageLocationRecorder $pageLocationRecorder,
-        private readonly PrivacyService $privacyService,
-        private readonly InputMethodRecorder $inputMethodRecorder
+        private readonly PrivacyService $privacyService
     ) {
         parent::__construct($context);
     }
@@ -143,7 +141,6 @@ class Stream extends Action implements HttpPostActionInterface
                 $this->conversationRepository->updateTitle($conversationId, $this->privacyService->safeTitle($message));
             }
             $messageId = $this->conversationRepository->addMessage($conversationId, 'user', $message);
-            $this->inputMethodRecorder->record($messageId, InputMethodRecorder::fromRequest($postData['input_method'] ?? null));
             if ($pageContext !== null) {
                 $this->pageLocationRecorder->record($messageId, $pageContext->toLocation());
             }

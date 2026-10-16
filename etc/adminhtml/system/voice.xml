@@ -1,56 +1,11 @@
 <?xml version="1.0"?>
 <include xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_include.xsd">
-    <group id="voice" translate="label comment" type="text" sortOrder="35" showInDefault="1" showInWebsite="1" showInStore="1">
+    <group id="voice" translate="label" type="text" sortOrder="35" showInDefault="1" showInWebsite="0" showInStore="0">
         <label>Voice Input</label>
-        <comment>Speak to the assistant instead of typing. Speech is converted to text by the browser's own speech recognition, so the audio is handled by the browser vendor (for example Google for Chrome), never by Mago or the AI provider. The resulting text is treated exactly like typed text.</comment>
-        <field id="enabled" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
+        <field id="enabled" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
             <label>Enabled</label>
             <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-            <comment>Show a microphone button in the chat panel. Speech is turned into text by the browser's own speech recognition, so the audio is handled by the browser vendor (e.g. Google for Chrome), not by Mago or the AI provider. The recognised text is editable and treated exactly like typed text. Works in browsers with built-in speech recognition (Chrome, Edge, Safari); elsewhere, such as Firefox, the button is greyed out and explains why.</comment>
-        </field>
-        <field id="language" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Language</label>
-            <source_model>MagoAssistant\Mago\Model\Config\Source\SpeechLanguage</source_model>
-            <comment>The language the browser listens for. Speaking another language than the one selected here gives garbled text, so pick the language administrators actually speak rather than the interface language.</comment>
-            <depends><field id="enabled">1</field></depends>
-        </field>
-        <field id="mode" translate="label comment" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Voice Mode</label>
-            <source_model>MagoAssistant\Mago\Model\Config\Source\VoiceMode</source_model>
-            <comment><![CDATA[<strong>Dictate</strong>: press the microphone, speak, check the text and press Send yourself.<br/><strong>Send after a pause</strong>: press the microphone once. After each pause a bar counts down and sends the message; say a yes word to send at once, a no word to clear it, or keep talking to add more.<br/><strong>Confirm each message</strong>: press the microphone once. After each pause a bar asks "Send this message?" and waits: say a yes word (or click Send) to send, a no word (or Discard) to clear it, or keep talking to add more.<br/>In both, the microphone is paused while the assistant answers and then listens again for your next message. Press the microphone, start typing or say a stop word to end it. Admins can also switch mode from the chat itself.]]></comment>
-            <depends><field id="enabled">1</field></depends>
-        </field>
-        <field id="send_delay" translate="label comment" type="text" sortOrder="35" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Send Delay (ms)</label>
-            <comment>Used by Send after a pause (also when an admin picks it in the chat): how long the bar counts down after you stop talking before the message is sent, in milliseconds (default 1400). Gives time to say a no word or keep talking. 0 sends at once.</comment>
-            <validate>validate-digits validate-zero-or-greater</validate>
-            <depends><field id="enabled">1</field></depends>
-        </field>
-        <field id="idle_timeout" translate="label comment" type="text" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Turn Off After Silence (seconds)</label>
-            <comment>Send after a pause and Confirm each message keep the microphone open between messages. After this many seconds without any speech it turns itself off, so it does not keep listening to the room when nobody is talking to the assistant. Time spent waiting for an answer does not count. 0 keeps it on until it is turned off by hand (default 8).</comment>
-            <validate>validate-digits validate-zero-or-greater</validate>
-            <depends><field id="enabled">1</field></depends>
-        </field>
-        <field id="words_yes" translate="label comment" type="text" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Yes Words</label>
-            <comment>Send the message while the bar is up, and press Allow on a confirmation card (spoken, or typed as a short reply; a card that cannot be undone still needs its box ticked by hand first). Comma-separated words in your own language (the one set under Language above), added to the built-in English words, which always keep working. The first word you enter is the one the panel suggests. Use ordinary words the speech recognition knows: invented words or phrases are written down differently each time and will not be recognised.</comment>
-            <depends><field id="enabled">1</field></depends>
-        </field>
-        <field id="words_no" translate="label comment" type="text" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>No Words</label>
-            <comment>Clear the message while the bar is up, and press Reject on a confirmation card. Comma-separated words in your own language (the one set under Language above), added to the built-in English words, which always keep working. The first word you enter is the one the panel suggests. Use ordinary words the speech recognition knows: invented words or phrases are written down differently each time and will not be recognised.</comment>
-            <depends><field id="enabled">1</field></depends>
-        </field>
-        <field id="words_stop" translate="label comment" type="text" sortOrder="70" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Stop Words</label>
-            <comment>Said on their own, these turn the microphone off in any mode. There is deliberately no spoken "start". Comma-separated words in your own language (the one set under Language above), added to the built-in English words, which always keep working. The first word you enter is the one the panel suggests. Use ordinary words the speech recognition knows: invented words or phrases are written down differently each time and will not be recognised.</comment>
-            <depends><field id="enabled">1</field></depends>
-        </field>
-        <field id="number_words" translate="label comment" type="text" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Number Words</label>
-            <comment>While the hands-free microphone listens, suggestions show "Option 1", "Option 2"…, and saying the number picks one. Digits and English number words (one, two, first, second…) always work. Add your own language here: the numbers in order, separated by commas, with alternatives for the same number separated by a slash. For example: een/één/eerste, twee/tweede, drie/derde.</comment>
-            <depends><field id="enabled">1</field></depends>
+            <comment>Show a microphone button in the chat panel to dictate a message. Speech is turned into text by the browser's own speech recognition, so the audio goes to the browser vendor (for example Google for Chrome), not to Mago or the AI provider. The text lands in the input to check and send yourself. The browser listens in the admin user's interface locale (Account Settings). Only shown in browsers with built-in speech recognition, such as Chrome, Edge and Safari.</comment>
         </field>
     </group>
 </include>

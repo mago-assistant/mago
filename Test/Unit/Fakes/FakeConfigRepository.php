@@ -8,7 +8,6 @@ namespace MagoAssistant\Mago\Test\Unit\Fakes;
 
 use Magento\Store\Api\Data\StoreInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface;
-use MagoAssistant\Mago\Model\Voice\CommandWords;
 
 class FakeConfigRepository implements RepositoryInterface
 {
@@ -16,13 +15,7 @@ class FakeConfigRepository implements RepositoryInterface
     private int $maxToolIterations = 0;
     private int $customerNotificationInterval = 0;
     private bool $answerWidgets = false;
-    private bool $voiceInput = true;
-    private string $voiceMode = 'confirm';
-    private string $voiceLanguage = 'auto';
-    private int $voiceSendDelay = 1400;
-    private int $voiceIdleTimeout = 8;
-    /** @var array<string, string[]> */
-    private array $voiceWords = [];
+    private bool $voiceInput = false;
     private int $maxResponseTokens = 0;
     private bool $reindexAllowed = false;
     private bool $isDebugEnabled = false;
@@ -86,79 +79,6 @@ class FakeConfigRepository implements RepositoryInterface
     public function isVoiceInputEnabled(): bool
     {
         return $this->voiceInput;
-    }
-
-    public function withVoiceMode(string $mode): self
-    {
-        $this->voiceMode = $mode;
-
-        return $this;
-    }
-
-    public function getVoiceMode(): string
-    {
-        return $this->voiceMode;
-    }
-
-    public function withVoiceLanguage(string $language): self
-    {
-        $this->voiceLanguage = $language;
-
-        return $this;
-    }
-
-    public function getVoiceLanguage(): string
-    {
-        return $this->voiceLanguage;
-    }
-
-    public function withVoiceSendDelay(int $milliseconds): self
-    {
-        $this->voiceSendDelay = $milliseconds;
-
-        return $this;
-    }
-
-    public function getVoiceSendDelay(): int
-    {
-        return $this->voiceSendDelay;
-    }
-
-    public function withVoiceIdleTimeout(int $seconds): self
-    {
-        $this->voiceIdleTimeout = $seconds;
-
-        return $this;
-    }
-
-    public function getVoiceIdleTimeout(): int
-    {
-        return $this->voiceIdleTimeout;
-    }
-
-    /**
-     * @param array<string, string[]> $words
-     */
-    public function withVoiceWords(array $words): self
-    {
-        $this->voiceWords = $words;
-
-        return $this;
-    }
-
-    public function getVoiceNumberWords(): array
-    {
-        return [];
-    }
-
-    public function getVoiceWords(): array
-    {
-        $words = [];
-        foreach (CommandWords::COMMANDS as $command) {
-            $words[$command] = CommandWords::withEnglish($command, implode(',', $this->voiceWords[$command] ?? []));
-        }
-
-        return $words;
     }
 
     public function getExtensionVersion(): string
