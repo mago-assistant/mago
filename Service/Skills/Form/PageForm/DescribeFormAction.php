@@ -63,6 +63,7 @@ class DescribeFormAction extends AbstractPageFormReadAction
             'is_new_entity' => $pageContext->isNewEntity,
             'store_id' => $pageContext->storeId,
             'total_fields' => $pageContext->fieldCount,
+            'field_list_truncated' => $pageContext->isFieldListTruncated,
             'returned_fields' => count($fields),
             'fields' => array_map($this->toFieldSummary(...), $fields),
         ];
@@ -107,6 +108,7 @@ class DescribeFormAction extends AbstractPageFormReadAction
             'is_new_entity' => [PiiClass::PUBLIC],
             'store_id' => [PiiClass::PUBLIC],
             'total_fields' => [PiiClass::PUBLIC],
+            'field_list_truncated' => [PiiClass::PUBLIC],
             'returned_fields' => [PiiClass::PUBLIC],
             'fields' => [PiiClass::PUBLIC],
             'path' => [PiiClass::PUBLIC],

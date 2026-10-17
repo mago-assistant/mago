@@ -19,6 +19,13 @@ use MagoAssistant\Mago\Model\Form\PageLocation;
  * This walks the stored messages in order and, wherever a user message was sent from a
  * different page than the previous one, prefixes the copy that goes to the provider with a
  * short note saying so. The stored message itself is never changed.
+ *
+ * The first message of a conversation sent from a form page gets a note too, saying which page it
+ * is. That note used to be a line in the system prompt, rebuilt for every request, which changed
+ * the very start of the prompt whenever the administrator moved between pages and so gave a
+ * provider that caches a prompt prefix nothing stable to reuse. Here the note is a pure function
+ * of what is stored per message, so every request replays the same text for the same history, and
+ * only the message that was sent from a new page differs.
  */
 class NavigationNoteInjector
 {
@@ -48,8 +55,9 @@ class NavigationNoteInjector
 
             $location = $this->locationOf($message);
 
-            if ($hasSeenUserMessage && !$this->isSameLocation($previousLocation, $location)) {
-                $messages[$index][self::COLUMN_CONTENT] = $this->noteFor($previousLocation, $location)
+            $note = $this->noteForMessage($hasSeenUserMessage, $previousLocation, $location);
+            if ($note !== null) {
+                $messages[$index][self::COLUMN_CONTENT] = $note
                     . "\n\n" . (string)($message[self::COLUMN_CONTENT] ?? '');
             }
 
@@ -58,6 +66,23 @@ class NavigationNoteInjector
         }
 
         return $messages;
+    }
+
+    private function noteForMessage(bool $hasSeenUserMessage, ?PageLocation $previous, ?PageLocation $current): ?string
+    {
+        if (!$hasSeenUserMessage) {
+            return $current === null ? null : $this->openingNote($current);
+        }
+
+        return $this->isSameLocation($previous, $current) ? null : $this->noteFor($previous, $current);
+    }
+
+    private function openingNote(PageLocation $current): string
+    {
+        return sprintf(
+            '[Page context: the administrator is viewing %s and has its form open.]',
+            $current->describe()
+        );
     }
 
     private function isSameLocation(?PageLocation $previous, ?PageLocation $current): bool
