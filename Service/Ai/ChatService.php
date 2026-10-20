@@ -16,6 +16,7 @@ use MagoAssistant\Mago\Api\Tool\ToolInterface;
 use MagoAssistant\Mago\Api\Tool\UpfrontGuidanceToolInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Logger\DebugLogger;
+use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Service\Acl\ToolAccess;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
@@ -27,6 +28,11 @@ use MagoAssistant\Mago\Service\Usage\UsageLogger;
 class ChatService implements ChatServiceInterface
 {
     private const BYTES_PER_TOKEN_ESTIMATE = 4;
+
+    /** A key name is the model's to choose: the warning keeps a few, short ones */
+    private const LOGGED_KEY_COUNT = 10;
+
+    private const LOGGED_KEY_LENGTH = 64;
 
     /** Marker that opens the store scope section so it is never injected twice */
     private const STORE_SCOPE_MARKER = '[Store scope]';
@@ -54,7 +60,8 @@ class ChatService implements ChatServiceInterface
         private readonly AnswerWidgets $answerWidgets,
         private readonly PageContextHolder $pageContextHolder,
         private readonly PrivacyService $privacyService,
-        private readonly ToolAccess $toolAccess
+        private readonly ToolAccess $toolAccess,
+        private readonly ErrorLogger $errorLogger
     ) {
     }
 
@@ -820,21 +827,24 @@ class ChatService implements ChatServiceInterface
             return ['error' => 'Tool not found: ' . $toolCall['name']];
         }
 
-        $denial = $this->getDenialReason($tool, $toolCall['input'] ?? [], $adminUserId);
+        // Only what the action declares runs, which is also all the confirmation card shows: a key
+        // the model added beyond the schema would otherwise reach the save without the admin seeing it.
+        $input = $this->inputForAction($tool, $toolCall['input'] ?? []);
+        $this->logDroppedArguments($tool, $toolCall, $input);
+        $denial = $this->getDenialReason($tool, $input, $adminUserId);
         if ($denial !== null) {
             return ['error' => $denial];
         }
 
         // The tool's own declaration of how the invoked action's output crosses to the LLM (#97).
-        $classes = $tool->getFieldClassification((string)($toolCall['input']['action'] ?? ''));
+        $classes = $tool->getFieldClassification((string)($input['action'] ?? ''));
 
         try {
             $this->debugLogger->addLog('Tool Execute', [
                 'tool' => $toolCall['name'],
-                'action' => $toolCall['input']['action'] ?? null,
-                'input_keys' => array_keys($toolCall['input'] ?? []),
+                'action' => $input['action'] ?? null,
+                'input_keys' => array_keys($input),
             ]);
-            $input = $toolCall['input'] ?? [];
             // An admin URL token never rehydrates into a write, resolvable or not: it embeds the
             // admin secret key. Nor does text a customer wrote. Other masked values do rehydrate
             // (#114); the confirmation card shows them in plain text with a warning instead.
@@ -960,7 +970,7 @@ class ChatService implements ChatServiceInterface
         if (!$tool) {
             return false;
         }
-        $input = $toolCall['input'] ?? [];
+        $input = $this->inputForAction($tool, $toolCall['input'] ?? []);
         if ($tool->isReadOnlyAction($input)) {
             return false;
         }
@@ -984,6 +994,7 @@ class ChatService implements ChatServiceInterface
     /**
      * Why the admin user may not perform this invocation, or null when allowed.
      * Checks the assistant skill permission first, then the tool's native Magento ACL.
+     * Decided on the input executeTool() runs, so no undeclared key can sway it.
      *
      * @param ToolInterface $tool
      * @param array<string, mixed> $input
@@ -992,6 +1003,7 @@ class ChatService implements ChatServiceInterface
      */
     private function getDenialReason(ToolInterface $tool, array $input, ?int $adminUserId): ?string
     {
+        $input = $this->inputForAction($tool, $input);
         if (!$this->toolRegistry->isCallAllowed($tool, $input, $adminUserId)) {
             return sprintf(
                 'Access denied: your skill permissions do not allow this action with the %s tool',
@@ -1384,10 +1396,45 @@ class ChatService implements ChatServiceInterface
     }
 
     /**
+     * Names the keys inputForAction() cut, never their values. A key another action of the tool
+     * declares is routine (the model fills in every key it is shown), so it only reaches the debug
+     * log. A key the tool never offered is not: the model was told about it somewhere else, most
+     * likely by an add-on whose action reads a key it does not declare, so that one is always logged.
+     *
+     * @param array<string, mixed> $toolCall
+     * @param array<array-key, mixed> $input
+     */
+    private function logDroppedArguments(ToolInterface $tool, array $toolCall, array $input): void
+    {
+        $dropped = array_map('strval', array_keys(array_diff_key($toolCall['input'] ?? [], $input)));
+        if ($dropped === []) {
+            return;
+        }
+
+        $context = ['tool' => $toolCall['name'], 'action' => $input['action'] ?? null];
+        $this->debugLogger->addLog('Tool Arguments Dropped', $context + ['undeclared_keys' => $dropped]);
+
+        $neverOffered = array_values(array_diff(
+            $dropped,
+            array_map('strval', array_keys($tool->getParameterSchema()['properties'] ?? []))
+        ));
+        if ($neverOffered === []) {
+            return;
+        }
+        $this->errorLogger->addWarning('Tool Arguments Never Declared', $context + [
+            'keys' => array_map(
+                static fn (string $key): string => mb_substr($key, 0, self::LOGGED_KEY_LENGTH),
+                array_slice($neverOffered, 0, self::LOGGED_KEY_COUNT)
+            ),
+        ]);
+    }
+
+    /**
      * The parameters the chosen action actually takes. A skill offers one flat schema for all its
      * actions, and the model fills in every key it is shown, so a status change arrives carrying
      * capture, carrier_code and the credit memo adjustments. On the confirmation card that is worse
      * than noise: the admin is asked to approve a status change while reading "capture: true".
+     * executeTool() runs the same cut, so the card and the save never see different arguments.
      *
      * @param array<array-key,mixed> $input
      * @return array<array-key,mixed>

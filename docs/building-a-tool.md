@@ -59,7 +59,12 @@ The methods, and what goes wrong with each:
   not. Never promise more than `execute()` returns. Keep it short; it is sent on every request.
 - `getParameterSchema()`: JSON Schema with `type: object`. The model fills in every parameter it is
   shown, so only offer parameters that are always safe to receive. Removing a parameter works
-  better than a description asking the model not to use it.
+  better than a description asking the model not to use it. For a skill action (and any tool
+  implementing `ActionScopedToolInterface`) the schema of the called action is also an allowlist:
+  `execute()` never receives a key it does not declare, so declare every key you read. A dropped key
+  that no action of the tool declares is logged as a warning ("Tool Arguments Never Declared") in
+  Mago's error log, debug mode or not; with debug logging on, every dropped key shows up as "Tool
+  Arguments Dropped".
 - `getMagentoAcl(array $input = [])`: an empty `$input` must return the most restrictive resource
   the tool can reach (fail closed). A tool that touches no Magento data returns
   `Acl::MAGO_PER_USER`, which gates it by the per-user skill permission alone. Never `''`: an
