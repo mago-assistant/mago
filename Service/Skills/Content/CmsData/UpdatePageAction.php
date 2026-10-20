@@ -27,7 +27,7 @@ class UpdatePageAction implements ActionInterface
 
     public function getDescription(): string
     {
-        return 'Update CMS page content or title';
+        return 'Update CMS page content, title or enabled status';
     }
 
     public function getParameterSchema(): array
@@ -44,6 +44,11 @@ class UpdatePageAction implements ActionInterface
             'title' => [
                 'type' => 'string',
                 'description' => 'New title for update actions',
+            ],
+            'is_active' => [
+                'type' => 'boolean',
+                'description' => 'Whether the page or block is enabled. Updates keep the current status when it '
+                    . 'is left out; new pages and blocks are enabled unless it is false.',
             ],
         ];
     }
@@ -98,8 +103,8 @@ class UpdatePageAction implements ActionInterface
 
         $body = ['page' => ['id' => $pageId]];
         // Send the existing URL key back, or Magento regenerates the identifier from the title on
-        // save and the old storefront URL 404s with no redirect. This action only edits content and
-        // title; it never renames a page.
+        // save and the old storefront URL 404s with no redirect. This action only edits content, title
+        // and status; it never renames a page.
         $currentIdentifier = (string)($page['identifier'] ?? '');
         if ($currentIdentifier !== '') {
             $body['page']['identifier'] = $currentIdentifier;
@@ -109,6 +114,12 @@ class UpdatePageAction implements ActionInterface
         }
         if (!empty($params['title'])) {
             $body['page']['title'] = $params['title'];
+        }
+        if (isset($params['is_active'])) {
+            $body['page']['active'] = filter_var($params['is_active'], FILTER_VALIDATE_BOOLEAN);
+        }
+        if (!$this->hasChanges($body['page'])) {
+            return ['error' => 'Nothing to update: pass content, title or is_active'];
         }
 
         $result = $this->apiClient->put('cmsPage/' . $pageId, $body, $adminUserId);
@@ -125,5 +136,16 @@ class UpdatePageAction implements ActionInterface
                 'url' => $this->secureAdminUrl->getUrl('cms/page/edit', ['page_id' => $pageId]),
             ]],
         ];
+    }
+
+    /**
+     * The identifiers in the body only address the page; without a field next to them the PUT
+     * would change nothing and still report success.
+     *
+     * @param array<string, mixed> $page
+     */
+    private function hasChanges(array $page): bool
+    {
+        return array_diff_key($page, array_flip(['id', 'identifier'])) !== [];
     }
 }

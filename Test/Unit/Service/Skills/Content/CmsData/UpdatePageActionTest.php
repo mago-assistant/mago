@@ -54,6 +54,26 @@ class UpdatePageActionTest extends TestCase
         self::assertSame('About Our Company', $this->putBody()['page']['title']);
     }
 
+    #[Test]
+    public function itDisablesThePageWithoutRenamingIt(): void
+    {
+        $result = $this->action(['id' => 5, 'identifier' => 'about-us'])
+            ->execute(['identifier' => 'about-us', 'is_active' => false], self::ADMIN_USER_ID);
+
+        self::assertTrue($result['success']);
+        self::assertSame(['page' => ['id' => 5, 'identifier' => 'about-us', 'active' => false]], $this->putBody());
+    }
+
+    #[Test]
+    public function itRefusesWhenThereIsNothingToChange(): void
+    {
+        $result = $this->action(['id' => 5, 'identifier' => 'about-us'])
+            ->execute(['identifier' => 'about-us'], self::ADMIN_USER_ID);
+
+        self::assertSame('Nothing to update: pass content, title or is_active', $result['error']);
+        self::assertSame([], $this->apiClient->callsOf(FakeInternalApiClient::PUT));
+    }
+
     /**
      * @return array<string, mixed>
      */

@@ -1272,7 +1272,7 @@ final class ChatServiceTest extends TestCase
             }
             public function getParameterSchema(): array
             {
-                return [];
+                return ['content' => ['type' => 'string']];
             }
             public function getAclResource(): ?string
             {
@@ -1357,7 +1357,7 @@ final class ChatServiceTest extends TestCase
             }
             public function getParameterSchema(): array
             {
-                return [];
+                return ['comment' => ['type' => 'string']];
             }
             public function getAclResource(): ?string
             {

@@ -27,7 +27,7 @@ class UpdateBlockAction implements ActionInterface
 
     public function getDescription(): string
     {
-        return 'Update CMS block content or title';
+        return 'Update CMS block content, title or enabled status';
     }
 
     public function getParameterSchema(): array
@@ -44,6 +44,11 @@ class UpdateBlockAction implements ActionInterface
             'title' => [
                 'type' => 'string',
                 'description' => 'New title for update actions',
+            ],
+            'is_active' => [
+                'type' => 'boolean',
+                'description' => 'Whether the page or block is enabled. Updates keep the current status when it '
+                    . 'is left out; new pages and blocks are enabled unless it is false.',
             ],
         ];
     }
@@ -103,6 +108,12 @@ class UpdateBlockAction implements ActionInterface
         if (!empty($params['title'])) {
             $body['block']['title'] = $params['title'];
         }
+        if (isset($params['is_active'])) {
+            $body['block']['active'] = filter_var($params['is_active'], FILTER_VALIDATE_BOOLEAN);
+        }
+        if (!$this->hasChanges($body['block'])) {
+            return ['error' => 'Nothing to update: pass content, title or is_active'];
+        }
 
         $result = $this->apiClient->put('cmsBlock/' . $blockId, $body, $adminUserId);
 
@@ -118,5 +129,16 @@ class UpdateBlockAction implements ActionInterface
                 'url' => $this->secureAdminUrl->getUrl('cms/block/edit', ['block_id' => $blockId]),
             ]],
         ];
+    }
+
+    /**
+     * The identifiers in the body only address the block; without a field next to them the PUT
+     * would change nothing and still report success.
+     *
+     * @param array<string, mixed> $block
+     */
+    private function hasChanges(array $block): bool
+    {
+        return array_diff_key($block, array_flip(['id'])) !== [];
     }
 }

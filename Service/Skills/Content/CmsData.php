@@ -63,7 +63,7 @@ class CmsData extends AbstractSkill
     protected function getBaseInstructions(): string
     {
         return 'store_id only applies to create_page and create_block. Updating a page or block keeps its existing '
-            . 'store view assignment; store_id is ignored there. '
+            . 'store view assignment, so do not send store_id with them. '
             . 'The panel adds a link to the created or updated page or block for you, so do not write an edit or '
             . 'admin url in your answer yourself.';
     }

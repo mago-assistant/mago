@@ -142,7 +142,8 @@ abstract class AbstractSkill implements ActionScopedToolInterface, IrreversibleT
             }
         }
 
-        return $action->execute($params, (int)($params['_admin_user_id'] ?? 0));
+        return $this->findUndeclaredParameterRefusal($action, $params)
+            ?? $action->execute($params, (int)($params['_admin_user_id'] ?? 0));
     }
 
     public function getActionAcl(array $input): ?string
@@ -156,8 +157,47 @@ abstract class AbstractSkill implements ActionScopedToolInterface, IrreversibleT
     public function findRefusal(array $input): ?array
     {
         $action = $this->actions[$input['action'] ?? ''] ?? null;
+        if ($action === null) {
+            return null;
+        }
 
-        return $action instanceof ValidatingActionInterface ? $action->findRefusal($input) : null;
+        return $this->findUndeclaredParameterRefusal($action, $input)
+            ?? ($action instanceof ValidatingActionInterface ? $action->findRefusal($input) : null);
+    }
+
+    /**
+     * The tool schema merges the parameters of every action, so the model can send a write action a
+     * parameter only another action declares. The action would drop it and still report success,
+     * and the admin would have confirmed a change that never happens (#279). Reads are left alone:
+     * an ignored filter there does not change store data.
+     *
+     * @return array<string, string>|null
+     */
+    private function findUndeclaredParameterRefusal(ActionInterface $action, array $input): ?array
+    {
+        if ($action->isReadOnly()) {
+            return null;
+        }
+
+        $undeclared = array_keys(array_filter(
+            array_diff_key($input, $action->getParameterSchema(), ['action' => true]),
+            static fn (mixed $value, string|int $name): bool => $value !== null
+                && !str_starts_with((string)$name, '_'),
+            ARRAY_FILTER_USE_BOTH
+        ));
+        if ($undeclared === []) {
+            return null;
+        }
+
+        return ['error' => sprintf(
+            'The %s action does not support %s, so nothing was changed. It accepts: %s. If the request '
+            . 'cannot be done with those, tell the administrator instead of reporting success.',
+            $action->getName(),
+            implode(', ', $undeclared),
+            $action->getParameterSchema() === []
+                ? 'no parameters'
+                : implode(', ', array_keys($action->getParameterSchema()))
+        )];
     }
 
     public function isReadOnly(): bool

@@ -61,7 +61,7 @@ class CreatePageAction implements ActionInterface
                 'type' => 'integer',
                 'description' => 'Only for create_page and create_block: store view the new page or block belongs '
                     . 'to. 0 = all store views (default); a store view id from the store scope list limits it to that '
-                    . 'store view. Ignored by all other actions.',
+                    . 'store view. Do not send it with any other action.',
             ],
         ];
     }
