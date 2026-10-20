@@ -13,6 +13,10 @@ use Magento\Config\Model\Config\TypePool;
  * already decides whether the admin may change the setting; this names the settings where a
  * change proposed from text the assistant read would hurt most: what runs on every storefront
  * page, how the admin is secured and reached, the store's URLs, where its email goes.
+ *
+ * Settings config_writer refuses outright (BlockedConfigPaths: base URLs, the admin URL, the mail
+ * server, the addresses customer mail goes to, two-factor and admin login security, head and
+ * footer scripts) never reach the card, so they need no reason here.
  */
 final class ConfigWriteImpact
 {
@@ -30,13 +34,7 @@ final class ConfigWriteImpact
      * Path prefixes and the reason a change there stands out, first match wins.
      */
     private const REASONS = [
-        'design/head/includes' => self::STOREFRONT_CODE,
-        'design/footer/absolute_footer' => self::STOREFRONT_CODE,
         'design/theme/' => self::STOREFRONT_CODE,
-        'twofactorauth/' => self::SECURITY,
-        'admin/security/' => self::SECURITY,
-        'admin/captcha/' => self::SECURITY,
-        'admin/url/' => self::SECURITY,
         'customer/captcha/' => self::SECURITY,
         'customer/password/' => self::SECURITY,
         'oauth/' => self::SECURITY,
@@ -52,7 +50,7 @@ final class ConfigWriteImpact
         'dev/' => self::DEVELOPER,
     ];
 
-    private const EMAIL_COPY_FIELDS = ['copy_to', 'copy_method'];
+    private const EMAIL_COPY_FIELDS = ['copy_method'];
 
     public function __construct(
         private readonly TypePool $typePool

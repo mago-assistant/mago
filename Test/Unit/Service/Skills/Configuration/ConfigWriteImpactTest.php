@@ -20,14 +20,13 @@ class ConfigWriteImpactTest extends TestCase
     public static function highImpactPaths(): array
     {
         return [
-            'storefront head' => ['design/head/includes', 'HTML and scripts'],
-            'storefront footer' => ['design/footer/absolute_footer', 'HTML and scripts'],
             'storefront theme' => ['design/theme/theme_id', 'HTML and scripts'],
-            'two-factor auth' => ['twofactorauth/general/enable', 'secured'],
-            'admin URL' => ['admin/url/custom', 'secured'],
-            'base URL' => ['web/secure/base_url', 'unreachable'],
-            'SMTP host' => ['system/smtp/host', 'email'],
-            'a copy of every order email' => ['sales_email/order/copy_to', 'email'],
+            'customer password policy' => ['customer/password/lockout_failures', 'secured'],
+            'web API security' => ['webapi/webapisecurity/allow_insecure', 'secured'],
+            'secure URLs in the admin' => ['web/secure/use_in_adminhtml', 'unreachable'],
+            'mail switched off' => ['system/smtp/disable', 'email'],
+            'how order email is copied' => ['sales_email/order/copy_method', 'email'],
+            'sender name' => ['trans_email/ident_general/name', 'email'],
             'developer settings' => ['dev/js/merge_files', 'developer'],
             'an environment setting' => ['catalog/search/opensearch_server_hostname', 'environment'],
             'a sensitive setting' => ['google/analytics/account', 'sensitive'],

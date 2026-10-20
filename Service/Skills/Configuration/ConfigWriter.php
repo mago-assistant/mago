@@ -10,18 +10,25 @@ use Magento\Framework\App\Cache\TypeListInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\Exception\LocalizedException;
 use MagoAssistant\Mago\Api\Tool\HighImpactToolInterface;
+use MagoAssistant\Mago\Api\Tool\ValidatingToolInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 
-class ConfigWriter implements HighImpactToolInterface
+class ConfigWriter implements HighImpactToolInterface, ValidatingToolInterface
 {
+    /**
+     * Credentials, payment settings and Mago's own settings (ConfigPathAccess::isBlocked())
+     */
+    private const PROTECTED_PATH_REFUSAL = ['error' => 'Cannot modify this configuration path for security reasons'];
+
     public function __construct(
         private readonly ConfigValueSaver $valueSaver,
         private readonly TypeListInterface $cacheTypeList,
         private readonly StoreScopeContext $scopeContext,
         private readonly ConfigPathAccess $pathAccess,
         private readonly ConfigWriteImpact $impact,
-        private readonly ScopeConfigInterface $scopeConfig
+        private readonly ScopeConfigInterface $scopeConfig,
+        private readonly BlockedConfigPaths $blockedPaths
     ) {
     }
 
@@ -32,7 +39,11 @@ class ConfigWriter implements HighImpactToolInterface
 
     public function getDescription(): string
     {
-        return 'Modify Magento store configuration values. Requires merchant confirmation before execution. Credentials, payment config and Mago\'s own settings are blocked.';
+        return 'Modify Magento store configuration values. Requires merchant confirmation before execution. '
+            . 'Credentials, payment config and Mago\'s own settings are blocked, and so are the storefront and admin '
+            . 'URLs, the mail server, the store email addresses and every other address customer mail goes to, '
+            . 'two-factor and admin login security and the storefront head and footer scripts: for those, tell the '
+            . 'user to change them under Stores > Configuration.';
     }
 
     public function getParameterSchema(): array
@@ -79,11 +90,17 @@ class ConfigWriter implements HighImpactToolInterface
         $value = (string)$value;
 
         if ($this->pathAccess->isBlocked($path)) {
-            return ['error' => 'Cannot modify this configuration path for security reasons'];
+            return self::PROTECTED_PATH_REFUSAL;
         }
 
         if (!$this->pathAccess->isAllowed($path)) {
             return ['error' => 'Access denied: you do not have the permission for this configuration section'];
+        }
+
+        // Refused before the card already (findRefusal); checked again for a confirm that skips it,
+        // after the section check so an admin without the section learns nothing about its paths
+        if ($this->blockedPaths->isBlocked($path)) {
+            return $this->blockedPathRefusal($path);
         }
 
         if (!$this->pathAccess->isDeclared($path)) {
@@ -140,7 +157,7 @@ class ConfigWriter implements HighImpactToolInterface
         $path = $this->pathAccess->normalise($input['path'] ?? '');
         $scope = (string)($input['scope'] ?? StoreScopeContext::SCOPE_DEFAULT);
         $scopeId = (int)($input['scope_id'] ?? 0);
-        if ($path === '' || $this->pathAccess->isBlocked($path)
+        if ($path === '' || $this->pathAccess->isBlocked($path) || $this->blockedPaths->isBlocked($path)
             || $this->scopeContext->validateScope($scope, $scopeId) !== null
         ) {
             return [];
@@ -187,6 +204,35 @@ class ConfigWriter implements HighImpactToolInterface
             is_scalar($current) ? (string)$current : '',
             is_scalar($newValue) ? (string)$newValue : ''
         );
+    }
+
+    /**
+     * A setting this tool never writes is refused before the confirmation card: there is nothing to
+     * allow. Both checks run again in execute().
+     */
+    public function findRefusal(array $input): ?array
+    {
+        $path = $this->pathAccess->normalise($input['path'] ?? '');
+
+        // A section the admin lacks is left to execute(), which denies it without describing its paths
+        return match (true) {
+            $path === '', !$this->pathAccess->isAllowed($path) => null,
+            $this->pathAccess->isBlocked($path) => self::PROTECTED_PATH_REFUSAL,
+            $this->blockedPaths->isBlocked($path) => $this->blockedPathRefusal($path),
+            default => null,
+        };
+    }
+
+    /**
+     * @return array{error: string}
+     */
+    private function blockedPathRefusal(string $path): array
+    {
+        return ['error' => sprintf(
+            'Changing "%s" from the chat is turned off: a wrong value here can hand over the store, its admin '
+                . 'or its mail. Change it under Stores > Configuration, where Magento checks the value.',
+            $path
+        )];
     }
 
     public function isReadOnly(): bool

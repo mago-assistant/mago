@@ -11,6 +11,7 @@ use Magento\Framework\App\Cache\TypeListInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\AuthorizationInterface;
+use MagoAssistant\Mago\Service\Skills\Configuration\BlockedConfigPaths;
 use MagoAssistant\Mago\Service\Skills\Configuration\ConfigPathAccess;
 use MagoAssistant\Mago\Service\Skills\Configuration\ConfigReader;
 use MagoAssistant\Mago\Service\Skills\Configuration\ConfigValueSaver;
@@ -286,7 +287,7 @@ class ConfigWriterTest extends TestCase
         $writer = $this->writerWith($this->createMock(ConfigValueSaver::class), null, null, null, $scopeConfig);
 
         $cautions = $writer->getCautions(
-            ['path' => 'design/head/includes', 'value' => '<script src="https://evil.example/s.js"></script>'],
+            ['path' => 'design/theme/theme_id', 'value' => '<script src="https://evil.example/s.js"></script>'],
             1
         );
 
@@ -309,6 +310,66 @@ class ConfigWriterTest extends TestCase
             ['path' => 'design/head/includes', 'value' => 'x', 'scope' => 'stores', 'scope_id' => 99],
             1
         ));
+    }
+
+    #[Test]
+    public function itRefusesABlockedSettingBeforeTheConfirmationCard(): void
+    {
+        $writer = $this->writerWith($this->createMock(ConfigValueSaver::class));
+
+        $refusal = $writer->findRefusal(['path' => 'admin/url/custom_path', 'value' => 'https://evil.example/']);
+
+        self::assertStringContainsString('Changing "admin/url/custom_path" from the chat is turned off', $refusal['error'] ?? '');
+        self::assertStringContainsString('Stores > Configuration', $refusal['error'] ?? '');
+    }
+
+    #[Test]
+    public function itRefusesACredentialBeforeTheConfirmationCard(): void
+    {
+        $writer = $this->writerWith($this->createMock(ConfigValueSaver::class));
+
+        $refusal = $writer->findRefusal(['path' => 'general/vendor/api_key', 'value' => 'x']);
+
+        self::assertSame('Cannot modify this configuration path for security reasons', $refusal['error'] ?? null);
+    }
+
+    #[Test]
+    public function itLeavesABlockedSettingOfASectionTheAdminLacksToExecute(): void
+    {
+        $writer = $this->writerWith(
+            $this->createMock(ConfigValueSaver::class),
+            null,
+            new FakeAclAuthorization(['Magento_Config::config_general'])
+        );
+
+        self::assertNull($writer->findRefusal(['path' => 'admin/url/custom_path', 'value' => 'x']));
+    }
+
+    #[Test]
+    public function itLetsAnEverydaySettingReachTheConfirmationCard(): void
+    {
+        $writer = $this->writerWith($this->createMock(ConfigValueSaver::class));
+
+        self::assertNull($writer->findRefusal(['path' => self::PATH, 'value' => 'Main Shop']));
+    }
+
+    #[Test]
+    public function itNeverSavesABlockedSettingEvenWhenConfirmed(): void
+    {
+        $resource = $this->createMock(ConfigValueSaver::class);
+        $resource->expects(self::never())->method('save');
+
+        $result = $this->writerWith($resource)->execute(['path' => 'admin/url/custom_path', 'value' => 'https://evil.example/']);
+
+        self::assertStringContainsString('turned off', $result['error'] ?? '');
+    }
+
+    #[Test]
+    public function aBlockedSettingNeedsNoCaution(): void
+    {
+        $writer = $this->writerWith($this->createMock(ConfigValueSaver::class));
+
+        self::assertSame([], $writer->getCautions(['path' => 'design/head/includes', 'value' => 'x'], 1));
     }
 
     #[Test]
@@ -370,7 +431,8 @@ class ConfigWriterTest extends TestCase
                 new FakeObjectManagerConfig()
             ),
             new ConfigWriteImpact($typePool ?? new TypePool()),
-            $scopeConfig ?? $this->createStub(ScopeConfigInterface::class)
+            $scopeConfig ?? $this->createStub(ScopeConfigInterface::class),
+            new BlockedConfigPaths()
         );
     }
 }

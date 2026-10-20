@@ -423,6 +423,19 @@
         </type>
 
         FormPolicy's own defaults already cover every form that carries personal data.
+
+        BlockedConfigPaths: the settings config_writer never changes from the chat (storefront and
+        admin URLs, mail server, every address customer mail goes to, two-factor and admin login security,
+        storefront head and footer scripts). A module adds glob patterns (* and ?) for settings of
+        its own; the defaults stay:
+
+        <type name="MagoAssistant\Mago\Service\Skills\Configuration\BlockedConfigPaths">
+            <arguments>
+                <argument name="additionalPatterns" xsi:type="array">
+                    <item name="vendor_gateway_url" xsi:type="string">vendor_section/gateway/*_url</item>
+                </argument>
+            </arguments>
+        </type>
     -->
 
     <!-- Skill Actions: PageForm -->
