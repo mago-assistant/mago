@@ -133,6 +133,13 @@ A write that can be reverted but changes something the admin should weigh first 
 `MagoAssistant\Mago\Api\Tool\HighImpactToolInterface`: `getCautions(array $input, int $adminUserId)`
 returns the lines to show, empty when the plain card will do. `ChatService` adds `caution: true`
 and the lines as `impacts`; the panel shows the same card with "I understand what this changes".
+A skill action does the same by implementing `MagoAssistant\Mago\Api\Skill\CautionedActionInterface`
+(`getCautions(array $params, int $adminUserId)`); `AbstractSkill` passes the lines on, as it does
+for irreversible actions. Every discount write uses it: `coupon_manager` and
+`catalog_price_rules` `create_rule` name the discount, whether it needs a coupon, and the
+websites, customer groups (guests called out) and dates it applies to; `create_coupon` says how
+many working codes it creates for which rule; `apply_rules` says it reprices every product from
+all active catalog rules.
 `config_writer` uses it for storefront scripts, admin security, URLs, mail routing, developer,
 environment and sensitive settings, with the current and the new value (#245). The ACL still
 decides whether the admin may make the change at all.

@@ -31,6 +31,7 @@ use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Service\Usage\UsageLogger;
 use MagoAssistant\Mago\Test\Unit\Fakes\BuildsStoreLayouts;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAction;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeCautionedAction;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeConfigRepository;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeHighImpactTool;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeIrreversibleAction;
@@ -224,6 +225,55 @@ final class ChatServiceTest extends TestCase
             $confirm['tools'][1]['impacts']
         );
         self::assertArrayNotHasKey('caution', $confirm['tools'][2]);
+    }
+
+    #[Test]
+    public function confirmationCarriesTheCautionsOfACautionedSkillAction(): void
+    {
+        $this->grants = ['coupon_manager' => 'write'];
+        $authorization = $this->createMock(AuthorizationInterface::class);
+        $authorization->method('isAllowed')->willReturn(true);
+        $service = $this->buildChatService([
+            new FakeSkill('coupon_manager', $authorization, [
+                'create_rule' => new FakeCautionedAction('create_rule', ['Takes 100% off every cart.']),
+            ]),
+        ]);
+        $this->responses = $this->proposedTwice([
+            'content' => '',
+            'tool_calls' => [['id' => 'call_1', 'name' => 'coupon_manager', 'input' => ['action' => 'create_rule']]],
+        ]);
+        $confirm = null;
+        $onChunk = static function (string $type, array $data) use (&$confirm): void {
+            if ($type === 'confirm') {
+                $confirm = $data;
+            }
+        };
+
+        $service->processMessageStreaming([$this->userMessage()], $onChunk, null, self::ADMIN_ID);
+
+        self::assertTrue($confirm['tools'][0]['caution'] ?? false);
+        self::assertSame(['Takes 100% off every cart.'], $confirm['tools'][0]['impacts']);
+    }
+
+    #[Test]
+    public function confirmationAsksAPlainSkillActionWithoutACaution(): void
+    {
+        $this->grants = ['cms_data' => 'write'];
+        $service = $this->buildChatService();
+        $this->responses = $this->proposedTwice([
+            'content' => '',
+            'tool_calls' => [['id' => 'call_1', 'name' => 'cms_data', 'input' => ['action' => 'update_page', 'content' => 'x']]],
+        ]);
+        $confirm = null;
+        $onChunk = static function (string $type, array $data) use (&$confirm): void {
+            if ($type === 'confirm') {
+                $confirm = $data;
+            }
+        };
+
+        $service->processMessageStreaming([$this->userMessage()], $onChunk, null, self::ADMIN_ID);
+
+        self::assertArrayNotHasKey('caution', $confirm['tools'][0]);
     }
 
     #[Test]

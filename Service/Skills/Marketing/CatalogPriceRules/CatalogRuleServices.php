@@ -40,6 +40,11 @@ class CatalogRuleServices
         return $this->objectManager->create(Collection::class);
     }
 
+    public function countActiveRules(): int
+    {
+        return $this->createCollection()->addFieldToFilter('is_active', ['eq' => 1])->getSize();
+    }
+
     public function getJob(): Job
     {
         return $this->objectManager->get(Job::class);

@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Marketing\CouponManager;
 
 use MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\CreateRuleAction;
+use MagoAssistant\Mago\Service\Skills\Marketing\DiscountRuleCautions;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -30,7 +31,7 @@ class CreateRuleActionTest extends TestCase
         $secureAdminUrl = $this->createStub(SecureAdminUrl::class);
         $secureAdminUrl->method('getUrl')->willReturn('https://example.test/admin/rule');
 
-        return new CreateRuleAction($this->apiClient, $secureAdminUrl);
+        return new CreateRuleAction($this->apiClient, $secureAdminUrl, new DiscountRuleCautions($this->apiClient));
     }
 
     private function create(array $params): array
@@ -152,5 +153,91 @@ class CreateRuleActionTest extends TestCase
 
         self::assertStringContainsString('0 or greater', $description);
         self::assertStringContainsString('at most 100', $description);
+    }
+
+    #[Test]
+    public function itCautionsThatARuleWithoutACouponTakesItsDiscountOffEveryCart(): void
+    {
+        $cautions = $this->action()->getCautions(['discount_type' => 'percent', 'discount_amount' => 100], self::ADMIN_USER_ID);
+
+        self::assertSame('Takes 100% off every cart, automatically and without a coupon.', $cautions[0]);
+    }
+
+    #[Test]
+    public function itNamesTheCouponARuleNeeds(): void
+    {
+        $cautions = $this->action()->getCautions(
+            ['discount_type' => 'fixed', 'discount_amount' => 5, 'coupon_code' => 'SUMMER'],
+            self::ADMIN_USER_ID
+        );
+
+        self::assertSame('Takes 5 off each item in carts that use coupon SUMMER.', $cautions[0]);
+    }
+
+    #[Test]
+    public function itCautionsAboutFreeShippingOnEveryCart(): void
+    {
+        $cautions = $this->action()->getCautions(['discount_type' => 'free_shipping'], self::ADMIN_USER_ID);
+
+        self::assertSame('Gives free shipping on every cart, automatically and without a coupon.', $cautions[0]);
+    }
+
+    #[Test]
+    public function itCautionsThatARuleWithoutGroupsReachesGuests(): void
+    {
+        $cautions = $this->action()->getCautions(['discount_type' => 'percent', 'discount_amount' => 10], self::ADMIN_USER_ID);
+
+        self::assertContains('Applies to every customer group, guests (NOT LOGGED IN) included.', $cautions);
+    }
+
+    #[Test]
+    public function itCautionsAboutTheGroupsARuleIsGiven(): void
+    {
+        $cautions = $this->action()->getCautions(
+            ['discount_type' => 'percent', 'discount_amount' => 10, 'customer_group_ids' => [2]],
+            self::ADMIN_USER_ID
+        );
+
+        self::assertContains('Applies to customer group group 2.', $cautions);
+    }
+
+    #[Test]
+    public function itTreatsCouponCodeZeroAsACouponOnTheCard(): void
+    {
+        $cautions = $this->action()->getCautions(
+            ['discount_type' => 'percent', 'discount_amount' => 100, 'coupon_code' => '0'],
+            self::ADMIN_USER_ID
+        );
+
+        self::assertSame('Takes 100% off carts that use coupon 0.', $cautions[0]);
+    }
+
+    #[Test]
+    public function itSavesCouponCodeZeroAsACouponRuleLikeTheCardSays(): void
+    {
+        $this->create(['discount_type' => 'percent', 'discount_amount' => 100, 'coupon_code' => '0']);
+
+        $rule = $this->apiClient->callsOf(FakeInternalApiClient::POST)[0]['payload']['rule'];
+        self::assertSame([2, '0'], [$rule['coupon_type'], $rule['coupon_code']]);
+    }
+
+    #[Test]
+    public function itCallsOutGuestsInACommaListOfGroups(): void
+    {
+        $cautions = $this->action()->getCautions(
+            ['discount_type' => 'percent', 'discount_amount' => 10, 'customer_group_ids' => '1,0'],
+            self::ADMIN_USER_ID
+        );
+
+        self::assertContains('Applies to customer groups group 1, group 0, so guests get it too.', $cautions);
+    }
+
+    #[Test]
+    public function itSavesACommaListOfGroupsAsTheGroupsTheCardNamed(): void
+    {
+        $this->create(['discount_type' => 'percent', 'discount_amount' => 10, 'customer_group_ids' => '1,0']);
+
+        $rule = $this->apiClient->callsOf(FakeInternalApiClient::POST)[0]['payload']['rule'];
+        self::assertSame([1, 0], $rule['customer_group_ids']);
     }
 }

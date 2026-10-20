@@ -6,11 +6,11 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
-class ApplyRulesAction implements ActionInterface
+class ApplyRulesAction implements CautionedActionInterface
 {
     public function __construct(
         private readonly CatalogRuleServices $catalogRules,
@@ -56,6 +56,21 @@ class ApplyRulesAction implements ActionInterface
         return 'This action triggers a full recalculation of all catalog price rules. '
             . 'It may take a while on stores with large catalogs. '
             . 'Warn the user that price changes may not be visible immediately.';
+    }
+
+    /**
+     * Applying is the step that changes storefront prices, for every active rule at once,
+     * including any created or changed since the last run.
+     */
+    public function getCautions(array $params, int $adminUserId): array
+    {
+        $count = $this->catalogRules->countActiveRules();
+
+        return [
+            'Recalculates the price of every product from the ' . $count . ' active catalog price '
+                . ($count === 1 ? 'rule' : 'rules')
+                . ', including any created or changed since they were last applied.',
+        ];
     }
 
     public function execute(array $params, int $adminUserId): array

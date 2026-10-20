@@ -10,14 +10,21 @@ use Magento\Framework\AuthorizationInterface;
 use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Api\Tool\ValidatingToolInterface;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
 use MagoAssistant\Mago\Api\Skill\ConditionallyIrreversibleActionInterface;
 use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
 use MagoAssistant\Mago\Api\Acl;
 use MagoAssistant\Mago\Api\Tool\ActionAclAwareToolInterface;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
+use MagoAssistant\Mago\Api\Tool\HighImpactToolInterface;
 use MagoAssistant\Mago\Api\Tool\IrreversibleToolInterface;
 
-abstract class AbstractSkill implements ActionScopedToolInterface, IrreversibleToolInterface, ValidatingToolInterface, ActionAclAwareToolInterface
+abstract class AbstractSkill implements
+    ActionScopedToolInterface,
+    IrreversibleToolInterface,
+    HighImpactToolInterface,
+    ValidatingToolInterface,
+    ActionAclAwareToolInterface
 {
     /** @var ActionInterface[] */
     private readonly array $actions;
@@ -191,6 +198,15 @@ abstract class AbstractSkill implements ActionScopedToolInterface, IrreversibleT
         $action = $this->irreversibleAction($input);
 
         return $action ? array_values($action->getImpacts($input, $adminUserId)) : [];
+    }
+
+    public function getCautions(array $input, int $adminUserId): array
+    {
+        $action = $this->actions[$input['action'] ?? ''] ?? null;
+
+        return $action instanceof CautionedActionInterface
+            ? array_values($action->getCautions($input, $adminUserId))
+            : [];
     }
 
     /**
