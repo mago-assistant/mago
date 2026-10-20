@@ -147,7 +147,10 @@ html:has(body.mago-active) {
     z-index: 901;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    // Clip, not hidden: a hidden overflow is still a scroll container, so focusing anything
+    // positioned outside the panel's box scrolls the header, messages and input out of sight
+    // and leaves the panel blank (#280).
+    overflow: clip;
     transform: translateX(100%);
     transition: transform 0.3s ease;
 

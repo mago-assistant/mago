@@ -1759,7 +1759,10 @@
     flex: none;
 }
 
+// Positioned, so the hidden checkbox stays inside its card and scrolls with the messages
+// instead of being placed against the panel itself (#280).
 .mago-check {
+    position: relative;
     display: flex;
     align-items: center;
     gap: @mago-size__10;
