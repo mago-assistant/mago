@@ -12,6 +12,7 @@ use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\ChatServiceInterface;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
 use MagoAssistant\Mago\Api\WebApi\ChatManagementInterface;
+use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Service\Ai\ChatService;
 use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
@@ -137,12 +138,15 @@ class ChatManagement implements ChatManagementInterface
         }
     }
 
-    public function confirmAction(int $messageId): string
+    public function confirmAction(int $messageId, bool $acknowledged = false): string
     {
         try {
             $adminUserId = $this->requireAdminUserId();
             // Same claim as the admin panel's Confirm, so the two cannot both run one proposal
-            $message = $this->confirmationClaim->claimToConfirm($messageId, $adminUserId);
+            $message = $this->confirmationClaim->claimToConfirm(
+                new ConfirmRequest($messageId, $acknowledged, null),
+                $adminUserId
+            );
 
             $toolCalls = $message['tool_calls'] ?? [];
             if (is_string($toolCalls)) {

@@ -227,6 +227,19 @@ final class ChatServiceTest extends TestCase
     }
 
     #[Test]
+    public function itProposesAnIrreversibleWriteWithItsFlagWithoutStreaming(): void
+    {
+        $this->grants = ['order_manager' => 'write'];
+        $service = $this->buildChatService([$this->orderManagerSkill()]);
+        $this->responses = $this->proposedTwice(['content' => '', 'tool_calls' => [$this->cancelOrderCall()]]);
+
+        $result = $service->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertTrue($result['pending_confirmation']);
+        self::assertTrue($result['tool_calls'][0]['irreversible']);
+    }
+
+    #[Test]
     public function itLogsThePromptCacheFiguresTheProviderReported(): void
     {
         $this->responses = [[
@@ -1776,6 +1789,14 @@ final class ChatServiceTest extends TestCase
     private function proposedTwice(array $response): array
     {
         return [$response, $response];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function cancelOrderCall(): array
+    {
+        return ['id' => 'call_2', 'name' => 'order_manager', 'input' => ['action' => 'cancel', 'order_number' => '100']];
     }
 
     /**

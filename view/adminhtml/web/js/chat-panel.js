@@ -1701,11 +1701,13 @@ define([
                             + cautioned.map(function(c) { return toolLabel(c) + ': ' + (c.impacts || []).slice(0, 2).join(' '); }).join(' ')
                     }) : null,
                 items: tools.map(function(t, i) {
-                    return {id: t.id || String(i), label: toolLabel(t), meta: summarizeInput(t.input), params: UI.paramsFromInput(t.input)};
+                    return {id: t.id || String(i), label: toolLabel(t), meta: summarizeInput(t.input), params: UI.paramsFromInput(t.input), needsAck: !!(t.irreversible || t.caution)};
                 }),
+                ackLabel: irreversible.length ? t('I understand what these change, and that some cannot be undone') : t('I understand what these change'),
                 confirmLabel: function(n) { return 'Run ' + n; },
                 classes: hooks,
-                onConfirm: function(ids) { decide(true, ids); },
+                // The server runs a ticked irreversible or cautioned write only with this acknowledgement
+                onConfirm: function(ids, items, e, acknowledged) { decide(true, ids, acknowledged); },
                 onLater: function() { decide(false); }
             });
         } else if (first && (first.irreversible || first.caution)) {
@@ -1720,7 +1722,8 @@ define([
                 ackLabel: first.irreversible ? 'I understand this cannot be undone' : t('I understand what this changes'),
                 confirmLabel: 'Allow',
                 classes: hooks,
-                onConfirm: function() { decide(true); },
+                // The button only fires once the box is ticked; the server checks that it was
+                onConfirm: function() { decide(true, null, true); },
                 onCancel: function() { decide(false); }
             });
         } else {
@@ -1745,7 +1748,7 @@ define([
 
         var decided = false;
         // One answer per card: a second click (or a double click) must not send a second confirm.
-        function decide(allowed, selectedIds) {
+        function decide(allowed, selectedIds, acknowledged) {
             if (decided) return;
             decided = true;
             actions.innerHTML = '';
@@ -1754,7 +1757,7 @@ define([
                 if (allowed) {
                     var running = UI.skillRunning({title: title, progress: 30});
                     card.replaceWith(running);
-                    var run = {card: running, title: title, tools: tools, startedAt: Date.now()};
+                    var run = {card: running, title: title, tools: tools, startedAt: Date.now(), acknowledged: !!acknowledged};
                     if (selectedIds) {
                         run.selected = selectedIds;
                         run.skipped = tools.filter(function(t, i) { return selectedIds.indexOf(t.id || String(i)) === -1; });
@@ -1872,6 +1875,9 @@ define([
         }
 
         var body = {message_id: messageId, form_key: formKey, page_context: buildPageContext()};
+        if (run && run.acknowledged) {
+            body.acknowledged = true;
+        }
         if (run && run.selected) {
             body.tool_call_ids = run.selected;
         }
@@ -1898,6 +1904,7 @@ define([
 
             var applyResult = null;
             var applyPending = false;
+            var chainedTools = null;
             var doneReached = false;
 
             // See send()'s own copy of this same helper: apply() waits on a real signal (its form's
@@ -1956,6 +1963,13 @@ define([
                         }
                     }
                     else if (evt==='form_apply') { applyPending = true; applyFormDirective(d, handleApplyOutcome); }
+                    // The follow-up turn proposed another write: its card needs the tools' details
+                    // (and their irreversible and caution flags) like a first proposal, or it
+                    // asks without the acknowledgement the server requires.
+                    else if (evt==='confirm') {
+                        if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
+                        chainedTools = d.tools || [];
+                    }
                     else if (evt==='done') {
                         if (content && full) { content.innerHTML = renderMd(full, tokens); }
                         if (d.conversation_id) conversationId=d.conversation_id;
@@ -1970,7 +1984,7 @@ define([
                             attachFeedback(msg, d.message_id, null);
                         }
                         if (d.pending_confirmation && msg) {
-                            showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, []);
+                            showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, chainedTools || []);
                         }
                         announceReply(msg);
                         keepNavigateStatusLast();

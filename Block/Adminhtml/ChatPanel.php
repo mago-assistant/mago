@@ -156,6 +156,8 @@ class ChatPanel extends Template
             'Action rejected. No changes were made.',
             'This writes values that were masked for privacy: personal or customer data, such as a name, an email address or an order number. Check them before you allow it.',
             'I understand what this changes',
+            'I understand what these change',
+            'I understand what these change, and that some cannot be undone',
             'Check these before you run them, and run only what you asked for yourself:',
             'CMS page',
             'CMS block',

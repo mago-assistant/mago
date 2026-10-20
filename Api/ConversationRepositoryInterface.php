@@ -99,6 +99,17 @@ interface ConversationRepositoryInterface
     public function getMessageForUser(int $messageId, int $adminUserId): array;
 
     /**
+     * Whether a confirmation is still pending but was proposed longer ago than $maxAgeSeconds,
+     * without claiming it. Lets a refusal that happens before the claim name the expiry.
+     *
+     * @param int $messageId
+     * @param int $adminUserId only looks at a message owned by this admin user
+     * @param int $maxAgeSeconds
+     * @return bool
+     */
+    public function isPendingConfirmationExpired(int $messageId, int $adminUserId, int $maxAgeSeconds): bool;
+
+    /**
      * Atomically take a pending confirmation for one request: clears the flag only while it is
      * still set, so of two requests racing for the same message exactly one gets true.
      *

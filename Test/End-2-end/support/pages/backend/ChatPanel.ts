@@ -462,6 +462,13 @@ export default class ChatPanel {
   }
 
   /**
+   * The "I understand ..." checkbox of a card whose write cannot be undone or carries a caution
+   */
+  acknowledgement(page: Page): Locator {
+    return page.locator('#mago-messages .mago-check');
+  }
+
+  /**
    * One tick row per write on a batch confirmation card, and the folded list of every argument
    * that sits under each row.
    */

@@ -15,6 +15,7 @@ use Magento\Framework\Data\Form\FormKey;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\ChatServiceInterface;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
+use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
 use MagoAssistant\Mago\Service\Conversation\NavigationNoteInjector;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
@@ -63,7 +64,8 @@ class Confirm extends Action implements HttpPostActionInterface
         try {
             $rawBody = $this->getRequest()->getContent();
             $postData = $this->json->unserialize($rawBody);
-            $messageId = (int)($postData['message_id'] ?? 0);
+            $confirmRequest = ConfirmRequest::fromPostData(is_array($postData) ? $postData : []);
+            $messageId = $confirmRequest->messageId;
 
             $rawPageContext = $postData['page_context'] ?? null;
             $pageContext = $this->pageContextNormalizer->normalize($rawPageContext);
@@ -83,9 +85,12 @@ class Confirm extends Action implements HttpPostActionInterface
                 return $this->finishResponse();
             }
 
+            // A bulk confirmation sends the ticked tool call ids; without the field everything runs
+            $selectedIds = $confirmRequest->selectedIds;
+
             // Claimed before anything runs, so a second click or a parallel REST confirm gets an
             // "already handled" error instead of running the same writes again
-            $message = $this->confirmationClaim->claimToConfirm($messageId, $adminUserId);
+            $message = $this->confirmationClaim->claimToConfirm($confirmRequest, $adminUserId);
             // Claimed means it is never offered again, so a closed tab must not cut the batch short
             // before every write ran and its outcome was stored
             ignore_user_abort(true);
@@ -94,11 +99,6 @@ class Confirm extends Action implements HttpPostActionInterface
             if (is_string($toolCalls)) {
                 $toolCalls = $this->json->unserialize($toolCalls);
             }
-
-            // A bulk confirmation sends the ticked tool call ids; without the field everything runs
-            $selectedIds = isset($postData['tool_call_ids']) && is_array($postData['tool_call_ids'])
-                ? array_values(array_map('strval', $postData['tool_call_ids']))
-                : null;
 
             $conversationId = (int)$message['conversation_id'];
 

@@ -136,6 +136,13 @@ final class FakeConversationRepository implements ConversationRepositoryInterfac
         return $message;
     }
 
+    public function isPendingConfirmationExpired(int $messageId, int $adminUserId, int $maxAgeSeconds): bool
+    {
+        $message = $this->getMessageForUser($messageId, $adminUserId);
+
+        return $message['pending_confirmation'] === 1 && $this->ages[$messageId] > $maxAgeSeconds;
+    }
+
     public function claimPendingConfirmation(int $messageId, int $adminUserId, ?int $maxAgeSeconds = null): bool
     {
         $message = $this->getMessageForUser($messageId, $adminUserId);

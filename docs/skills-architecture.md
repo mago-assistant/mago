@@ -143,6 +143,12 @@ calls get the plain Allow button. The `order_manager` actions `add_comment`, `up
 `create_invoice` and `create_shipment` do this: they are irreversible when `notify_customer` is
 true, because a sent e-mail cannot be recalled.
 
+The acknowledgement is checked on the server too. `ConfirmationClaim::claimToConfirm()` reads the
+`irreversible` and `caution` flags stored on the proposal, the same copy the card was drawn from,
+and refuses a request whose ticked calls include a flagged one unless it carries
+`"acknowledged": true`. The refusal comes before the claim, so the proposal stays pending. The
+REST route `POST /V1/mago/confirm/:messageId` takes the same field in its body.
+
 Every `order_manager` action that e-mails the customer first asks `CustomerNotificationGuard`,
 after approval and right before the API call. It lets each kind of e-mail (comment, invoice,
 shipment, credit memo, order confirmation) go to the customer of an order once per

@@ -10,6 +10,7 @@ use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationAlreadyHandledException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationExpiredException;
+use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Model\Conversation\Repository;
 use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
 use MagoAssistant\Mago\Test\Integration\MagentoObjectManager;
@@ -101,11 +102,11 @@ final class ClaimPendingConfirmationTest extends TestCase
     #[Test]
     public function aSecondConfirmIsToldTheActionWasAlreadyHandled(): void
     {
-        $this->claim->claimToConfirm($this->messageId, self::ADMIN_USER_ID);
+        $this->claim->claimToConfirm(new ConfirmRequest($this->messageId, true, null), self::ADMIN_USER_ID);
 
         $this->expectException(ConfirmationAlreadyHandledException::class);
 
-        $this->claim->claimToConfirm($this->messageId, self::ADMIN_USER_ID);
+        $this->claim->claimToConfirm(new ConfirmRequest($this->messageId, true, null), self::ADMIN_USER_ID);
     }
 
     #[Test]
@@ -115,7 +116,39 @@ final class ClaimPendingConfirmationTest extends TestCase
 
         $this->expectException(ConfirmationExpiredException::class);
 
-        $this->claim->claimToConfirm($this->messageId, self::ADMIN_USER_ID);
+        $this->claim->claimToConfirm(new ConfirmRequest($this->messageId, true, null), self::ADMIN_USER_ID);
+    }
+
+    #[Test]
+    public function aPendingProposalOlderThanTheLimitIsExpired(): void
+    {
+        $this->backdateMessage(2);
+
+        $isExpired = $this->repository->isPendingConfirmationExpired($this->messageId, self::ADMIN_USER_ID, 3600);
+
+        self::assertTrue($isExpired);
+    }
+
+    #[Test]
+    public function aFreshPendingProposalIsNotExpired(): void
+    {
+        $isExpired = $this->repository->isPendingConfirmationExpired($this->messageId, self::ADMIN_USER_ID, 3600);
+
+        self::assertFalse($isExpired);
+    }
+
+    #[Test]
+    public function anotherAdminsExpiredProposalIsNotReportedAsExpired(): void
+    {
+        $this->backdateMessage(2);
+
+        $isExpired = $this->repository->isPendingConfirmationExpired(
+            $this->messageId,
+            self::OTHER_ADMIN_USER_ID,
+            3600
+        );
+
+        self::assertFalse($isExpired);
     }
 
     private function backdateMessage(int $hours): void

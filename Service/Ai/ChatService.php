@@ -147,9 +147,12 @@ class ChatService implements ChatServiceInterface
                 continue;
             }
             if ($writes !== []) {
+                // Described like the streaming path, so the stored row and the REST caller carry
+                // the irreversible and caution flags a confirm is checked against
+                [, $describedCalls] = $this->describedConfirmationCalls($response['tool_calls'], $adminUserId);
                 return [
                     'content' => $response['content'],
-                    'tool_calls' => $response['tool_calls'],
+                    'tool_calls' => $describedCalls,
                     'pending_confirmation' => true,
                 ];
             }

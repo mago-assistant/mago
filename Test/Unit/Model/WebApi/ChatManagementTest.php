@@ -44,7 +44,7 @@ final class ChatManagementTest extends TestCase
             new Json(),
             new ErrorReporter(new ErrorLogger(new FakeLogger(), new Json()), new PiiHeuristic()),
             new PrivacyService(new PrivacyFilter($vault, new PiiHeuristic()), $vault, new PiiHeuristic()),
-            new ConfirmationClaim($this->repository)
+            new ConfirmationClaim($this->repository, new Json())
         );
         $this->conversationId = $this->repository->create(self::ADMIN_USER_ID);
         $this->messageId = $this->repository->addMessage(
@@ -63,6 +63,27 @@ final class ChatManagementTest extends TestCase
 
         self::assertTrue($response['success'] ?? false);
         self::assertSame([['action' => 'create_rule']], $this->chatService->inputs());
+    }
+
+    #[Test]
+    public function itRunsNothingForAWriteThatNeedsTheAcknowledgementWithoutIt(): void
+    {
+        $messageId = $this->irreversibleProposal();
+
+        $response = $this->decode($this->chatManagement->confirmAction($messageId));
+
+        self::assertStringContainsString('understand what it changes', (string)($response['error'] ?? ''));
+        self::assertSame([], $this->chatService->toolCalls);
+    }
+
+    #[Test]
+    public function itRunsAWriteThatNeedsTheAcknowledgementOnceAcknowledged(): void
+    {
+        $messageId = $this->irreversibleProposal();
+
+        $this->chatManagement->confirmAction($messageId, true);
+
+        self::assertCount(1, $this->chatService->toolCalls);
     }
 
     #[Test]
@@ -111,6 +132,22 @@ final class ChatManagementTest extends TestCase
 
         self::assertStringContainsString('already been handled', (string)($response['error'] ?? ''));
         self::assertSame([], $this->chatService->toolCalls);
+    }
+
+    private function irreversibleProposal(): int
+    {
+        return $this->repository->addMessage(
+            $this->conversationId,
+            'assistant',
+            'Refunding the order.',
+            [[
+                'id' => 'call_2',
+                'name' => 'order_manager',
+                'input' => ['action' => 'create_creditmemo'],
+                'irreversible' => true,
+            ]],
+            true
+        );
     }
 
     /**

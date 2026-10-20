@@ -411,6 +411,98 @@ export const batchWrites: ChatScenario = {
     reject: { success: true },
 }
 
+const cancelOrderCall = {
+    id: 'toolu_cancel_1',
+    name: 'order_manager',
+    input: { action: 'cancel', order_number: '000000100' },
+};
+
+/* One write that cannot be undone: the card asks for a ticked acknowledgement before it runs. */
+export const irreversibleWrite: ChatScenario = {
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        ...textDeltas('I will cancel order 000000100. '),
+        { event: 'tool_call', data: cancelOrderCall },
+        {
+            event: 'confirm',
+            data: {
+                tools: [{
+                    ...cancelOrderCall,
+                    description: 'Manage orders',
+                    irreversible: true,
+                    impacts: ['Order #000000100 is canceled and cannot be reopened.'],
+                }],
+            },
+        },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+        },
+    ],
+    status: { message_id: MESSAGE_ID },
+    confirm: [
+        ...textDeltas('Order 000000100 is canceled.'),
+        { event: 'done', data: { conversation_id: CONVERSATION_ID } },
+    ],
+    reject: { success: true },
+}
+
+export const CHAINED_MESSAGE_ID = MESSAGE_ID + 1;
+
+/* A reversible write whose follow-up turn proposes a write that cannot be undone. */
+export const chainedIrreversibleWrite: ChatScenario = {
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        ...textDeltas('I will update the home page first. '),
+        { event: 'tool_call', data: batchCmsCall },
+        { event: 'confirm', data: { tools: [{ ...batchCmsCall, description: 'Manage CMS pages and blocks' }] } },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+        },
+    ],
+    status: { message_id: MESSAGE_ID },
+    confirm: [
+        ...textDeltas('The home page is updated. Next I will cancel order 000000100. '),
+        { event: 'tool_call', data: cancelOrderCall },
+        {
+            event: 'confirm',
+            data: {
+                tools: [{
+                    ...cancelOrderCall,
+                    description: 'Manage orders',
+                    irreversible: true,
+                    impacts: ['Order #000000100 is canceled and cannot be reopened.'],
+                }],
+            },
+        },
+        {
+            event: 'done',
+            data: { message_id: CHAINED_MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+        },
+    ],
+    reject: { success: true },
+}
+
+/* A batch where the config write carries a caution and the CMS write does not. */
+export const batchWritesWithCaution: ChatScenario = {
+    ...batchWrites,
+    stream: batchWrites.stream.map((event) => event.event !== 'confirm' ? event : {
+        event: 'confirm',
+        data: {
+            tools: [
+                {
+                    ...batchConfigCall,
+                    description: 'Write store configuration',
+                    caution: true,
+                    impacts: ['Changes the address of every storefront link.'],
+                },
+                { ...batchCmsCall, description: 'Manage CMS pages and blocks' },
+            ],
+        },
+    }),
+}
+
 /* A form write with more fields than the card used to list, one of them longer than its fold. */
 export const LONG_FIELD_VALUE = 'A long description that keeps going well past the point where the card folds it, '
     + 'and ends with <b>markup</b> the admin must still be able to read in full.';

@@ -199,6 +199,21 @@ class Repository implements ConversationRepositoryInterface
         return $row;
     }
 
+    public function isPendingConfirmationExpired(int $messageId, int $adminUserId, int $maxAgeSeconds): bool
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $select = $connection->select()
+            ->from($this->resourceConnection->getTableName('mago_message'), ['entity_id'])
+            ->where('pending_confirmation = ?', 1)
+            // Compared in SQL, like the claim, so created_at and NOW() share the connection's time zone
+            ->where('created_at < NOW() - INTERVAL ? SECOND', $maxAgeSeconds);
+        foreach ($this->ownedMessageWhere($messageId, $adminUserId) as $condition => $value) {
+            is_int($condition) ? $select->where($value) : $select->where($condition, $value);
+        }
+
+        return $connection->fetchOne($select) !== false;
+    }
+
     public function claimPendingConfirmation(int $messageId, int $adminUserId, ?int $maxAgeSeconds = null): bool
     {
         $connection = $this->resourceConnection->getConnection();

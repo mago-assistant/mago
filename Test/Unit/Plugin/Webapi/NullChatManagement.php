@@ -33,7 +33,7 @@ final class NullChatManagement implements ChatManagementInterface
         return '';
     }
 
-    public function confirmAction(int $messageId): string
+    public function confirmAction(int $messageId, bool $acknowledged = false): string
     {
         return '';
     }

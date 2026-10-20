@@ -16,6 +16,7 @@ use Magento\Framework\Serialize\Serializer\Json;
 use Magento\User\Model\User;
 use MagoAssistant\Mago\Controller\Adminhtml\Chat\Reject;
 use MagoAssistant\Mago\Logger\ErrorLogger;
+use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
@@ -79,11 +80,16 @@ final class RejectTest extends TestCase
     #[Test]
     public function itAnswersAlreadyHandledWhenTheProposalWasConfirmedBefore(): void
     {
-        (new ConfirmationClaim($this->repository))->claimToConfirm($this->messageId, self::ADMIN_USER_ID);
+        ($this->confirmationClaim())->claimToConfirm(new ConfirmRequest($this->messageId, true, null), self::ADMIN_USER_ID);
 
         $this->controller()->execute();
 
         self::assertStringContainsString('already been handled', (string)($this->responses[0]['error'] ?? ''));
+    }
+
+    private function confirmationClaim(): ConfirmationClaim
+    {
+        return new ConfirmationClaim($this->repository, new Json());
     }
 
     private function controller(): Reject
@@ -115,7 +121,7 @@ final class RejectTest extends TestCase
             new Json(),
             new ErrorReporter(new ErrorLogger(new FakeLogger(), new Json()), new PiiHeuristic()),
             $this->createStub(FormKey::class),
-            new ConfirmationClaim($this->repository)
+            $this->confirmationClaim()
         );
     }
 }

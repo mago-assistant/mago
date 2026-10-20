@@ -1306,25 +1306,44 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
     // Nothing starts ticked unless an item says checked: true, so every write is chosen on purpose.
     // An item's params open under its row with every argument in full, so the short meta line is
     // never all the admin gets to see of what runs.
-    // {title, icon, text, items: [{id, label, meta, params, checked, disabled}], confirmLabel(n), onConfirm(selectedIds),
-    //  onLater, classes: {actions, confirm, later}}
+    // An item with needsAck (no undo, or a caution) adds an acknowledgement under the list; while such an
+    // item is ticked the button stays disabled until it is ticked too, and onConfirm reports it.
+    // {title, icon, text, items: [{id, label, meta, params, checked, disabled, needsAck}], ackLabel, confirmLabel(n),
+    //  onConfirm(selectedIds, selectedItems, event, acknowledged), onLater, classes: {actions, confirm, later}}
     function skillBulk(opts) {
         var L = labels(opts);
         var classes = opts.classes || {};
         var items = opts.items || [];
         var state = items.map(function (it) { return it.checked === true && !it.disabled; });
         var counter = num('', 'mago-skill-count');
+        var checkbox = null;
+        var ack = null;
+        if (items.some(function (it) { return it.needsAck; })) {
+            checkbox = el('input', 'mago-check-input');
+            checkbox.type = 'checkbox';
+            ack = el('label', 'mago-check', [checkbox, el('span', 'mago-check-box', icon('check', 12, 3.2)), el('span', 'mago-check-label', opts.ackLabel || 'I understand what these change')]);
+            checkbox.addEventListener('change', function () { sync(); });
+        }
+        function isAcknowledged() {
+            return !!checkbox && checkbox.checked;
+        }
+        function waitsForAck() {
+            return items.some(function (it, i) { return state[i] && it.needsAck; }) && !isAcknowledged();
+        }
         var confirm = button('', 'is-primary' + (classes.confirm ? ' ' + classes.confirm : ''), function (e) {
+            if (waitsForAck()) {
+                return;
+            }
             var selected = items.filter(function (it, i) { return state[i]; });
             if (opts.onConfirm) {
-                opts.onConfirm(selected.map(function (it) { return it.id !== undefined ? it.id : it.label; }), selected, e);
+                opts.onConfirm(selected.map(function (it) { return it.id !== undefined ? it.id : it.label; }), selected, e, isAcknowledged());
             }
         });
         function sync() {
             var n = state.filter(Boolean).length;
             counter.textContent = tpl(L.ofSelected, n, items.length);
             confirm.textContent = typeof opts.confirmLabel === 'function' ? opts.confirmLabel(n) : (opts.confirmLabel || L.confirm) + (n ? ' (' + n + ')' : '');
-            confirm.disabled = n === 0;
+            confirm.disabled = n === 0 || waitsForAck();
         }
         var rows = items.map(function (it, i) {
             var box = el('span', 'mago-check-box', icon('check', 11, 3.2));
@@ -1363,6 +1382,7 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
                 opts.text ? el('div', 'mago-ask-text is-lead', content(opts.text)) : null,
                 opts.notice || null,
                 el('div', 'mago-bulk-rows', rows),
+                ack,
                 el('div', 'mago-actions is-tight' + (classes.actions ? ' ' + classes.actions : ''), [
                     confirm,
                     button(opts.laterLabel || L.later, 'is-ghost' + (classes.later ? ' ' + classes.later : ''), opts.onLater)
