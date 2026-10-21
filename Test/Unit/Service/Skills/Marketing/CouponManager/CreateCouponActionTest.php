@@ -103,6 +103,48 @@ class CreateCouponActionTest extends TestCase
         self::assertStringContainsString('for cart price rule 5,', $cautions[0]);
     }
 
+    /**
+     * @return array<string, array{0: array<string, int>, 1: string}>
+     */
+    public static function batchesTooLargeForTheChat(): array
+    {
+        return [
+            'too many codes' => [['quantity' => 5000], 'at most 100 coupon codes'],
+            'codes too long' => [['length' => 500], 'at most 32 characters'],
+        ];
+    }
+
+    /**
+     * @param array<string, int> $params
+     */
+    #[Test]
+    #[DataProvider('batchesTooLargeForTheChat')]
+    public function aBatchTooLargeForTheChatIsRefusedBeforeTheCardAndNeverGenerated(array $params, string $reason): void
+    {
+        $apiClient = (new FakeInternalApiClient())
+            ->withResponse(FakeInternalApiClient::GET, 'salesRules/5', [
+                'name' => 'Summer sale',
+                'coupon_type' => 'SPECIFIC_COUPON',
+                'use_auto_generation' => true,
+            ]);
+        $action = $this->action($apiClient);
+
+        $refusal = $action->findRefusal(['rule_id' => 5] + $params);
+        $result = $action->execute(['rule_id' => 5] + $params, self::ADMIN_USER_ID);
+
+        self::assertStringContainsString($reason, $refusal['error'] ?? '');
+        self::assertStringContainsString($reason, $result['error'] ?? '');
+        self::assertSame([], $apiClient->callsOf(FakeInternalApiClient::POST));
+    }
+
+    #[Test]
+    public function aHundredCodesIsStillGenerated(): void
+    {
+        $action = $this->action(new FakeInternalApiClient());
+
+        self::assertNull($action->findRefusal(['rule_id' => 5, 'quantity' => 100, 'length' => 32]));
+    }
+
     private function action(FakeInternalApiClient $apiClient): CreateCouponAction
     {
         $secureAdminUrl = $this->createStub(SecureAdminUrl::class);
