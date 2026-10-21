@@ -7,12 +7,27 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CouponManager;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class CreateCouponAction implements ActionInterface
+class CreateCouponAction implements ActionInterface, ValidatingActionInterface
 {
+    /**
+     * Codes are generated inside the request, one insert each, so a large batch from the chat
+     * would hold the request (and the database) for as long as it takes. Magento's own Manage
+     * Coupon Codes screen queues large batches; the chat sends the admin there instead.
+     */
+    private const MAX_QUANTITY = 100;
+
+    private const DEFAULT_QUANTITY = 1;
+
+    private const DEFAULT_LENGTH = 8;
+
+    /** Longest code the chat generates; a longer one is a typo, not a stronger code */
+    private const MAX_LENGTH = 32;
+
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl,
@@ -39,11 +54,11 @@ class CreateCouponAction implements ActionInterface
             ],
             'quantity' => [
                 'type' => 'integer',
-                'description' => 'Number of coupon codes to generate (default: 1)',
+                'description' => 'Number of coupon codes to generate (default: ' . self::DEFAULT_QUANTITY . ', max: ' . self::MAX_QUANTITY . ')',
             ],
             'length' => [
                 'type' => 'integer',
-                'description' => 'Length of generated coupon codes (default: 8)',
+                'description' => 'Length of generated coupon codes (default: ' . self::DEFAULT_LENGTH . ', max: ' . self::MAX_LENGTH . ')',
             ],
             'prefix' => [
                 'type' => 'string',
@@ -84,8 +99,31 @@ class CreateCouponAction implements ActionInterface
             . 'If the rule has coupon_type "no_coupon", inform the user that this rule does not support coupon codes.';
     }
 
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, string>|null
+     */
+    public function findRefusal(array $params): ?array
+    {
+        if ((int)($params['quantity'] ?? self::DEFAULT_QUANTITY) > self::MAX_QUANTITY) {
+            return ['error' => 'The chat generates at most ' . self::MAX_QUANTITY . ' coupon codes at a time. '
+                . 'For more, use Manage Coupon Codes on the cart price rule, which generates them in the '
+                . 'background.'];
+        }
+        if ((int)($params['length'] ?? self::DEFAULT_LENGTH) > self::MAX_LENGTH) {
+            return ['error' => 'Coupon codes are at most ' . self::MAX_LENGTH . ' characters long.'];
+        }
+
+        return null;
+    }
+
     public function execute(array $params, int $adminUserId): array
     {
+        $refusal = $this->findRefusal($params);
+        if ($refusal !== null) {
+            return $refusal;
+        }
+
         $ruleId = (int)($params['rule_id'] ?? 0);
         if (!$ruleId) {
             return ['error' => 'rule_id parameter is required for create_coupon'];
@@ -111,14 +149,14 @@ class CreateCouponAction implements ActionInterface
                 . 'be generated when "Use Auto Generation" is enabled on the rule.'];
         }
 
-        $quantity = (int)($params['quantity'] ?? 1);
-        $length = (int)($params['length'] ?? 8);
+        $quantity = (int)($params['quantity'] ?? self::DEFAULT_QUANTITY);
+        $length = (int)($params['length'] ?? self::DEFAULT_LENGTH);
 
         if ($quantity < 1) {
-            $quantity = 1;
+            $quantity = self::DEFAULT_QUANTITY;
         }
         if ($length < 4) {
-            $length = 8;
+            $length = self::DEFAULT_LENGTH;
         }
 
         $couponSpec = [
