@@ -55,7 +55,7 @@ final class AnswerWidgetsTest extends TestCase
     {
         $types = $this->answerWidgets()->getTypes();
 
-        $cards = ['skillAsk', 'skillRunning', 'skillBulk', 'skillIrreversible', 'skillPlan', 'confirmWrite'];
+        $cards = ['skillAsk', 'skillRunning', 'skillBulk', 'skillIrreversible', 'skillPlan', 'confirmWrite', 'paramPrompt'];
         foreach ($cards as $card) {
             self::assertNotContains($card, $types);
         }
@@ -97,6 +97,7 @@ final class AnswerWidgetsTest extends TestCase
     {
         return [
             'replaces a built-in' => ['stat', '{"type":"stat"} — mine.'],
+            'a card the panel draws from server events' => ['paramPrompt', '{"type":"paramPrompt"} — ask.'],
             'type is not camelCase' => ['stock-alert', '{"type":"stock-alert"} — mine.'],
             'no guidance' => ['stockAlert', '{"type":"stockAlert"}'],
             'shape is not JSON' => ['stockAlert', '{type: stockAlert} — mine.'],

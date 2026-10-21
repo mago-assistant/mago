@@ -270,8 +270,18 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         }
     }
 
+    // A tone becomes a class name, and an answer spec chooses its own tone: only a known value
+    // may pass, or "ok mago-skill is-accent" would dress a callout up as a permission card.
+    var TONES = ['ok', 'warn', 'danger', 'info', 'accent', 'write', 'muted'];
+    var CALLOUT_TONES = ['ok', 'warn', 'danger', 'info'];
+    var DELTA_DIRECTIONS = ['up', 'down', 'flat'];
+
+    function knownTone(tone) {
+        return TONES.indexOf(tone) !== -1 ? tone : '';
+    }
+
     function toneClass(tone) {
-        return tone ? ' is-' + tone : '';
+        return knownTone(tone) ? ' is-' + tone : '';
     }
 
     // Chart ramp: rank 0 is the subject (accent), then peach shades; from four
@@ -336,7 +346,9 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         if (!d) {
             return null;
         }
-        var dir = d.direction || (String(d.value).charAt(0) === '-' || String(d.value).charAt(0) === '−' ? 'down' : 'up');
+        var dir = DELTA_DIRECTIONS.indexOf(d.direction) !== -1
+            ? d.direction
+            : (String(d.value).charAt(0) === '-' || String(d.value).charAt(0) === '−' ? 'down' : 'up');
         var row = el('div', 'mago-delta is-' + dir);
         if (dir === 'up') {
             row.appendChild(icon('arrowUp', 13, 2.6));
@@ -865,7 +877,7 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
     // W18 Callouts: heads-up, error, success.
     // {tone: 'warn'|'danger'|'ok'|'info', text, action: {label, href, onClick}}
     function callout(opts) {
-        var tone = opts.tone || 'info';
+        var tone = CALLOUT_TONES.indexOf(opts.tone) !== -1 ? opts.tone : 'info';
         var iconName = tone === 'ok' ? 'checkCircle' : tone === 'danger' ? 'xCircle' : tone === 'warn' ? 'alert' : 'infoCircle';
         var body = el('div', 'mago-callout-text', content(opts.text));
         if (opts.action) {
@@ -1636,6 +1648,19 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         skillMenu: skillMenu
     };
 
+    // What an answer may draw: data, never controls. The model writes the spec, and text it read
+    // can steer it, so the cards the panel builds from server events (permission, irreversible,
+    // bulk, progress, trace, done, the missing-value prompt with its input field) are left out: a
+    // model-drawn copy would look exactly like the real thing, and an input the model labels
+    // "re-enter your password" would be a phishing form. Suggestions and choices stay: a click
+    // only sends their visible label as the admin's next message. A type another module
+    // registers is an answer widget by definition.
+    var ANSWER_TYPES = [
+        'stat', 'stats', 'sparkline', 'meter', 'ring', 'composition', 'rankedBars', 'columns', 'lines',
+        'stackedColumns', 'heatmap', 'funnel', 'entityList', 'table', 'record', 'callout', 'suggestions',
+        'choices', 'empty'
+    ];
+
     // Build a widget from a plain spec: {type: 'stat', label: ..., ...}.
     // Unknown types return null so a caller can fall back to plain text, and so
     // does a builder that throws: one broken widget must not break the answer.
@@ -1671,6 +1696,7 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
             return false;
         }
         BUILDERS[type] = builder;
+        ANSWER_TYPES.push(type);
         MagoUI[type] = builder;
         MagoUI.types.push(type);
         return true;
@@ -1747,7 +1773,7 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         allowHtml = false;
         try {
             specs.forEach(function (s) {
-                var node = render(s);
+                var node = s && ANSWER_TYPES.indexOf(s.type) !== -1 ? render(s) : null;
                 if (node instanceof Node) {
                     wrap.appendChild(node);
                     built++;

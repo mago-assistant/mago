@@ -14,7 +14,8 @@ use MagoAssistant\Mago\Logger\ErrorLogger;
  * The panel (view/adminhtml/web/js/mago-ui.js) turns a ```mago fenced block holding a JSON spec into
  * one of the widgets from the Mago Widget Kit. This section of the system prompt tells the model the
  * format, the types it may use and when a widget beats prose. Interactive cards (permission, progress,
- * bulk selection) are not listed: the panel builds those itself from the tool events.
+ * bulk selection, the missing-value prompt with its input field) are not listed: the panel builds
+ * those itself from the tool events, and mago-ui.js refuses to draw them from an answer.
  *
  * Another module adds a widget through the "widgets" argument in its di.xml, next to a builder it
  * registers with MagoUI.register() in the browser (see docs/widgets.md). Each entry reads like the
@@ -84,12 +85,18 @@ class AnswerWidgets
             . 'Give 3–4 readings that fit this request and this store, phrased so each works as the user\'s next '
             . 'message (a click sends the label). Write every label, and "other" (a click lets the user type '
             . 'their own, e.g. "Something else…"), in the language of your answer.',
-        'paramPrompt' => '{"type":"paramPrompt","text":"Which price should it become?","prefix":"€",'
-            . '"placeholder":"69.00","chips":[{"label":"−10%","value":"71.10"},{"label":"Back to 79.00",'
-            . '"value":"79.00"}]} — use this, instead of a plain question, when exactly one value is missing '
-            . 'before a write can run; the value the user enters or picks comes back as their next message.',
         'empty' => '{"type":"empty","title":"Nothing found","text":"Every product in Lighting has an image."} — an '
             . 'empty result, instead of a bare sentence.',
+    ];
+
+    /**
+     * Builders mago-ui.js keeps for the cards it draws from server events. renderJson() refuses
+     * them in an answer, so teaching one to the model would only produce empty widgets.
+     */
+    private const PANEL_ONLY_TYPES = [
+        'confirmWrite', 'toolTrace', 'answerFooter', 'skeleton', 'skillAsk', 'skillRunning', 'skillLine',
+        'skillFailed', 'readLine', 'skillIrreversible', 'skillBulk', 'skillPlan', 'paramPrompt',
+        'undoCallout', 'sessionLog', 'skillMenu',
     ];
 
     /** Separates the example shape from the guidance in every catalog entry */
@@ -134,6 +141,9 @@ class AnswerWidgets
         }
         if (isset(self::CATALOG[$type])) {
             return 'A built-in widget already uses this type.';
+        }
+        if (in_array($type, self::PANEL_ONLY_TYPES, true)) {
+            return 'This is a card the panel builds from server events; an answer can never draw it.';
         }
         if (!is_string($entry) || !str_contains($entry, self::SHAPE_SEPARATOR)) {
             return 'The entry must be a string: the JSON shape, " — ", then when to use it.';
