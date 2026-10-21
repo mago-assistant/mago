@@ -189,6 +189,16 @@ name, an order comment). Treat every spec value as untrusted:
   `innerHTML` already lives in the admin page while your builder runs.
 - **Check links with `MagoUI.safeHref()`.**
 - **Never evaluate anything from the spec.**
+- **Never draw a control from the spec.** An answer shows data. Cards that ask for a decision
+  (permission, irreversible, bulk) or report progress come from server events only, and
+  `renderJson()` builds just the answer types: the built-in data widgets and the ones registered
+  with `MagoUI.register()`. A type you register is an answer widget, so keep it free of buttons
+  that act on the store.
+- **Map a spec value onto a class only through a fixed list.** A free value such as `tone` or
+  `direction` that lands in `className` lets the model add any class and dress the widget up as
+  something it is not. The built-in helpers ignore a value they do not know: `badge()` takes `ok`,
+  `warn`, `danger`, `info`, `accent`, `write` and `muted`; `callout()` takes `ok`, `warn`, `danger`
+  and `info`; a stat's delta takes the directions `up`, `down` and `flat`.
 
 As a second line of defence, `renderJson()` scrubs whatever a builder returns before it reaches
 the page:
