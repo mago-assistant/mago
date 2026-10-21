@@ -9,13 +9,20 @@ namespace MagoAssistant\Mago\Service\Skills\Configuration;
 use Magento\Framework\Indexer\IndexerRegistry;
 use Magento\Indexer\Model\Indexer\CollectionFactory;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
+use MagoAssistant\Mago\Api\Tool\ActionAclAwareToolInterface;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
+use MagoAssistant\Mago\Api\Tool\HighImpactToolInterface;
 use MagoAssistant\Mago\Api\Tool\UpfrontGuidanceToolInterface;
 use MagoAssistant\Mago\Api\Tool\ValidatingToolInterface;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
-class IndexerManager implements ActionScopedToolInterface, UpfrontGuidanceToolInterface, ValidatingToolInterface
+class IndexerManager implements
+    ActionScopedToolInterface,
+    UpfrontGuidanceToolInterface,
+    ValidatingToolInterface,
+    HighImpactToolInterface,
+    ActionAclAwareToolInterface
 {
     /** An indexer id echoed into an error is capped here so a runaway argument is not stored or re-sent */
     private const MAX_ID_ECHO = 100;
@@ -28,6 +35,13 @@ class IndexerManager implements ActionScopedToolInterface, UpfrontGuidanceToolIn
     ];
 
     private const REINDEX_ACTIONS = ['reindex', 'reindex_all'];
+
+    public const REINDEX_ALL_RESOURCE = 'MagoAssistant_Mago::reindex_all';
+
+    /** What the admin acknowledges before every indexer is rebuilt */
+    private const REINDEX_ALL_CAUTION = 'Rebuilds every indexer. On a large catalog this can run for a long '
+        . 'time and slow down the storefront and the admin while it does; reindex only the indexers a '
+        . 'change touches where you can.';
 
     /**
      * Steer the model away from reindex_all and towards the indexers the change actually touches.
@@ -377,5 +391,25 @@ class IndexerManager implements ActionScopedToolInterface, UpfrontGuidanceToolIn
     private function truncateId(string $id): string
     {
         return mb_strlen($id) > self::MAX_ID_ECHO ? mb_substr($id, 0, self::MAX_ID_ECHO) . '…' : $id;
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return string[]
+     */
+    public function getCautions(array $input, int $adminUserId): array
+    {
+        return ($input['action'] ?? '') === 'reindex_all' ? [self::REINDEX_ALL_CAUTION] : [];
+    }
+
+    /**
+     * Rebuilding every indexer needs its own resource on top of invalidate, the same two the
+     * reindex-all route requires, so the card is never offered to an admin the route would refuse.
+     *
+     * @param array<string, mixed> $input
+     */
+    public function getActionAcl(array $input): ?string
+    {
+        return ($input['action'] ?? '') === 'reindex_all' ? self::REINDEX_ALL_RESOURCE : null;
     }
 }

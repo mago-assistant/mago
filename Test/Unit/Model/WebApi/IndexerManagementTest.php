@@ -25,6 +25,10 @@ use MagoAssistant\Mago\Test\Unit\Fakes\FakeLogger;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Magento\Framework\Exception\AuthorizationException;
+use Magento\Framework\Exception\InputException;
+use MagoAssistant\Mago\Service\Skills\Configuration\IndexerManager;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeAclAuthorization;
 
 final class IndexerManagementTest extends TestCase
 {
@@ -75,7 +79,57 @@ final class IndexerManagementTest extends TestCase
         );
     }
 
-    private function indexer(string $id): IndexerInterface&MockObject
+#[Test]
+    public function aReindexWithoutIndexersIsRefusedInsteadOfRebuildingEverything(): void
+    {
+        $management = $this->management([$this->indexer('catalog_product_price')]);
+
+        $this->expectException(InputException::class);
+
+        $management->reindex([]);
+    }
+
+    #[Test]
+    public function namingEveryIndexerNeedsTheReindexAllGrant(): void
+    {
+        $management = $this->management(
+            [$this->indexer('catalog_product_price'), $this->indexer('cataloginventory_stock')],
+            [],
+            false
+        );
+
+        $this->expectException(AuthorizationException::class);
+
+        $management->reindex(['catalog_product_price', 'cataloginventory_stock']);
+    }
+
+    #[Test]
+    public function namingEveryIndexerWorksWithTheReindexAllGrant(): void
+    {
+        $management = $this->management(
+            [$this->indexer('catalog_product_price'), $this->indexer('cataloginventory_stock')]
+        );
+
+        $results = $management->reindex(['catalog_product_price', 'cataloginventory_stock']);
+
+        self::assertCount(2, $results);
+    }
+
+    #[Test]
+    public function namingSomeIndexersNeedsNoReindexAllGrant(): void
+    {
+        $management = $this->management(
+            [$this->indexer('catalog_product_price'), $this->indexer('cataloginventory_stock')],
+            [],
+            false
+        );
+
+        $results = $management->reindex(['catalog_product_price', 'catalog_product_price']);
+
+        self::assertCount(1, $results);
+    }
+
+        private function indexer(string $id): IndexerInterface&MockObject
     {
         $indexer = $this->createMock(IndexerInterface::class);
         $indexer->method('getId')->willReturn($id);
@@ -89,8 +143,11 @@ final class IndexerManagementTest extends TestCase
      * @param IndexerInterface[] $indexers
      * @param array<string, string> $sharedIndexes
      */
-    private function management(array $indexers, array $sharedIndexes = []): IndexerManagement
-    {
+    private function management(
+        array $indexers,
+        array $sharedIndexes = [],
+        bool $canReindexAll = true
+    ): IndexerManagement {
         $collectionFactory = $this->createMock(CollectionFactory::class);
         $collectionFactory->method('create')->willReturn($indexers);
         $config = $this->createMock(ConfigInterface::class);
@@ -109,7 +166,8 @@ final class IndexerManagementTest extends TestCase
             $resultFactory,
             new ErrorReporter(new ErrorLogger($this->logger, new Json()), new PiiHeuristic()),
             $this->createMock(UserContextInterface::class),
-            (new FakeConfigRepository())->withReindexAllowed(true)
+            (new FakeConfigRepository())->withReindexAllowed(true),
+            new FakeAclAuthorization($canReindexAll ? [IndexerManager::REINDEX_ALL_RESOURCE] : [])
         );
     }
 
