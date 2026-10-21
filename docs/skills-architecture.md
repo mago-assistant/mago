@@ -144,6 +144,16 @@ all active catalog rules.
 environment and sensitive settings, with the current and the new value (#245). The ACL still
 decides whether the admin may make the change at all.
 
+Some settings are not offered at all: `BlockedConfigPaths` lists those where one wrong value hands
+over the store, its admin or its mail (storefront and admin base URLs, the SMTP host, port and
+bounce address, every `copy_to` of order mail, the contact form recipient, the store email
+addresses `trans_email/ident_*/email`, which receive customer replies and the payment-failed mail,
+error report addresses, `twofactorauth/*`, `admin/security/*`, `admin/captcha/*`,
+`design/head/includes` and `design/footer/absolute_footer`). `config_writer` refuses them before the confirmation card and
+again on execution, and points the admin to Stores > Configuration. A module blocks settings of
+its own by adding glob patterns (`*`, `?`) to the `additionalPatterns` argument in di.xml; the
+defaults cannot be removed that way.
+
 An action that is only irreversible for some calls implements
 `ConditionallyIrreversibleActionInterface` and answers `isIrreversible(array $params)`; the other
 calls get the plain Allow button. The `order_manager` actions `add_comment`, `update_status`,

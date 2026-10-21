@@ -21,8 +21,8 @@ Modify store configuration values. Shows what will change before executing.
 ```
 Change my store name to "My New Store"
 Set the default currency to EUR
-Update the store email to info@example.com
-Set web/unsecure/base_url to https://mystore.com/
+Set the store phone number to +31 20 123 4567
+Show prices including tax in the catalog
 Disable the welcome message
 ```
 
