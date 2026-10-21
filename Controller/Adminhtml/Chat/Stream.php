@@ -24,6 +24,7 @@ use MagoAssistant\Mago\Service\Conversation\NavigationNoteInjector;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Form\PageContextNormalizer;
+use MagoAssistant\Mago\Service\Http\EventStreamHeaders;
 use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 
 class Stream extends Action implements HttpPostActionInterface
@@ -49,7 +50,8 @@ class Stream extends Action implements HttpPostActionInterface
         private readonly PageContextHolder $pageContextHolder,
         private readonly NavigationNoteInjector $navigationNoteInjector,
         private readonly PageLocationRecorder $pageLocationRecorder,
-        private readonly PrivacyService $privacyService
+        private readonly PrivacyService $privacyService,
+        private readonly EventStreamHeaders $eventStreamHeaders
     ) {
         parent::__construct($context);
     }
@@ -58,11 +60,7 @@ class Stream extends Action implements HttpPostActionInterface
     {
         /** @var HttpResponse $response */
         $response = $this->getResponse();
-        $response->setHeader('Content-Type', 'text/event-stream', true);
-        $response->setHeader('Cache-Control', 'no-cache', true);
-        $response->setHeader('Connection', 'keep-alive', true);
-        $response->setHeader('X-Accel-Buffering', 'no', true);
-        $response->sendHeaders();
+        $this->eventStreamHeaders->send($response);
 
         // Disable all output buffering for SSE
         while (ob_get_level()) {
