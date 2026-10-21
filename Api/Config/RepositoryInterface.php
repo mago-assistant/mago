@@ -54,7 +54,10 @@ interface RepositoryInterface
     public function getMagentoVersion(): string;
 
     /**
-     * @param int|null $storeId
+     * Whether the assistant is switched on. Read at default scope only, so a website or store view
+     * setting can never switch it back on after it was switched off.
+     *
+     * @param int|null $storeId Ignored; kept so existing callers keep working
      * @return bool
      */
     public function isEnabled(?int $storeId = null): bool;
