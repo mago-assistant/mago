@@ -968,6 +968,62 @@ final class ChatServiceTest extends TestCase
     }
 
     #[Test]
+    public function itForgetsTheTokensOfRowsTheResponseCapCutOff(): void
+    {
+        $privacy = $this->privacyService();
+        $service = $this->serviceWithTool($this->customerEmailsTool(60), $privacy);
+
+        $results = $service->executeConfirmedTools(
+            [['id' => 'call_1', 'name' => 'customer_data', 'input' => ['action' => 'list']]],
+            self::ADMIN_ID
+        );
+
+        self::assertTrue($results['call_1']['_truncated']);
+        self::assertSame('customer1@example.com', $privacy->rehydrate('mago://email_1'));
+        self::assertSame('mago://email_60', $privacy->rehydrate('mago://email_60'));
+    }
+
+    #[Test]
+    public function itNeverEndsACutResultHalfwayThroughAToken(): void
+    {
+        $endings = array_map(function (int $padding): string {
+            $tool = $this->customerEmailsTool(60)->withResult([
+                'padding' => str_repeat('p', $padding),
+                'emails' => array_map(static fn (int $i): string => "customer{$i}@example.com", range(1, 60)),
+            ]);
+            $results = $this->serviceWithTool($tool)->executeConfirmedTools(
+                [['id' => 'call_1', 'name' => 'customer_data', 'input' => ['action' => 'list']]],
+                self::ADMIN_ID
+            );
+
+            return substr($results['call_1']['output'], -20);
+        }, range(0, 20));
+
+        self::assertSame([], array_values(array_filter(
+            $endings,
+            static fn (string $ending): bool => preg_match('#mago://\w*$#', $ending) === 1
+        )));
+    }
+
+    #[Test]
+    public function itKeepsTheTokenOfAnEditLinkTheModelNeverSees(): void
+    {
+        $privacy = $this->privacyService();
+        $service = $this->serviceWithTool((new FakeTool('page_writer', ['save'], []))->withResult([
+            'saved' => true,
+            'admin_url' => 'https://shop.test/admin/cms/page/edit/id/4/key/abc123/',
+        ]), $privacy);
+
+        $results = $service->executeConfirmedTools(
+            [['id' => 'call_1', 'name' => 'page_writer', 'input' => ['action' => 'save']]],
+            self::ADMIN_ID
+        );
+
+        self::assertArrayNotHasKey('admin_url', $results['call_1']);
+        self::assertSame('https://shop.test/admin/cms/page/edit/id/4/key/abc123/', $privacy->rehydrate('mago://url_1'));
+    }
+
+    #[Test]
     public function itDoesNotSpendTheResponseBudgetOnWhatOnlyTheBrowserSees(): void
     {
         $directive = ['action' => 'form_write', 'changes' => array_fill(0, 40, [
@@ -1184,12 +1240,27 @@ final class ChatServiceTest extends TestCase
         self::assertStringNotContainsString('https://shop.test/admin', $result['content']);
     }
 
-    private function serviceWithTool(FakeTool $tool): ChatService
+    /**
+     * A read tool listing customer emails, each one tokenised for the model
+     */
+    private function customerEmailsTool(int $count): FakeTool
     {
-        return $this->serviceWithAnyTool($tool);
+        return (new FakeTool('customer_data', ['list'], ['list']))
+            ->withResult([
+                'emails' => array_map(static fn (int $i): string => "customer{$i}@example.com", range(1, $count)),
+            ])
+            ->withFieldClassification([
+                'padding' => [PiiClass::PUBLIC],
+                'emails' => [PiiClass::TOKENISE, 'email'],
+            ]);
     }
 
-    private function serviceWithAnyTool(ToolInterface $tool): ChatService
+    private function serviceWithTool(FakeTool $tool, ?PrivacyService $privacy = null): ChatService
+    {
+        return $this->serviceWithAnyTool($tool, $privacy);
+    }
+
+    private function serviceWithAnyTool(ToolInterface $tool, ?PrivacyService $privacy = null): ChatService
     {
         return new ChatService(
             (new FakeConfigRepository())->withMaxResponseTokens(self::MAX_RESPONSE_TOKENS),
@@ -1201,7 +1272,7 @@ final class ChatServiceTest extends TestCase
             new StoreScopeContext($this->createMock(StoreManagerInterface::class)),
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
             new PageContextHolder(),
-            $this->privacyService(),
+            $privacy ?? $this->privacyService(),
             new ToolAccess(new FakeAuthorization(), new FakePermissionChecker())
         );
     }

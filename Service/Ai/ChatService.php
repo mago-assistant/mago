@@ -28,6 +28,9 @@ class ChatService implements ChatServiceInterface
 {
     private const BYTES_PER_TOKEN_ESTIMATE = 4;
 
+    /** A vault token the response cap may have cut short, at the very end of the kept output */
+    private const TRAILING_TOKEN_PATTERN = '#mago://\w*$#';
+
     /** Marker that opens the store scope section so it is never injected twice */
     private const STORE_SCOPE_MARKER = '[Store scope]';
 
@@ -861,7 +864,35 @@ class ChatService implements ChatServiceInterface
             if ($adminUserId !== null) {
                 $input['_admin_user_id'] = $adminUserId;
             }
-            $result = $tool->execute($input);
+            return $this->presentToolResult($tool, $input, $tool->execute($input), $classes, $toolCall['name']);
+        } catch (\Throwable $e) {
+            $error = $this->errorReporter->reportToolFailure('Tool Error ' . $toolCall['name'], $e);
+            // The exception message can embed a rehydrated argument, so it goes through the filter
+            // (its "error" envelope is re-scrubbed) rather than straight to the LLM.
+            return $this->privacyService->filterToolResult($classes, ['error' => $error]);
+        }
+    }
+
+    /**
+     * The tool result as it leaves for the model: filtered, its edit links taken out, capped. The
+     * vault holds the tokens the filter mints until the cap has cut the result, then keeps only
+     * the ones the model or the panel actually got.
+     *
+     * @param array<string,array{0:string,1?:string}> $classes
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>
+     */
+    private function presentToolResult(
+        ToolInterface $tool,
+        array $input,
+        array $result,
+        array $classes,
+        string $toolName
+    ): array {
+        $linksBefore = count($this->pendingEntityLinks);
+        $presented = [];
+        $this->privacyService->holdNewTokens();
+        try {
             // Privacy filter runs here, before the result is capped and sent to the LLM. The
             // client_directive bypasses it: it only ever goes to the browser, which checks the real
             // entity id against the open form and stages the real values, so a token there makes
@@ -873,16 +904,18 @@ class ChatService implements ChatServiceInterface
             // deterministically instead of relying on the model to copy the token into its prose.
             $result = $this->collectEntityLinks($tool, $input, $result);
             $this->debugLogger->addLog('Tool Result', [
-                'tool' => $toolCall['name'],
+                'tool' => $toolName,
                 'is_error' => isset($result['error']),
                 'field_count' => count($result),
             ]);
-            return $this->capToolResult($this->withClientDirective($result, $directive), $toolCall['name']);
-        } catch (\Throwable $e) {
-            $error = $this->errorReporter->reportToolFailure('Tool Error ' . $toolCall['name'], $e);
-            // The exception message can embed a rehydrated argument, so it goes through the filter
-            // (its "error" envelope is re-scrubbed) rather than straight to the LLM.
-            return $this->privacyService->filterToolResult($classes, ['error' => $error]);
+            $presented = $this->capToolResult($this->withClientDirective($result, $directive), $toolName);
+
+            return $presented;
+        } finally {
+            $this->privacyService->releaseHeldTokens((string)json_encode(
+                [$presented, array_slice($this->pendingEntityLinks, $linksBefore)],
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+            ));
         }
     }
 
@@ -913,7 +946,8 @@ class ChatService implements ChatServiceInterface
             'max_bytes' => $maxBytes,
         ]);
 
-        $output = mb_strcut($json, 0, $maxBytes);
+        // A token cut in half would read as another: mago://email_12 cut after the 1 is email_1.
+        $output = (string)preg_replace(self::TRAILING_TOKEN_PATTERN, '', mb_strcut($json, 0, $maxBytes));
 
         return $this->withClientDirective([
             '_truncated' => true,

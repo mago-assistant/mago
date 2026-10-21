@@ -12,6 +12,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\AdminRouteAcl;
 use MagoAssistant\Mago\Service\Url\EntityRouteMap;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class AdminNavigator implements ToolInterface
 {
@@ -20,6 +21,8 @@ class AdminNavigator implements ToolInterface
      * more than the registry holds, so a denied page never costs the admin a result.
      */
     private const SEARCH_POOL = 50;
+    private const DEFAULT_LIMIT = 5;
+    private const MAX_LIMIT = 10;
 
     public function __construct(
         private readonly PageRegistry $pageRegistry,
@@ -72,7 +75,8 @@ class AdminNavigator implements ToolInterface
                 ],
                 'limit' => [
                     'type' => 'integer',
-                    'description' => 'Maximum number of search results (default: 5)',
+                    'description' => 'Maximum number of search results (default: ' . self::DEFAULT_LIMIT . ', max: '
+                        . self::MAX_LIMIT . ')',
                 ],
             ],
         ];
@@ -95,7 +99,7 @@ class AdminNavigator implements ToolInterface
         }
 
         $category = $params['category'] ?? null;
-        $limit = max(1, min((int)($params['limit'] ?? 5), 10));
+        $limit = ResultLimit::fromParams($params, self::DEFAULT_LIMIT, self::MAX_LIMIT);
         // Only pages in the asked category that this admin may open - a link to a page that
         // answers 403 is noise, and the resource guarding each page is the same one Magento checks
         // on arrival. Both filters run before the cut, so neither costs the admin a result: the

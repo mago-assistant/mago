@@ -10,6 +10,7 @@ use Magento\Cron\Model\ResourceModel\Schedule\CollectionFactory;
 use Magento\Cron\Model\Schedule;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class ListScheduleAction implements ActionInterface
 {
@@ -33,7 +34,7 @@ class ListScheduleAction implements ActionInterface
         return [
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results to return (default: 20)',
+                'description' => 'Number of results to return (default: 20, max: ' . ResultLimit::MAX . ')',
             ],
             'job_code' => [
                 'type' => 'string',
@@ -70,7 +71,7 @@ class ListScheduleAction implements ActionInterface
 
     public function execute(array $params, int $adminUserId): array
     {
-        $limit = (int)($params['limit'] ?? 20);
+        $limit = ResultLimit::fromParams($params, 20);
         $jobCode = $params['job_code'] ?? '';
 
         $now = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');

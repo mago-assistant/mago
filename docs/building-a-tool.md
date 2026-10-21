@@ -93,6 +93,9 @@ Use Magento repositories and `SearchCriteriaBuilder`, never raw SQL, and inject
 
 - `[PiiClass::PUBLIC]`: sent as is. Only for data that is not personal.
 - `[PiiClass::TOKENISE, '<type>']`: the model sees `mago://<type>_1`, the admin sees the real value.
+  The type is lowercase letters only (`taxid`, not `tax_id` or `vatNumber`). Anything else is
+  folded to lowercase letters when the token is minted (`tax_id` becomes `taxid`), and
+  `mago:tool:verify` reports it.
   Types in use: `name`, `email`, `phone`, `address`, `customer`, `order`, `invoice`, `shipment`,
   `creditmemo`, `url`, `entity`, `review`, `reviewtitle`, `reviewtext`, `nickname`.
 - `[PiiClass::STRIP]`: never sent.

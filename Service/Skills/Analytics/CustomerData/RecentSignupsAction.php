@@ -12,6 +12,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Service\Time\StoreTime;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class RecentSignupsAction implements ActionInterface
 {
@@ -46,7 +47,7 @@ class RecentSignupsAction implements ActionInterface
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results (default: 10). Use 1 for a question about a '
+                'description' => 'Number of results (default: 10, max: ' . ResultLimit::MAX . '). Use 1 for a question about a '
                     . 'single customer, such as the newest one.',
             ],
         ];
@@ -98,7 +99,7 @@ class RecentSignupsAction implements ActionInterface
         }
 
         $period = $params['period'] ?? '30days';
-        $limit = (int)($params['limit'] ?? 10);
+        $limit = ResultLimit::fromParams($params, 10);
         $from = $this->periodParser->getFromDate($period);
 
         $countParams = $this->apiClient->buildSearchCriteria(

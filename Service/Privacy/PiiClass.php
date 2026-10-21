@@ -22,4 +22,25 @@ final class PiiClass
      * enumerated; declaring it is an explicit assertion about all of them.
      */
     public const ANY = '*';
+
+    /**
+     * What a TOKENISE type should be: lowercase letters only. Every place that recognises a token
+     * (the refusal of a write that still carries one, the stream splitter, the card's masked-value
+     * warning) matches mago://[a-z]+_<number>, so any other type would slip past them.
+     */
+    public const TOKEN_TYPE_PATTERN = '/^[a-z]+$/';
+
+    /** The type a token gets when the declared one has no letters left */
+    private const FALLBACK_TOKEN_TYPE = 'value';
+
+    /**
+     * The declared type folded to lowercase letters, so a tool declaring "tax_id" or "vatNumber"
+     * keeps working (as "taxid" and "vatnumber") and its tokens are still recognised everywhere.
+     */
+    public static function tokenType(string $declaredType): string
+    {
+        $type = (string)preg_replace('/[^a-z]/', '', strtolower($declaredType));
+
+        return $type === '' ? self::FALLBACK_TOKEN_TYPE : $type;
+    }
 }

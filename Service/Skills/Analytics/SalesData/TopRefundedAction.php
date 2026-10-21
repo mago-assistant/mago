@@ -11,6 +11,7 @@ use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class TopRefundedAction implements ActionInterface
 {
@@ -39,7 +40,7 @@ class TopRefundedAction implements ActionInterface
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results to return (default: 10)',
+                'description' => 'Number of results to return (default: 10, max: ' . ResultLimit::MAX . ')',
             ],
         ];
     }
@@ -74,7 +75,7 @@ class TopRefundedAction implements ActionInterface
     public function execute(array $params, int $adminUserId): array
     {
         $period = $params['period'] ?? '30days';
-        $limit = (int)($params['limit'] ?? 10);
+        $limit = ResultLimit::fromParams($params, 10);
         $connection = $this->resourceConnection->getConnection();
         $creditmemoTable = $this->resourceConnection->getTableName('sales_creditmemo');
         $creditmemoItemTable = $this->resourceConnection->getTableName('sales_creditmemo_item');
