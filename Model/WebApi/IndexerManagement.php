@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Model\WebApi;
 
 use Magento\Authorization\Model\UserContextInterface;
+use Magento\Framework\AuthorizationInterface;
 use Magento\Framework\Exception\AuthorizationException;
 use Magento\Framework\Exception\InputException;
 use Magento\Framework\Exception\LocalizedException;
@@ -20,6 +21,7 @@ use MagoAssistant\Mago\Api\Data\IndexerResultInterface;
 use MagoAssistant\Mago\Api\Data\IndexerResultInterfaceFactory;
 use MagoAssistant\Mago\Api\WebApi\IndexerManagementInterface;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
+use MagoAssistant\Mago\Service\Skills\Configuration\IndexerManager;
 
 class IndexerManagement implements IndexerManagementInterface
 {
@@ -35,7 +37,8 @@ class IndexerManagement implements IndexerManagementInterface
         private readonly IndexerResultInterfaceFactory $indexerResultFactory,
         private readonly ErrorReporter $errorReporter,
         private readonly UserContextInterface $userContext,
-        private readonly ConfigRepository $configRepository
+        private readonly ConfigRepository $configRepository,
+        private readonly AuthorizationInterface $authorization
     ) {
     }
 
@@ -50,7 +53,34 @@ class IndexerManagement implements IndexerManagementInterface
     {
         $this->requireAdminUser();
         $this->requireReindexAllowed();
-        return $this->rebuild($this->getIndexers($indexerIds));
+        if ($indexerIds === []) {
+            throw new InputException(__(
+                'Name at least one indexer. Rebuilding every indexer is POST /V1/mago/indexers/reindex-all.'
+            ));
+        }
+        $indexers = $this->getIndexers($indexerIds);
+        $this->requireReindexAllGrantForEveryIndexer($indexers);
+
+        return $this->rebuild($indexers);
+    }
+
+    /**
+     * Naming every indexer is a reindex-all by another route, so it needs the same grant: without
+     * this, Magento_Indexer::invalidate alone would rebuild everything synchronously.
+     *
+     * @param IndexerInterface[] $indexers
+     * @throws AuthorizationException
+     */
+    private function requireReindexAllGrantForEveryIndexer(array $indexers): void
+    {
+        if (count($indexers) < count($this->getIndexers())
+            || $this->authorization->isAllowed(IndexerManager::REINDEX_ALL_RESOURCE)) {
+            return;
+        }
+
+        throw new AuthorizationException(__(
+            'Rebuilding every indexer needs the "Reindex All Indexers" permission.'
+        ));
     }
 
     /**

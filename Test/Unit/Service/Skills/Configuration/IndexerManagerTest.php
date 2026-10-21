@@ -65,6 +65,34 @@ final class IndexerManagerTest extends TestCase
     }
 
     #[Test]
+    public function rebuildingEveryIndexerAsksForACaution(): void
+    {
+        $cautions = $this->manager()->getCautions(['action' => 'reindex_all'], 1);
+
+        self::assertCount(1, $cautions);
+        self::assertStringContainsString('Rebuilds every indexer', $cautions[0]);
+    }
+
+    #[Test]
+    public function aSingleReindexOrAModeChangeNeedsNoCaution(): void
+    {
+        $manager = $this->manager();
+
+        self::assertSame([], $manager->getCautions(['action' => 'reindex', 'indexer_id' => 'catalog_product_price'], 1));
+        self::assertSame([], $manager->getCautions(['action' => 'set_mode', 'indexer_id' => 'catalog_product_price'], 1));
+    }
+
+    #[Test]
+    public function rebuildingEveryIndexerNeedsItsOwnResource(): void
+    {
+        $manager = $this->manager();
+
+        self::assertSame('Magento_Indexer::invalidate', $manager->getMagentoAcl(['action' => 'reindex_all']));
+        self::assertSame('MagoAssistant_Mago::reindex_all', $manager->getActionAcl(['action' => 'reindex_all']));
+        self::assertNull($manager->getActionAcl(['action' => 'reindex', 'indexer_id' => 'catalog_product_price']));
+    }
+
+    #[Test]
     public function aRunawayIndexerIdIsTruncatedInTheRefusalAndTheExecuteError(): void
     {
         $manager = $this->manager();

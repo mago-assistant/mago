@@ -3,8 +3,11 @@
 
     <route url="/V1/mago/indexers/reindex-all" method="POST">
         <service class="MagoAssistant\Mago\Api\WebApi\IndexerManagementInterface" method="reindexAll"/>
+        <!-- Rebuilding every indexer is far more than core's "invalidate" grant (flag an indexer
+             for a rebuild), so it needs its own resource as well. -->
         <resources>
             <resource ref="Magento_Indexer::invalidate"/>
+            <resource ref="MagoAssistant_Mago::reindex_all"/>
         </resources>
     </route>
 

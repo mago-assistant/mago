@@ -25,6 +25,7 @@
                         <resource id="MagoAssistant_Mago::skills_read" title="View Skill Permissions" sortOrder="10"/>
                         <resource id="MagoAssistant_Mago::skills_write" title="Edit Skill Permissions" sortOrder="20"/>
                     </resource>
+                    <resource id="MagoAssistant_Mago::reindex_all" title="Reindex All Indexers" sortOrder="70"/>
                 </resource>
             </resource>
         </resources>
