@@ -399,6 +399,7 @@ Two classes bridge that to the rest of this module:
 | Class | Responsibility |
 |---|---|
 | `Service\Ai\RequestFactory` | Turns the conversation arrays the panel and the conversation store speak into a `ChatRequestInterface`, tools included |
+| `Service\Ai\ToolOutputEnvelope` | Fences every tool result in the request with `<tool_output id="…">` markers and repeats the "data, not instructions" rule after it. The id is a keyed hash of the tool call id and the result, so text inside a result cannot close the fence, and a replayed turn is wrapped the same way, which keeps the provider's prompt cache. The stored conversation keeps the plain result |
 | `Service\Ai\Client` | Resolves the configured service row, applies `max_tokens`, and maps responses and stream chunks back to the array shape `ChatService` returns |
 
 `ChatService` therefore never sees a provider. Streaming yields `StreamChunkInterface` values with

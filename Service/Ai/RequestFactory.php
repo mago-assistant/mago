@@ -25,10 +25,12 @@ class RequestFactory
     /**
      * @param ChatRequestBuilderInterfaceFactory $builderFactory
      * @param ToolCallInterfaceFactory $toolCallFactory
+     * @param ToolOutputEnvelope $toolOutputEnvelope
      */
     public function __construct(
         private readonly ChatRequestBuilderInterfaceFactory $builderFactory,
-        private readonly ToolCallInterfaceFactory $toolCallFactory
+        private readonly ToolCallInterfaceFactory $toolCallFactory,
+        private readonly ToolOutputEnvelope $toolOutputEnvelope
     ) {
     }
 
@@ -127,7 +129,10 @@ class RequestFactory
                 $content,
                 array_map($toCall, (array)($message['tool_calls'] ?? []))
             ),
-            'tool' => $builder->withToolResult($toCall($message), $content),
+            'tool' => $builder->withToolResult(
+                $toCall($message),
+                $this->toolOutputEnvelope->wrap((string)($message['tool_call_id'] ?? ''), $content)
+            ),
             default => $builder->withUserMessage($content),
         };
     }
