@@ -30,3 +30,15 @@ export default class WireMockJournal {
     return (result.requests ?? []).map((entry: {body: string}) => entry.body);
   }
 }
+
+const TOOL_OUTPUT_FENCE = /^<tool_output id="([0-9a-f]+)">\n([\s\S]*)\n<\/tool_output id="\1">/;
+
+/**
+ * The tool result a provider request carried, parsed. ToolOutputEnvelope fences every result in
+ * <tool_output> markers before it leaves for the provider, so the JSON sits between them.
+ */
+export function toolOutputOf(content: string): any {
+  const fenced = TOOL_OUTPUT_FENCE.exec(content);
+
+  return JSON.parse(fenced ? fenced[2] : content);
+}

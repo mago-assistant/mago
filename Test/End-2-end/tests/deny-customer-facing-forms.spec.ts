@@ -5,6 +5,7 @@
 import {expect, test, type APIRequestContext} from '@playwright/test';
 import ChatPanel from 'Pages/backend/ChatPanel';
 import MagentoApi from 'Services/MagentoApi';
+import {toolOutputOf} from 'Services/WireMockJournal';
 
 const chatPanel = new ChatPanel();
 const magentoApi = new MagentoApi();
@@ -63,7 +64,7 @@ async function findPageFormToolResult(request: APIRequestContext, triggerPhrase:
       const body = JSON.parse(decoded);
       const toolMessage = body.messages.find((message: any) => message.role === 'tool');
 
-      return JSON.parse(toolMessage.content);
+      return toolOutputOf(toolMessage.content);
     }
 
     await new Promise((resolve) => setTimeout(resolve, 500));

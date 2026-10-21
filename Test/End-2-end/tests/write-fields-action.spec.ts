@@ -8,6 +8,7 @@ import ChatMock from 'Actions/backend/ChatMock';
 import MagentoApi from 'Services/MagentoApi';
 import {LONG_FIELD_VALUE, stageFieldChange, stageManyFieldChanges} from 'Fixtures/scenarios';
 import {PROVIDER_ROUND_TRIP_TIMEOUT} from 'Config/timeouts';
+import {toolOutputOf} from 'Services/WireMockJournal';
 
 const chatPanel = new ChatPanel();
 const chatMock = new ChatMock();
@@ -250,7 +251,7 @@ async function findToolResult(request: APIRequestContext, triggerPhrase: string)
       const body = JSON.parse(decoded);
       const toolMessage = body.messages.find((message: any) => message.role === 'tool');
 
-      return JSON.parse(toolMessage.content);
+      return toolOutputOf(toolMessage.content);
     }
 
     await new Promise((resolve) => setTimeout(resolve, 500));
