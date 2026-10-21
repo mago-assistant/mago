@@ -187,6 +187,7 @@ class PageContextNormalizer
             'options' => $this->normalizeOptions($rawField['options'] ?? null),
             'required' => (bool)($rawField['required'] ?? false),
             'disabled' => (bool)($rawField['disabled'] ?? false),
+            'hidden' => (bool)($rawField['hidden'] ?? false),
             'usesDefaultValue' => (bool)($rawField['usesDefaultValue'] ?? false),
         ];
     }
@@ -217,6 +218,7 @@ class PageContextNormalizer
             'options' => null,
             'required' => (bool)($rawField['required'] ?? false),
             'disabled' => (bool)($rawField['disabled'] ?? false),
+            'hidden' => (bool)($rawField['hidden'] ?? false),
             'usesDefaultValue' => (bool)($rawField['usesDefaultValue'] ?? false),
         ];
     }

@@ -460,6 +460,10 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
             if ($field['disabled']) {
                 return '"' . $change['path'] . '" is disabled on this form and cannot be written to.';
             }
+            if ($field['hidden'] ?? false) {
+                return '"' . $change['path'] . '" is a hidden field on this form (a record id or a value carried '
+                    . 'along), never shown to the administrator, so it is not written to from the chat.';
+            }
         }
 
         return null;
