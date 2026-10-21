@@ -214,6 +214,25 @@ define(['uiRegistry'], function (registry) {
     var SECRET_PATH_PATTERN = /password|secret|token|api_key|apikey|private_key/i;
 
     /**
+     * A field that is never shown on the form: a hidden input, or an invisible component without a
+     * label (the CMS page form's page_id, an id carried along with the record). A value staged there
+     * would be saved with the form without the administrator ever seeing it, and the confirmation
+     * card could only show it under a blank label, so it is never written to. A labelled field that
+     * a switcher merely hides until another field changes (a coupon code behind "Specific Coupon")
+     * is not hidden in this sense: the card names it, and the change that reveals it can be in the
+     * same batch. PageContextNormalizer carries the flag and WriteFieldsAction refuses the change.
+     *
+     * @param {Object} component
+     * @returns {Boolean}
+     */
+    function isHiddenField(component) {
+        var label = typeof component.label === 'function' ? component.label() : component.label;
+
+        return component.formElement === 'hidden'
+            || (typeof component.visible === 'function' && component.visible() === false && !label);
+    }
+
+    /**
      * A secret's value never leaves the browser: it is not the assistant's to read, and the
      * snapshot travels to the provider and into the conversation history. The field itself is
      * still listed (path, label, type) so it can be described and written to. Magento has no
@@ -261,6 +280,7 @@ define(['uiRegistry'], function (registry) {
                 options: isSecret ? [] : capOptions(readOptions(component), caps.maxFieldOptions, truncated),
                 required: typeof component.required === 'function' ? !!component.required() : false,
                 disabled: typeof component.disabled === 'function' ? !!component.disabled() : false,
+                hidden: isHiddenField(component),
                 usesDefaultValue: usesDefaultValue(component)
             };
         });
@@ -1069,7 +1089,9 @@ define(['uiRegistry'], function (registry) {
      */
     function settleChange(namespace, provider, change, callback) {
         whenFieldReady(namespace, change.path, FIELD_REGISTRATION_TIMEOUT_MS, function (component) {
-            callback(component ? writeChange(component, provider, change) : unwritableChangeResult(change));
+            callback(component && !isHiddenField(component)
+                ? writeChange(component, provider, change)
+                : unwritableChangeResult(change));
         });
     }
 
