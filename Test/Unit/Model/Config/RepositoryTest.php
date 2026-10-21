@@ -13,6 +13,7 @@ use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Filesystem\Driver\File as FileDriver;
 use Magento\Framework\Serialize\Serializer\Json;
 use Magento\Framework\Stdlib\DateTime\DateTime;
+use Magento\Store\Model\ScopeInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface;
 use MagoAssistant\Mago\Model\Config\Repository;
 use MagoAssistant\Mago\Model\Config\SystemPromptBuilder;
@@ -27,6 +28,26 @@ use PHPUnit\Framework\TestCase;
 
 class RepositoryTest extends TestCase
 {
+    #[Test]
+    public function aStoreViewSettingCannotSwitchTheAssistantBackOn(): void
+    {
+        $repository = $this->repositoryWith((new FakeScopeConfig([Repository::XML_PATH_EXTENSION_ENABLE => '0']))
+            ->withScopeValue(ScopeInterface::SCOPE_STORE, Repository::XML_PATH_EXTENSION_ENABLE, '1')
+            ->withScopeValue(ScopeInterface::SCOPE_WEBSITE, Repository::XML_PATH_EXTENSION_ENABLE, '1'));
+
+        self::assertFalse($repository->isEnabled());
+        self::assertFalse($repository->isEnabled(1));
+    }
+
+    #[Test]
+    public function aStoreViewSettingCannotSwitchTheAssistantOff(): void
+    {
+        $repository = $this->repositoryWith((new FakeScopeConfig([Repository::XML_PATH_EXTENSION_ENABLE => '1']))
+            ->withScopeValue(ScopeInterface::SCOPE_STORE, Repository::XML_PATH_EXTENSION_ENABLE, '0'));
+
+        self::assertTrue($repository->isEnabled());
+    }
+
     #[Test]
     public function itReturnsAConfiguredHexAccentColor(): void
     {
@@ -110,9 +131,14 @@ class RepositoryTest extends TestCase
      */
     private function repository(array $config): Repository
     {
+        return $this->repositoryWith(new FakeScopeConfig($config));
+    }
+
+    private function repositoryWith(FakeScopeConfig $scopeConfig): Repository
+    {
         return new Repository(
             new FakeStoreManager(),
-            new FakeScopeConfig($config),
+            $scopeConfig,
             $this->withoutConstructor(ConfigDataCollectionFactory::class),
             $this->withoutConstructor(ConfigData::class),
             new Json(),

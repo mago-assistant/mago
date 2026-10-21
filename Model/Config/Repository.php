@@ -66,9 +66,15 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return $this->metadata->getVersion();
     }
 
+    /**
+     * The kill switch, read at default scope only. A website or store view setting must not switch
+     * the assistant back on after an admin switched it off: REST calls run in the scope of the
+     * store in their URL, so a store override would quietly win there. $storeId is kept for the
+     * interface and ignored.
+     */
     public function isEnabled(?int $storeId = null): bool
     {
-        return $this->isSetFlag(self::XML_PATH_EXTENSION_ENABLE, $storeId);
+        return $this->isSetFlag(self::XML_PATH_EXTENSION_ENABLE, null, ScopeConfigInterface::SCOPE_TYPE_DEFAULT);
     }
 
     public function getSupportLink(): string
