@@ -8,12 +8,12 @@ namespace MagoAssistant\Mago\Controller\Adminhtml\Conversations;
 
 use Magento\Backend\App\Action;
 use Magento\Backend\App\Action\Context;
-use Magento\Framework\App\Action\HttpGetActionInterface;
+use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Controller\ResultInterface;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 
-class Delete extends Action implements HttpGetActionInterface
+class Delete extends Action implements HttpPostActionInterface
 {
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::conversations_delete';
 
