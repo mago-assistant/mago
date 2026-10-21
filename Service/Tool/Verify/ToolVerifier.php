@@ -194,6 +194,11 @@ class ToolVerifier
             return 'Field "' . $field . '" tokenises without a token type, e.g. [PiiClass::TOKENISE, \'order\']';
         }
 
+        if ($class === PiiClass::TOKENISE && preg_match(PiiClass::TOKEN_TYPE_PATTERN, (string)$rule[1]) !== 1) {
+            return 'Field "' . $field . '" uses token type "' . $rule[1] . '", which is minted as "'
+                . PiiClass::tokenType((string)$rule[1]) . '": use lowercase letters only';
+        }
+
         return null;
     }
 

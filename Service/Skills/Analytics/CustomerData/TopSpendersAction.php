@@ -12,6 +12,7 @@ use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class TopSpendersAction implements ActionInterface
 {
@@ -43,7 +44,7 @@ class TopSpendersAction implements ActionInterface
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results (default: 10)',
+                'description' => 'Number of results (default: 10, max: ' . ResultLimit::MAX . ')',
             ],
         ];
     }
@@ -80,7 +81,7 @@ class TopSpendersAction implements ActionInterface
     public function execute(array $params, int $adminUserId): array
     {
         $period = $params['period'] ?? '30days';
-        $limit = (int)($params['limit'] ?? 10);
+        $limit = ResultLimit::fromParams($params, 10);
         $connection = $this->resourceConnection->getConnection();
         $orderTable = $this->resourceConnection->getTableName('sales_order');
         $from = $this->periodParser->getFromDate($period);

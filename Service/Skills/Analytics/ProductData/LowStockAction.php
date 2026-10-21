@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Analytics\ProductData;
 use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class LowStockAction implements ActionInterface
 {
@@ -36,7 +37,7 @@ class LowStockAction implements ActionInterface
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results (default: 10)',
+                'description' => 'Number of results (default: 10, max: ' . ResultLimit::MAX . ')',
             ],
         ];
     }
@@ -70,7 +71,7 @@ class LowStockAction implements ActionInterface
     public function execute(array $params, int $adminUserId): array
     {
         $threshold = (int)($params['threshold'] ?? 5);
-        $limit = (int)($params['limit'] ?? 10);
+        $limit = ResultLimit::fromParams($params, 10);
 
         $collection = $this->collectionFactory->create();
         $collection->addAttributeToSelect(['name', 'sku', 'price', 'status'])

@@ -11,11 +11,14 @@ use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Service\Time\StoreTime;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class LookupCustomerAction implements ActionInterface
 {
     private const NAME_FIELDS = ['firstname', 'middlename', 'lastname'];
     private const MAX_NAME_WORDS = 5;
+    private const DEFAULT_LIMIT = 10;
+    private const MAX_LIMIT = 10;
     private const NEWEST_FIRST = [['field' => 'created_at', 'direction' => 'DESC']];
     private const SEARCH_REQUIRED = ['error' => 'search parameter is required for lookup_customer'];
 
@@ -53,7 +56,7 @@ class LookupCustomerAction implements ActionInterface
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results (default: 10)',
+                'description' => 'Number of results (default: ' . self::DEFAULT_LIMIT . ', max: ' . self::MAX_LIMIT . ')',
             ],
         ];
     }
@@ -105,7 +108,7 @@ class LookupCustomerAction implements ActionInterface
             return ['error' => 'Admin user context is required'];
         }
 
-        $limit = max(1, min((int)($params['limit'] ?? 10), 10));
+        $limit = ResultLimit::fromParams($params, self::DEFAULT_LIMIT, self::MAX_LIMIT);
 
         $searchParams = $this->isSingleFieldSearch($search)
             ? $this->singleFieldSearch($search, $limit)

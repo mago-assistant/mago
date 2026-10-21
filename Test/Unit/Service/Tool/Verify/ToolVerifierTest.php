@@ -154,6 +154,16 @@ final class ToolVerifierTest extends TestCase
     }
 
     #[Test]
+    public function itFailsATokenTypeTheTokenMatchersWouldNotRecognise(): void
+    {
+        $tool = $this->tool()->withFieldClassification(['tax_id' => [PiiClass::TOKENISE, 'tax_id']]);
+
+        $failures = $this->messagesWith(CheckStatus::Failure, $this->verifier()->inspect($tool, ['action' => 'check']));
+
+        self::assertSame(['Field "tax_id" uses token type "tax_id", which is minted as "taxid": use lowercase letters only'], $failures);
+    }
+
+    #[Test]
     public function itWarnsWhenTheClassificationIsEmpty(): void
     {
         $checks = $this->verifier()->inspect($this->tool()->withFieldClassification([]), []);

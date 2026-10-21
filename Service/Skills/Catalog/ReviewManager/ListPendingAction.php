@@ -10,6 +10,7 @@ use Magento\Review\Model\Review;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class ListPendingAction implements ActionInterface
 {
@@ -34,7 +35,7 @@ class ListPendingAction implements ActionInterface
         return [
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results to return (default: 20)',
+                'description' => 'Number of results to return (default: 20, max: ' . ResultLimit::MAX . ')',
             ],
         ];
     }
@@ -76,7 +77,7 @@ class ListPendingAction implements ActionInterface
             return ['error' => 'Admin user context is required'];
         }
 
-        $limit = (int)($params['limit'] ?? 20);
+        $limit = ResultLimit::fromParams($params, 20);
 
         $collection = $this->reviewServices->createCollection();
         $collection->addStatusFilter(Review::STATUS_PENDING);

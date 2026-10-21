@@ -65,10 +65,12 @@ class SearchActionTest extends TestCase
         $action->execute(['query' => 'Oslo'], self::ADMIN_USER_ID);
         $action->execute(['query' => 'Oslo', 'limit' => 500], self::ADMIN_USER_ID);
         $action->execute(['query' => 'Oslo', 'limit' => 0], self::ADMIN_USER_ID);
+        $action->execute(['query' => 'Oslo', 'limit' => 'all'], self::ADMIN_USER_ID);
 
         $calls = $this->apiClient->callsOf(FakeInternalApiClient::GET);
         self::assertSame(20, $calls[0]['payload']['searchCriteria[pageSize]']);
         self::assertSame(50, $calls[1]['payload']['searchCriteria[pageSize]']);
         self::assertSame(1, $calls[2]['payload']['searchCriteria[pageSize]']);
+        self::assertSame(20, $calls[3]['payload']['searchCriteria[pageSize]']);
     }
 }

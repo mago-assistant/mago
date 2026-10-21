@@ -29,6 +29,22 @@ class PrivacyService
     }
 
     /**
+     * Tokens minted from now on stay in memory until releaseHeldTokens()
+     */
+    public function holdNewTokens(): void
+    {
+        $this->vault->holdNewTokens();
+    }
+
+    /**
+     * Keep the held tokens that occur in what was shown, forget the rest
+     */
+    public function releaseHeldTokens(string $shownText): void
+    {
+        $this->vault->releaseHeldTokens($shownText);
+    }
+
+    /**
      * Filter a tool result before it reaches the LLM. $classes is the executed tool's own
      * declaration (ToolInterface::getFieldClassification() for the invoked action).
      *

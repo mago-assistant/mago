@@ -11,6 +11,7 @@ use Magento\Framework\DB\Sql\Expression;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class TopProductsAction implements ActionInterface
 {
@@ -39,7 +40,7 @@ class TopProductsAction implements ActionInterface
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results to return (default: 10)',
+                'description' => 'Number of results to return (default: 10, max: ' . ResultLimit::MAX . ')',
             ],
         ];
     }
@@ -73,7 +74,7 @@ class TopProductsAction implements ActionInterface
     public function execute(array $params, int $adminUserId): array
     {
         $period = $params['period'] ?? '30days';
-        $limit = (int)($params['limit'] ?? 10);
+        $limit = ResultLimit::fromParams($params, 10);
         $connection = $this->resourceConnection->getConnection();
         $orderTable = $this->resourceConnection->getTableName('sales_order');
         $itemTable = $this->resourceConnection->getTableName('sales_order_item');

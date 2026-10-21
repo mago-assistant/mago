@@ -11,6 +11,7 @@ use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Time\StoreTime;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class ListFailedAction implements ActionInterface
 {
@@ -36,7 +37,7 @@ class ListFailedAction implements ActionInterface
         return [
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results to return (default: 20)',
+                'description' => 'Number of results to return (default: 20, max: ' . ResultLimit::MAX . ')',
             ],
             'since' => [
                 'type' => 'string',
@@ -80,7 +81,7 @@ class ListFailedAction implements ActionInterface
 
     public function execute(array $params, int $adminUserId): array
     {
-        $limit = (int)($params['limit'] ?? 20);
+        $limit = ResultLimit::fromParams($params, 20);
         $since = $params['since'] ?? '';
         $jobCode = $params['job_code'] ?? '';
 

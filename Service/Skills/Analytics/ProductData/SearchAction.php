@@ -10,6 +10,7 @@ use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class SearchAction implements ActionInterface
 {
@@ -41,7 +42,7 @@ class SearchAction implements ActionInterface
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results (default: 20, max: 50)',
+                'description' => 'Number of results (default: 20, max: ' . self::MAX_LIMIT . ')',
             ],
         ];
     }
@@ -87,7 +88,7 @@ class SearchAction implements ActionInterface
             return ['error' => 'Admin user context is required'];
         }
 
-        $limit = min(max((int)($params['limit'] ?? self::DEFAULT_LIMIT), 1), self::MAX_LIMIT);
+        $limit = ResultLimit::fromParams($params, self::DEFAULT_LIMIT, self::MAX_LIMIT);
         $searchParams = $this->apiClient->buildSearchCriteria(
             [['field' => 'name', 'value' => '%' . $query . '%', 'condition_type' => 'like']],
             $limit

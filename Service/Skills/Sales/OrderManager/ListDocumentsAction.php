@@ -12,6 +12,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\AbstractDocument;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\DocumentTypeInterface;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class ListDocumentsAction implements ActionInterface
 {
@@ -149,7 +150,7 @@ class ListDocumentsAction implements ActionInterface
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of documents to return (default: 10, max: 50)',
+                'description' => 'Number of documents to return (default: 10, max: ' . ResultLimit::MAX . ')',
             ],
         ];
     }
@@ -180,9 +181,7 @@ class ListDocumentsAction implements ActionInterface
     public function execute(array $params, int $adminUserId): array
     {
         $params = $this->routeSort($params);
-        $limit = (int)($params['limit'] ?? 10);
-        $limit = max($limit, 1);
-        $limit = min($limit, 50);
+        $limit = ResultLimit::fromParams($params, 10);
 
         $query = $this->query($params);
         if (isset($query['error'])) {
