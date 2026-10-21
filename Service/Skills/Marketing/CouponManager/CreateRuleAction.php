@@ -39,6 +39,10 @@ class CreateRuleAction implements CautionedActionInterface
                 'type' => 'string',
                 'description' => 'Name for the cart price rule (required)',
             ],
+            'description' => [
+                'type' => 'string',
+                'description' => 'Internal description of the rule, shown only in the admin (optional)',
+            ],
             'discount_type' => [
                 'type' => 'string',
                 'description' => 'Discount type: "percent", "fixed", or "free_shipping"',

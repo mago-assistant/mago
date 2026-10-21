@@ -24,6 +24,9 @@ interface ActionInterface
 
     /**
      * Extra parameter definitions (beyond 'action') as JSON Schema properties
+     *
+     * Also the allowlist for execute(): a key not declared here never reaches it, whatever the
+     * model sends. That is what keeps the confirmation card and the save in step.
      */
     public function getParameterSchema(): array;
 
@@ -50,7 +53,8 @@ interface ActionInterface
     /**
      * Execute the action
      *
-     * @param array $params Tool call parameters
+     * @param array $params Tool call parameters: 'action', the keys getParameterSchema() declares,
+     *        and '_admin_user_id'; anything else the model sent is dropped before this runs
      * @param int $adminUserId Current admin user ID
      * @return array Result data
      */

@@ -34,4 +34,14 @@ class ErrorLogger
 
         $this->logger->error($message);
     }
+
+    /**
+     * Something worth a developer's look that did not fail the request
+     *
+     * @param array<string, mixed> $data
+     */
+    public function addWarning(string $type, array $data): void
+    {
+        $this->logger->warning($type . ': ' . $this->json->serialize($data));
+    }
 }

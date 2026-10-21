@@ -28,7 +28,9 @@ interface ActionScopedToolInterface extends ToolInterface
 
     /**
      * Parameter schema limited to the given action names: the action enum and
-     * only the parameters those actions declare.
+     * only the parameters those actions declare. Called with the one action of a
+     * tool call, it is also the allowlist for execute(): keys outside it are
+     * dropped before the call runs.
      *
      * @param string[] $actionNames
      * @return array

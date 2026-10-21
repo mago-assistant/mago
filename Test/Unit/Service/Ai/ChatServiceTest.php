@@ -78,6 +78,8 @@ final class ChatServiceTest extends TestCase
 
     private FakeLogger $debugLog;
 
+    private FakeLogger $errorLog;
+
     protected function setUp(): void
     {
         $this->grants = ['cms_data' => 'read'];
@@ -102,7 +104,7 @@ final class ChatServiceTest extends TestCase
         $authorization->method('isAllowed')->willReturn(true);
 
         $cmsData = new FakeSkill('cms_data', $authorization, [
-            'list_pages' => new FakeAction('list_pages', true, [], 'Always mention the page count.'),
+            'list_pages' => new FakeAction('list_pages', true, ['query' => ['type' => 'string']], 'Always mention the page count.'),
             'update_page' => new FakeAction('update_page', false, ['content' => ['type' => 'string']]),
             'check_links' => new FakeAction('check_links', true, [], '', ['error' => 'Link checker is offline']),
         ]);
@@ -144,6 +146,7 @@ final class ChatServiceTest extends TestCase
         $config = (new FakeConfigRepository())->withMaxToolIterations(5)->withMaxResponseTokens(4000)
             ->withAnswerWidgets($answerWidgets)->withDebugEnabled($isDebugEnabled);
         $this->debugLog = new FakeLogger();
+        $this->errorLog = new FakeLogger();
         return new ChatService(
             $config,
             $client,
@@ -155,7 +158,8 @@ final class ChatServiceTest extends TestCase
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
             new PageContextHolder(),
             $privacy ?? $this->privacyService(),
-            new ToolAccess($authorization, $checker)
+            new ToolAccess($authorization, $checker),
+            new ErrorLogger($this->errorLog, $json)
         );
     }
 
@@ -435,6 +439,34 @@ final class ChatServiceTest extends TestCase
 
         self::assertSame('update_page', $results['call_1']['executed']);
         self::assertSame('update_page', $results['call_2']['executed']);
+    }
+
+    #[Test]
+    public function aConfirmedCallRunsWithOnlyTheArgumentsItsActionDeclares(): void
+    {
+        $createRule = new FakeAction('create_rule', false, ['name' => ['type' => 'string']]);
+        $this->grants = ['coupon_manager' => 'write'];
+        $this->chatService = $this->buildChatService([new FakeSkill('coupon_manager', new FakeAuthorization(), [
+            'create_rule' => $createRule,
+            'deactivate_rule' => new FakeAction('deactivate_rule', false, ['rule_id' => ['type' => 'integer']]),
+        ])]);
+
+        $this->chatService->executeConfirmedTools([[
+            'id' => 'call_1',
+            'name' => 'coupon_manager',
+            'input' => [
+                'action' => 'create_rule',
+                'name' => 'Spring sale',
+                'rule_id' => 3,
+                'uses_per_customer' => 0,
+                '_admin_user_id' => 1,
+            ],
+        ]], self::ADMIN_ID);
+
+        self::assertSame(
+            ['action' => 'create_rule', 'name' => 'Spring sale', '_admin_user_id' => self::ADMIN_ID],
+            $createRule->executedParams()
+        );
     }
 
     #[Test]
@@ -745,6 +777,45 @@ final class ChatServiceTest extends TestCase
     }
 
     #[Test]
+    public function theDebugLogNamesTheUndeclaredKeysItDroppedButNotTheirValues(): void
+    {
+        $chatService = $this->buildChatService(isDebugEnabled: true);
+        $this->responses = [$this->toolCallResponse('list_pages', ['query' => 'home', 'owner' => 'jane@example.com'])];
+
+        $chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        $log = implode("\n", $this->debugLog->getMessages());
+        self::assertStringContainsString(
+            'Tool Arguments Dropped: {"tool":"cms_data","action":"list_pages","undeclared_keys":["owner"]}',
+            $log
+        );
+        self::assertStringNotContainsString('jane@example.com', $log);
+    }
+
+    #[Test]
+    public function aKeyNoActionOfTheToolDeclaresIsLoggedOutsideDebugMode(): void
+    {
+        $this->responses = [$this->toolCallResponse('list_pages', ['query' => 'home', 'country_code' => 'NL'])];
+
+        $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertSame(
+            ['Tool Arguments Never Declared: {"tool":"cms_data","action":"list_pages","keys":["country_code"]}'],
+            $this->errorLog->getMessages()
+        );
+    }
+
+    #[Test]
+    public function aKeyAnotherActionDeclaresIsNoWarning(): void
+    {
+        $this->responses = [$this->toolCallResponse('list_pages', ['content' => 'x'])];
+
+        $this->chatService->processMessage([$this->userMessage()], null, self::ADMIN_ID);
+
+        self::assertSame([], $this->errorLog->getMessages());
+    }
+
+    #[Test]
     public function theDebugLogRecordsWhichToolRanButNotItsInputOrOutput(): void
     {
         $chatService = $this->buildChatService(isDebugEnabled: true);
@@ -1002,7 +1073,8 @@ final class ChatServiceTest extends TestCase
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
             new PageContextHolder(),
             $this->privacyService(),
-            new ToolAccess(new FakeAuthorization(), new FakePermissionChecker())
+            new ToolAccess(new FakeAuthorization(), new FakePermissionChecker()),
+            new ErrorLogger(new FakeLogger(), new Json())
         );
     }
 
@@ -1265,7 +1337,8 @@ final class ChatServiceTest extends TestCase
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
             new PageContextHolder(),
             $this->privacyService(),
-            new ToolAccess(new FakeAuthorization(), new FakePermissionChecker())
+            new ToolAccess(new FakeAuthorization(), new FakePermissionChecker()),
+            new ErrorLogger(new FakeLogger(), new Json())
         );
     }
 
@@ -1335,7 +1408,7 @@ final class ChatServiceTest extends TestCase
             }
             public function getParameterSchema(): array
             {
-                return [];
+                return ['content' => ['type' => 'string']];
             }
             public function getAclResource(): ?string
             {
@@ -1420,7 +1493,7 @@ final class ChatServiceTest extends TestCase
             }
             public function getParameterSchema(): array
             {
-                return [];
+                return ['comment' => ['type' => 'string']];
             }
             public function getAclResource(): ?string
             {

@@ -204,7 +204,8 @@ final class ChatServiceToolConfirmationTest extends TestCase
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
             new PageContextHolder(),
             new PrivacyService(new PrivacyFilter($vault, new PiiHeuristic()), $vault, new PiiHeuristic()),
-            new ToolAccess($authorization, $this->permissions)
+            new ToolAccess($authorization, $this->permissions),
+            new ErrorLogger(new FakeLogger(), new Json())
         );
     }
 

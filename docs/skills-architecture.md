@@ -208,7 +208,7 @@ see [widgets.md](widgets.md).
 MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface
 ```
 
-Optional extension of `ToolInterface` for mixed read/write tools. It adds `getDescriptionForActions(array $actionNames)` and `getParameterSchemaForActions(array $actionNames)`, which the registry calls for admins holding only a `read` grant so the provider sees a description and schema that mention nothing but the read actions. `AbstractSkill` implements it for free; hand-written mixed tools (`cache_manager`, `indexer_manager`) implement it themselves. A mixed tool that only implements `ToolInterface` still works, but is narrowed by the action enum alone.
+Optional extension of `ToolInterface` for mixed read/write tools. It adds `getDescriptionForActions(array $actionNames)` and `getParameterSchemaForActions(array $actionNames)`, which the registry calls for admins holding only a `read` grant so the provider sees a description and schema that mention nothing but the read actions. `AbstractSkill` implements it for free; hand-written mixed tools (`cache_manager`, `indexer_manager`) implement it themselves. A mixed tool that only implements `ToolInterface` still works, but is narrowed by the action enum alone. The same per-action schema cuts the arguments of every call: `ChatService` drops any key the called action does not declare before the permission check, the confirmation card and `execute()`, so what the admin approves is exactly what runs. A tool that only implements `ToolInterface` receives its input as sent.
 
 #### `ChatService`
 
