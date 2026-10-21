@@ -6,12 +6,12 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CouponManager;
 
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
+use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class CreateCouponAction implements ActionInterface
+class CreateCouponAction implements CautionedActionInterface
 {
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
@@ -84,6 +84,24 @@ class CreateCouponAction implements ActionInterface
             . 'If the rule has coupon_type "no_coupon", inform the user that this rule does not support coupon codes.';
     }
 
+    /**
+     * Every generated code is a working discount for whoever holds it
+     */
+    public function getCautions(array $params, int $adminUserId): array
+    {
+        $ruleId = (int)($params['rule_id'] ?? 0);
+        $rule = $this->apiClient->get('salesRules/' . $ruleId, [], $adminUserId);
+        $quantity = $this->quantity($params);
+        $ruleName = isset($rule['error']) || !isset($rule['name'])
+            ? 'cart price rule ' . $ruleId
+            : 'cart price rule "' . $rule['name'] . '" (' . $ruleId . ')';
+
+        return [
+            'Creates ' . $quantity . ' working coupon ' . ($quantity === 1 ? 'code' : 'codes') . ' for '
+                . $ruleName . ', each giving its discount to whoever enters it.',
+        ];
+    }
+
     public function execute(array $params, int $adminUserId): array
     {
         $ruleId = (int)($params['rule_id'] ?? 0);
@@ -111,12 +129,9 @@ class CreateCouponAction implements ActionInterface
                 . 'be generated when "Use Auto Generation" is enabled on the rule.'];
         }
 
-        $quantity = (int)($params['quantity'] ?? 1);
+        $quantity = $this->quantity($params);
         $length = (int)($params['length'] ?? 8);
 
-        if ($quantity < 1) {
-            $quantity = 1;
-        }
         if ($length < 4) {
             $length = 8;
         }
@@ -154,5 +169,13 @@ class CreateCouponAction implements ActionInterface
                 ['id' => $ruleId]
             ),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function quantity(array $params): int
+    {
+        return max(1, (int)($params['quantity'] ?? 1));
     }
 }

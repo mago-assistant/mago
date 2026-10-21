@@ -66,6 +66,43 @@ class CreateCouponActionTest extends TestCase
         self::assertCount(1, $apiClient->callsOf(FakeInternalApiClient::POST));
     }
 
+    #[Test]
+    public function itCautionsHowManyWorkingCodesItCreatesForWhichRule(): void
+    {
+        $apiClient = (new FakeInternalApiClient())
+            ->withResponse(FakeInternalApiClient::GET, 'salesRules/5', ['name' => 'Summer sale']);
+
+        $cautions = $this->action($apiClient)->getCautions(['rule_id' => 5, 'quantity' => 500], self::ADMIN_USER_ID);
+
+        self::assertSame(
+            ['Creates 500 working coupon codes for cart price rule "Summer sale" (5), '
+                . 'each giving its discount to whoever enters it.'],
+            $cautions
+        );
+    }
+
+    #[Test]
+    public function itCautionsAboutAtLeastOneCodeLikeTheGenerateCallMakes(): void
+    {
+        $apiClient = (new FakeInternalApiClient())
+            ->withResponse(FakeInternalApiClient::GET, 'salesRules/5', ['name' => 'Summer sale']);
+
+        $cautions = $this->action($apiClient)->getCautions(['rule_id' => 5, 'quantity' => 0], self::ADMIN_USER_ID);
+
+        self::assertStringStartsWith('Creates 1 working coupon code for', $cautions[0]);
+    }
+
+    #[Test]
+    public function itStillCautionsWhenTheRuleCannotBeRead(): void
+    {
+        $apiClient = (new FakeInternalApiClient())
+            ->withResponse(FakeInternalApiClient::GET, 'salesRules/5', ['error' => 'Not allowed']);
+
+        $cautions = $this->action($apiClient)->getCautions(['rule_id' => 5], self::ADMIN_USER_ID);
+
+        self::assertStringContainsString('for cart price rule 5,', $cautions[0]);
+    }
+
     private function action(FakeInternalApiClient $apiClient): CreateCouponAction
     {
         $secureAdminUrl = $this->createStub(SecureAdminUrl::class);

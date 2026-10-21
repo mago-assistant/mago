@@ -14,8 +14,10 @@ use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
 use MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\CreateRuleAction;
+use MagoAssistant\Mago\Service\Skills\Marketing\DiscountRuleCautions;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeCatalogRuleServices;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeLogger;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -55,6 +57,7 @@ class CreateRuleActionTest extends TestCase
             'catalogRules' => new FakeCatalogRuleServices($this->catalogRuleRepository, $this->rule),
             'secureAdminUrl' => $secureAdminUrl,
             'errorReporter' => new ErrorReporter(new ErrorLogger(new FakeLogger(), new Json()), new PiiHeuristic()),
+            'cautions' => new DiscountRuleCautions(new FakeInternalApiClient()),
         ]);
     }
 
@@ -165,5 +168,73 @@ class CreateRuleActionTest extends TestCase
 
         self::assertStringContainsString('greater than 0', $description);
         self::assertStringContainsString('at most 100', $description);
+    }
+
+    #[Test]
+    public function itCautionsAboutAPercentageOffEveryProduct(): void
+    {
+        $cautions = $this->action->getCautions(['discount_type' => 'percent', 'discount_amount' => 30], self::ADMIN_USER_ID);
+
+        self::assertSame('Takes 30% off the price of every product.', $cautions[0]);
+    }
+
+    #[Test]
+    public function itCautionsAboutAPriceSetForTheProductsOfACategory(): void
+    {
+        $cautions = $this->action->getCautions(
+            ['discount_type' => 'to_fixed', 'discount_amount' => 1, 'category_ids' => [5]],
+            self::ADMIN_USER_ID
+        );
+
+        self::assertSame('Sets the price of every product in category 5 to 1.', $cautions[0]);
+    }
+
+    #[Test]
+    public function itCautionsThatARuleWithoutGroupsReachesGuests(): void
+    {
+        $cautions = $this->action->getCautions(['discount_type' => 'percent', 'discount_amount' => 10], self::ADMIN_USER_ID);
+
+        self::assertContains('Applies to every customer group, guests (NOT LOGGED IN) included.', $cautions);
+    }
+
+    #[Test]
+    public function itKeepsAnEmptyWebsiteListAsNoWebsiteLikeTheSaveDoes(): void
+    {
+        $cautions = $this->action->getCautions(
+            ['discount_type' => 'percent', 'discount_amount' => 10, 'website_ids' => []],
+            self::ADMIN_USER_ID
+        );
+
+        self::assertContains('Applies on no website.', $cautions);
+    }
+
+    #[Test]
+    public function itLeavesTheDiscountLineOutForAnUnknownDiscountType(): void
+    {
+        $cautions = $this->action->getCautions(['discount_type' => 'nonsense'], self::ADMIN_USER_ID);
+
+        self::assertSame('Applies on every website.', $cautions[0]);
+    }
+
+    #[Test]
+    public function itCallsOutGuestsInACommaListOfGroups(): void
+    {
+        $cautions = $this->action->getCautions(
+            ['discount_type' => 'percent', 'discount_amount' => 10, 'customer_group_ids' => '1,0'],
+            self::ADMIN_USER_ID
+        );
+
+        self::assertContains('Applies to customer groups group 1, group 0, so guests get it too.', $cautions);
+    }
+
+    #[Test]
+    public function itReadsAnEmptyCategoryListAsEveryProductLikeTheSaveDoes(): void
+    {
+        $cautions = $this->action->getCautions(
+            ['discount_type' => 'percent', 'discount_amount' => 10, 'category_ids' => ''],
+            self::ADMIN_USER_ID
+        );
+
+        self::assertSame('Takes 10% off the price of every product.', $cautions[0]);
     }
 }
