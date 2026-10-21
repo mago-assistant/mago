@@ -21,6 +21,7 @@ use MagoAssistant\Mago\Service\Conversation\NavigationNoteInjector;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Form\PageContextNormalizer;
+use MagoAssistant\Mago\Service\Http\EventStreamHeaders;
 
 class Confirm extends Action implements HttpPostActionInterface
 {
@@ -40,7 +41,8 @@ class Confirm extends Action implements HttpPostActionInterface
         private readonly PageContextNormalizer $pageContextNormalizer,
         private readonly PageContextHolder $pageContextHolder,
         private readonly NavigationNoteInjector $navigationNoteInjector,
-        private readonly ConfirmationClaim $confirmationClaim
+        private readonly ConfirmationClaim $confirmationClaim,
+        private readonly EventStreamHeaders $eventStreamHeaders
     ) {
         parent::__construct($context);
     }
@@ -49,11 +51,7 @@ class Confirm extends Action implements HttpPostActionInterface
     {
         /** @var HttpResponse $response */
         $response = $this->getResponse();
-        $response->setHeader('Content-Type', 'text/event-stream', true);
-        $response->setHeader('Cache-Control', 'no-cache', true);
-        $response->setHeader('Connection', 'keep-alive', true);
-        $response->setHeader('X-Accel-Buffering', 'no', true);
-        $response->sendHeaders();
+        $this->eventStreamHeaders->send($response);
 
         while (ob_get_level()) {
             ob_end_clean();
