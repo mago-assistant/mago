@@ -545,3 +545,34 @@ export const stageManyFieldChanges: ChatScenario = {
     status: { message_id: MESSAGE_ID },
     reject: { success: true },
 }
+
+/* An irreversible write proposed under an answer long enough to scroll the message list, the
+   shape a long conversation reloads into (issue #280). */
+export const invoiceOrderAfterLongAnswer: ChatScenario = {
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        { event: 'text', data: { text: Array.from({length: 40}, (_, i) => 'Order line ' + (i + 1) + '.').join('\n\n') } },
+        {
+            event: 'tool_call',
+            data: { id: 'toolu_invoice_1', name: 'order_manager', input: { action: 'create_invoice', order_number: '000000006' } },
+        },
+        {
+            event: 'confirm',
+            data: {
+                tools: [
+                    {
+                        name: 'order_manager',
+                        description: 'Manage orders',
+                        input: { action: 'create_invoice', order_number: '000000006' },
+                        irreversible: true,
+                    },
+                ],
+            },
+        },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+        },
+    ],
+    status: { message_id: MESSAGE_ID },
+}
