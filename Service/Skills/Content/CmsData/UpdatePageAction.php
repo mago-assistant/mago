@@ -27,7 +27,7 @@ class UpdatePageAction implements ActionInterface
 
     public function getDescription(): string
     {
-        return 'Update CMS page content or title';
+        return 'Update CMS page content, title or enabled status';
     }
 
     public function getParameterSchema(): array
@@ -44,6 +44,10 @@ class UpdatePageAction implements ActionInterface
             'title' => [
                 'type' => 'string',
                 'description' => 'New title for update actions',
+            ],
+            'is_active' => [
+                'type' => 'boolean',
+                'description' => 'Enable (true) or disable (false) the page. Leave out to keep the current status',
             ],
         ];
     }
@@ -86,6 +90,10 @@ class UpdatePageAction implements ActionInterface
             return ['error' => 'Admin user context is required'];
         }
 
+        if (!$this->hasRequestedChange($params)) {
+            return ['error' => 'Nothing to update: give content, title or is_active for page "' . $identifier . '"'];
+        }
+
         $page = $this->getPageAction->execute($params, $adminUserId);
         if (isset($page['error'])) {
             return $page;
@@ -98,8 +106,8 @@ class UpdatePageAction implements ActionInterface
 
         $body = ['page' => ['id' => $pageId]];
         // Send the existing URL key back, or Magento regenerates the identifier from the title on
-        // save and the old storefront URL 404s with no redirect. This action only edits content and
-        // title; it never renames a page.
+        // save and the old storefront URL 404s with no redirect. This action only edits content, title
+        // and status; it never renames a page.
         $currentIdentifier = (string)($page['identifier'] ?? '');
         if ($currentIdentifier !== '') {
             $body['page']['identifier'] = $currentIdentifier;
@@ -109,6 +117,10 @@ class UpdatePageAction implements ActionInterface
         }
         if (!empty($params['title'])) {
             $body['page']['title'] = $params['title'];
+        }
+        $isActive = $this->getRequestedActiveStatus($params);
+        if ($isActive !== null) {
+            $body['page']['active'] = $isActive;
         }
 
         $result = $this->apiClient->put('cmsPage/' . $pageId, $body, $adminUserId);
@@ -125,5 +137,27 @@ class UpdatePageAction implements ActionInterface
                 'url' => $this->secureAdminUrl->getUrl('cms/page/edit', ['page_id' => $pageId]),
             ]],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function hasRequestedChange(array $params): bool
+    {
+        return !empty($params['content'])
+            || !empty($params['title'])
+            || $this->getRequestedActiveStatus($params) !== null;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function getRequestedActiveStatus(array $params): ?bool
+    {
+        if (!array_key_exists('is_active', $params) || $params['is_active'] === null) {
+            return null;
+        }
+
+        return filter_var($params['is_active'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     }
 }
