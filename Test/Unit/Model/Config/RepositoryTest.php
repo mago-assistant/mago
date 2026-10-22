@@ -17,6 +17,7 @@ use Magento\Store\Model\ScopeInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface;
 use MagoAssistant\Mago\Model\Config\Repository;
 use MagoAssistant\Mago\Model\Config\SystemPromptBuilder;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeLocaleResolver;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeComponentRegistrar;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeEncryptor;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeProductMetadata;
@@ -149,7 +150,8 @@ class RepositoryTest extends TestCase
             $this->withoutConstructor(DateTime::class),
             new FakeComponentRegistrar(),
             $this->withoutConstructor(FileDriver::class),
-            $this->withoutConstructor(SystemPromptBuilder::class)
+            $this->withoutConstructor(SystemPromptBuilder::class),
+            new FakeLocaleResolver()
         );
     }
 

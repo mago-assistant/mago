@@ -15,6 +15,7 @@ use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Component\ComponentRegistrarInterface;
 use Magento\Framework\Encryption\EncryptorInterface;
 use Magento\Framework\Filesystem\Driver\File as FileDriver;
+use Magento\Framework\Locale\ResolverInterface as LocaleResolver;
 use Magento\Framework\Serialize\Serializer\Json;
 use Magento\Framework\Stdlib\DateTime\DateTime;
 use Magento\Store\Model\StoreManagerInterface;
@@ -38,7 +39,8 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         DateTime $dateTime,
         ComponentRegistrarInterface $componentRegistrar,
         FileDriver $fileDriver,
-        private readonly SystemPromptBuilder $systemPromptBuilder
+        private readonly SystemPromptBuilder $systemPromptBuilder,
+        private readonly LocaleResolver $localeResolver
     ) {
         parent::__construct(
             $storeManager,
@@ -124,7 +126,11 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
     public function getSystemPrompt(): string
     {
         $custom = $this->getStoreValue(self::XML_PATH_SYSTEM_PROMPT);
-        $base = $this->systemPromptBuilder->build($this->getLanguage(), date('Y-m-d'));
+        $base = $this->systemPromptBuilder->build(
+            $this->getLanguage(),
+            date('Y-m-d'),
+            $this->localeResolver->getLocale()
+        );
 
         return $custom ? $base . "\n\n" . $custom : $base;
     }

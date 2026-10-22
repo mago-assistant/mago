@@ -194,7 +194,7 @@ class AnswerWidgets
         $lines[] = 'When a request is too vague to answer and you ask the user what they mean, always offer '
             . 'the readings as a "choices" widget after your question, never as a markdown or text list.';
         $lines[] = 'Rules: only use data that a tool returned, never invent or extrapolate values; format numbers '
-            . 'and currency as display strings in the user\'s locale ("€38,410", "12.4%") except where a shape asks '
+            . 'and currency as display strings, written the way the language rule says ("€38,410", "12.4%"), except where a shape asks '
             . 'for plain numbers (value, max, points, values); keep labels short and never put HTML in any field. '
             . 'Set "href" only to the admin_url a tool returned for that record (a token like mago://url_1 or a full '
             . 'url), copied exactly; never write or assemble an admin path yourself, it lacks the secret key and '

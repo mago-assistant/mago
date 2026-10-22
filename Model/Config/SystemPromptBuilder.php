@@ -8,7 +8,10 @@ namespace MagoAssistant\Mago\Model\Config;
 
 final class SystemPromptBuilder
 {
-    public function build(string $language, string $today): string
+    private const DEFAULT_LOCALE = 'en_US';
+    private const NAMING_LOCALE = 'en';
+
+    public function build(string $language, string $today, string $interfaceLocale = self::DEFAULT_LOCALE): string
     {
         $base = 'Today is ' . $today . '. '
             . 'You are a Magento store assistant with tools to take direct action. '
@@ -51,10 +54,34 @@ final class SystemPromptBuilder
             . 'further help unless the user asks for them.';
 
         if ($language === 'auto') {
-            return $base . ' Respond in the same language as the user.';
+            return $base . ' ' . $this->describeAutoLanguage($interfaceLocale);
         }
 
         return $base . ' IMPORTANT: You MUST always respond in ' . $language
             . ', regardless of what language the user writes in.';
+    }
+
+    /**
+     * "The user's language" left to the model gets guessed from the store data around it: Dutch
+     * names, addresses and euro amounts pulled answers to English questions into Dutch (#270). The
+     * admin's own interface locale is a known anchor, so name it, and rule the store data out.
+     */
+    private function describeAutoLanguage(string $interfaceLocale): string
+    {
+        $languageName = $this->languageName($interfaceLocale);
+
+        return 'LANGUAGE: Reply in the language the administrator writes their latest message in. Their admin '
+            . 'interface is in ' . $languageName . ' (' . $interfaceLocale . '), so when that message is in '
+            . $languageName . ', or too short or mixed to tell, reply in ' . $languageName . '. Write numbers, '
+            . 'amounts and dates the way ' . $interfaceLocale . ' writes them. The store\'s data never decides '
+            . 'the language or the number format: product and customer names, addresses, order comments, the '
+            . 'currency and the country the store sells in can be in any language.';
+    }
+
+    private function languageName(string $locale): string
+    {
+        $name = \Locale::getDisplayLanguage($locale, self::NAMING_LOCALE);
+
+        return $name !== '' ? $name : $locale;
     }
 }
