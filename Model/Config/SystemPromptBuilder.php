@@ -82,6 +82,6 @@ final class SystemPromptBuilder
     {
         $name = \Locale::getDisplayLanguage($locale, self::NAMING_LOCALE);
 
-        return $name !== '' ? $name : $locale;
+        return is_string($name) && $name !== '' ? $name : $locale;
     }
 }
