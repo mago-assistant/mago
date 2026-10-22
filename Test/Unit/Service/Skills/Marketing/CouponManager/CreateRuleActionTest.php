@@ -49,7 +49,18 @@ class CreateRuleActionTest extends TestCase
 
     private function assertOneRuleIsCreated(): void
     {
-        self::assertCount(1, $this->apiClient->callsOf(FakeInternalApiClient::POST));
+        self::assertCount(1, $this->postsTo('salesRules'));
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function postsTo(string $endpoint): array
+    {
+        return array_values(array_filter(
+            $this->apiClient->callsOf(FakeInternalApiClient::POST),
+            static fn (array $call): bool => $call['endpoint'] === $endpoint
+        ));
     }
 
     #[Test]
@@ -217,8 +228,44 @@ class CreateRuleActionTest extends TestCase
     {
         $this->create(['discount_type' => 'percent', 'discount_amount' => 100, 'coupon_code' => '0']);
 
-        $rule = $this->apiClient->callsOf(FakeInternalApiClient::POST)[0]['payload']['rule'];
-        self::assertSame([2, '0'], [$rule['coupon_type'], $rule['coupon_code']]);
+        $rule = $this->postsTo('salesRules')[0]['payload']['rule'];
+        $coupon = $this->postsTo('coupons')[0]['payload']['coupon'];
+        self::assertSame([2, '0'], [$rule['coupon_type'], $coupon['code']]);
+    }
+
+    #[Test]
+    public function itSavesTheCouponCodeAsThePrimaryCouponOfTheNewRule(): void
+    {
+        $result = $this->create(['discount_type' => 'percent', 'discount_amount' => 20, 'coupon_code' => 'TESTALL']);
+
+        $rule = $this->postsTo('salesRules')[0]['payload']['rule'];
+        $coupon = $this->postsTo('coupons')[0]['payload']['coupon'];
+        self::assertArrayNotHasKey('coupon_code', $rule);
+        self::assertSame(['rule_id' => 12, 'code' => 'TESTALL', 'is_primary' => true], [
+            'rule_id' => $coupon['rule_id'],
+            'code' => $coupon['code'],
+            'is_primary' => $coupon['is_primary'],
+        ]);
+        self::assertSame('TESTALL', $result['coupon_code']);
+    }
+
+    #[Test]
+    public function itDeletesTheRuleAgainWhenItsCouponCannotBeSaved(): void
+    {
+        $this->apiClient->withResponse(FakeInternalApiClient::POST, 'coupons', ['error' => 'Coupon code already exists']);
+
+        $result = $this->create(['discount_type' => 'percent', 'discount_amount' => 20, 'coupon_code' => 'TESTALL']);
+
+        self::assertStringContainsString('Coupon code already exists', $result['error']);
+        self::assertSame(['salesRules/12'], array_column($this->apiClient->callsOf(FakeInternalApiClient::DELETE), 'endpoint'));
+    }
+
+    #[Test]
+    public function aRuleWithoutACouponCreatesNoCoupon(): void
+    {
+        $this->create(['discount_type' => 'percent', 'discount_amount' => 20]);
+
+        self::assertSame([], $this->postsTo('coupons'));
     }
 
     #[Test]

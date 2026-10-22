@@ -15,6 +15,8 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class CreateRuleAction implements CautionedActionInterface
 {
+    private const COUPON_TYPE_MANUAL = 0;
+
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl,
@@ -185,10 +187,6 @@ class CreateRuleAction implements CautionedActionInterface
             ],
         ];
 
-        if ($couponCode !== '') {
-            $ruleData['rule']['coupon_code'] = $couponCode;
-        }
-
         if ($discountType === 'free_shipping') {
             $ruleData['rule']['simple_free_shipping'] = '1';
             $ruleData['rule']['discount_amount'] = 0;
@@ -209,11 +207,16 @@ class CreateRuleAction implements CautionedActionInterface
 
         $ruleId = (int)($result['rule_id'] ?? 0);
 
+        $couponError = $couponCode !== '' ? $this->addCoupon($ruleId, $couponCode, $adminUserId) : null;
+        if ($couponError !== null) {
+            return ['error' => $couponError];
+        }
+
         return [
             'success' => true,
             'rule_id' => $ruleId,
             'name' => $result['name'] ?? $name,
-            'coupon_code' => $result['coupon_code'] ?? ($couponCode !== '' ? $couponCode : null),
+            'coupon_code' => $couponCode !== '' ? $couponCode : null,
             'discount_type' => $discountType,
             'discount_amount' => $discountAmount,
             'admin_url' => $this->secureAdminUrl->getUrl(
@@ -221,6 +224,32 @@ class CreateRuleAction implements CautionedActionInterface
                 ['id' => $ruleId]
             ),
         ];
+    }
+
+    /**
+     * The REST rule has no coupon code field: a specific coupon is its own record, saved once the
+     * rule exists. A rule that cannot get its code is deleted again, or it would sit there active,
+     * expecting a coupon nobody can enter.
+     *
+     * @return string|null the error, or null once the coupon is saved
+     */
+    private function addCoupon(int $ruleId, string $couponCode, int $adminUserId): ?string
+    {
+        $result = $this->apiClient->post('coupons', [
+            'coupon' => [
+                'rule_id' => $ruleId,
+                'code' => $couponCode,
+                'is_primary' => true,
+                'type' => self::COUPON_TYPE_MANUAL,
+            ],
+        ], $adminUserId);
+        if (!isset($result['error'])) {
+            return null;
+        }
+
+        $this->apiClient->delete('salesRules/' . $ruleId, $adminUserId);
+
+        return 'Failed to create coupon ' . $couponCode . ', so the rule was not kept: ' . $result['error'];
     }
 
     /**
