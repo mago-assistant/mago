@@ -39,7 +39,7 @@ class DeadStock implements ToolInterface
             . 'sales rate (slow-moving inventory). Only products created before the period count, '
             . 'because Magento keeps no receipt date. Returns totals, the products with the highest '
             . 'stock value and a link to download the full list as CSV. Does not change stock or '
-            . 'prices and does not look at inventory sources separately.';
+            . 'prices. With Multi-Source Inventory the quantity is the sum over all sources.';
     }
 
     public function getParameterSchema(): array
@@ -60,7 +60,7 @@ class DeadStock implements ToolInterface
                 ],
                 'min_days_of_cover' => [
                     'type' => 'integer',
-                    'minimum' => 1,
+                    'minimum' => DeadStockReport::MIN_DAYS_OF_COVER,
                     'description' => 'slow_moving only: how many days the stock must last at the '
                         . 'current sales rate to count as slow-moving. Default 180.',
                 ],
@@ -132,15 +132,14 @@ class DeadStock implements ToolInterface
             return ['error' => 'dead_stock needs action "obsolete" or "slow_moving"'];
         }
 
-        $months = max(DeadStockReport::MIN_MONTHS, min(
-            DeadStockReport::MAX_MONTHS,
-            (int)($params['months'] ?? DeadStockReport::DEFAULT_MONTHS)
-        ));
-        $minDaysOfCover = max(1, (int)($params['min_days_of_cover'] ?? DeadStockReport::DEFAULT_MIN_DAYS_OF_COVER));
+        $months = DeadStockReport::clampMonths((int)($params['months'] ?? DeadStockReport::DEFAULT_MONTHS));
+        $minDaysOfCover = DeadStockReport::clampMinDaysOfCover(
+            (int)($params['min_days_of_cover'] ?? DeadStockReport::DEFAULT_MIN_DAYS_OF_COVER)
+        );
         $limit = max(1, min(self::MAX_LIMIT, (int)($params['limit'] ?? self::DEFAULT_LIMIT)));
 
-        $rows = $this->report->build($action, $months, $minDaysOfCover);
-        $shown = array_slice($rows, 0, $limit);
+        $summary = $this->report->summary($action, $months, $minDaysOfCover);
+        $shown = $this->report->build($action, $months, $minDaysOfCover, $limit);
 
         $urlParams = ['type' => $action, 'months' => $months];
         $result = [
@@ -155,9 +154,9 @@ class DeadStock implements ToolInterface
 
         return $result + [
             'currency' => (string)$this->scopeConfig->getValue(self::BASE_CURRENCY_PATH),
-            'product_count' => count($rows),
-            'total_qty' => array_sum(array_column($rows, 'qty')),
-            'total_stock_value' => round(array_sum(array_column($rows, 'stock_value')), 2),
+            'product_count' => $summary['product_count'],
+            'total_qty' => $summary['total_qty'],
+            'total_stock_value' => $summary['total_stock_value'],
             'shown' => count($shown),
             'products' => array_map(static function (array $row): array {
                 unset($row['product_id']);

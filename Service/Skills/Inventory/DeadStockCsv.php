@@ -21,12 +21,48 @@ class DeadStockCsv
     /**
      * Builds the CSV contents.
      *
+     * @param iterable<list<array<string,mixed>>> $chunks Report rows, one list per chunk
+     * @return string
+     */
+    public function build(iterable $chunks): string
+    {
+        $csv = self::BOM . $this->line(array_values(array_map('strval', $this->columns()))) . "\n";
+        foreach ($chunks as $rows) {
+            $csv .= $this->lines($rows);
+        }
+
+        return $csv;
+    }
+
+    /**
+     * CSV lines for report rows, each ending in a newline.
+     *
      * @param list<array<string,mixed>> $rows
      * @return string
      */
-    public function build(array $rows): string
+    public function lines(array $rows): string
     {
-        $columns = [
+        $keys = array_keys($this->columns());
+        $lines = '';
+        foreach ($rows as $row) {
+            $cells = [];
+            foreach ($keys as $key) {
+                $cells[] = $this->cell($row[$key] ?? '');
+            }
+            $lines .= $this->line($cells) . "\n";
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Column headers keyed by report row field.
+     *
+     * @return array<string,\Magento\Framework\Phrase>
+     */
+    private function columns(): array
+    {
+        return [
             'sku' => __('SKU'),
             'product_name' => __('Product name'),
             'qty' => __('Quantity'),
@@ -38,17 +74,6 @@ class DeadStockCsv
             'value_basis' => __('Value basis'),
             'stock_value' => __('Stock value'),
         ];
-
-        $lines = [$this->line(array_values(array_map('strval', $columns)))];
-        foreach ($rows as $row) {
-            $cells = [];
-            foreach (array_keys($columns) as $key) {
-                $cells[] = $this->cell($row[$key] ?? '');
-            }
-            $lines[] = $this->line($cells);
-        }
-
-        return self::BOM . implode("\n", $lines) . "\n";
     }
 
     /**

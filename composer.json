@@ -12,6 +12,7 @@
         "magento/module-sales": "*",
         "magento/module-catalog": "*",
         "magento/module-catalog-inventory": "*",
+        "magento/module-reports": "*",
         "magento/module-customer": "*",
         "magento/module-cms": "*",
         "magento/module-config": "*",

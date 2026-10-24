@@ -12,7 +12,6 @@ use Magento\Framework\App\Action\HttpGetActionInterface;
 use Magento\Framework\Controller\Result\Raw;
 use Magento\Framework\Controller\ResultFactory;
 use Magento\Framework\Controller\ResultInterface;
-use MagoAssistant\Mago\Service\Skills\Inventory\DeadStock;
 use MagoAssistant\Mago\Service\Skills\Inventory\DeadStockCsv;
 use MagoAssistant\Mago\Service\Skills\Inventory\DeadStockReport;
 
@@ -21,7 +20,7 @@ use MagoAssistant\Mago\Service\Skills\Inventory\DeadStockReport;
  */
 class Export extends Action implements HttpGetActionInterface
 {
-    public const ADMIN_RESOURCE = DeadStock::ACL;
+    public const ADMIN_RESOURCE = 'Magento_Reports::report_products';
 
     public function __construct(
         Context $context,
@@ -39,8 +38,10 @@ class Export extends Action implements HttpGetActionInterface
             return $this->resultRedirectFactory->create()->setPath('admin/dashboard');
         }
 
-        $months = (int)$this->getRequest()->getParam('months', DeadStockReport::DEFAULT_MONTHS);
-        $minDaysOfCover = max(1, (int)$this->getRequest()->getParam(
+        $months = DeadStockReport::clampMonths(
+            (int)$this->getRequest()->getParam('months', DeadStockReport::DEFAULT_MONTHS)
+        );
+        $minDaysOfCover = DeadStockReport::clampMinDaysOfCover((int)$this->getRequest()->getParam(
             'min_days_of_cover',
             DeadStockReport::DEFAULT_MIN_DAYS_OF_COVER
         ));
@@ -52,7 +53,7 @@ class Export extends Action implements HttpGetActionInterface
         $result->setHeader('Content-Type', 'text/csv; charset=UTF-8', true)
             ->setHeader('Content-Disposition', 'attachment; filename="' . $fileName . '"', true)
             ->setHeader('Cache-Control', 'no-store', true)
-            ->setContents($this->csv->build($this->report->build($type, $months, $minDaysOfCover)));
+            ->setContents($this->csv->build($this->report->chunks($type, $months, $minDaysOfCover)));
 
         return $result;
     }
