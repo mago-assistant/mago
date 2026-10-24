@@ -28,7 +28,7 @@ class DeadStockCsvTest extends TestCase
     #[Test]
     public function itWritesOneLinePerRowInColumnOrder(): void
     {
-        $csv = (new DeadStockCsv())->build([[
+        $csv = (new DeadStockCsv())->build([[[
             'stock_value' => 1300.0,
             'sku' => 'JACKET-1',
             'product_name' => 'Winter jacket, blue',
@@ -39,7 +39,7 @@ class DeadStockCsvTest extends TestCase
             'days_of_cover' => null,
             'unit_value' => 32.5,
             'value_basis' => 'cost',
-        ]]);
+        ]]]);
 
         self::assertSame(
             'JACKET-1,"Winter jacket, blue",40,0,,2025-09-24 13:09:03,,32.5,cost,1300',
@@ -50,10 +50,27 @@ class DeadStockCsvTest extends TestCase
     #[Test]
     public function itNeutralisesTextThatASpreadsheetWouldRunAsAFormula(): void
     {
-        $csv = (new DeadStockCsv())->build([
+        $csv = (new DeadStockCsv())->build([[
             ['sku' => '=HYPERLINK("x")', 'product_name' => '@SUM(A1)', 'qty' => -1.0],
-        ]);
+        ]]);
 
         self::assertSame('"\'=HYPERLINK(""x"")",\'@SUM(A1),-1,,,,,,,', explode("\n", $csv)[1]);
+    }
+
+    #[Test]
+    public function itWritesTheRowsOfEveryChunkUnderOneHeader(): void
+    {
+        $chunks = (static function (): \Generator {
+            yield [['sku' => 'A'], ['sku' => 'B']];
+            yield [['sku' => 'C']];
+        })();
+
+        $lines = explode("\n", (new DeadStockCsv())->build($chunks));
+
+        self::assertCount(5, $lines);
+        self::assertSame(['A', 'B', 'C', ''], array_map(
+            static fn (string $line): string => explode(',', $line)[0],
+            array_slice($lines, 1)
+        ));
     }
 }

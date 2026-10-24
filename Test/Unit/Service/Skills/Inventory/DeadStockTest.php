@@ -10,11 +10,15 @@ use Magento\Framework\App\Config\ScopeConfigInterface;
 use MagoAssistant\Mago\Service\Skills\Inventory\DeadStock;
 use MagoAssistant\Mago\Service\Skills\Inventory\DeadStockReport;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeDeadStockReport;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 class DeadStockTest extends TestCase
 {
+    private FakeDeadStockReport $report;
+
     #[Test]
     public function itRefusesAnUnknownAction(): void
     {
@@ -61,6 +65,52 @@ class DeadStockTest extends TestCase
     }
 
     #[Test]
+    public function itPassesTheDefaultsToTheReport(): void
+    {
+        $this->toolWith([])->execute(['action' => 'obsolete']);
+
+        self::assertSame([
+            ['method' => 'summary', 'type' => 'obsolete', 'months' => 6, 'min_days_of_cover' => 180],
+            ['method' => 'build', 'type' => 'obsolete', 'months' => 6, 'min_days_of_cover' => 180, 'limit' => 20],
+        ], $this->report->calls);
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    #[Test]
+    #[DataProvider('outOfRangeParams')]
+    public function itClampsWhatItPassesToTheReport(array $params, int $months, int $minDaysOfCover, int $limit): void
+    {
+        $this->toolWith([])->execute(['action' => 'slow_moving'] + $params);
+
+        self::assertSame(
+            [
+                'method' => 'build',
+                'type' => 'slow_moving',
+                'months' => $months,
+                'min_days_of_cover' => $minDaysOfCover,
+                'limit' => $limit,
+            ],
+            $this->report->calls[1]
+        );
+        self::assertSame($months, $this->report->calls[0]['months']);
+        self::assertSame($minDaysOfCover, $this->report->calls[0]['min_days_of_cover']);
+    }
+
+    /**
+     * @return array<string, array{array<string,mixed>, int, int, int}>
+     */
+    public static function outOfRangeParams(): array
+    {
+        return [
+            'above the maximum' => [['months' => 99, 'limit' => 500], 36, 180, 50],
+            'below the minimum' => [['months' => 0, 'min_days_of_cover' => -5, 'limit' => 0], 1, 1, 1],
+            'numeric strings' => [['months' => '12', 'min_days_of_cover' => '365', 'limit' => '5'], 12, 365, 5],
+        ];
+    }
+
+    #[Test]
     public function itClassifiesEveryReturnedFieldAndTokenisesTheExportUrl(): void
     {
         $tool = $this->toolWith([$this->row('A', 1, 1.0)]);
@@ -80,9 +130,7 @@ class DeadStockTest extends TestCase
      */
     private function toolWith(array $rows): DeadStock
     {
-        $report = $this->createStub(DeadStockReport::class);
-        $report->method('build')->willReturn($rows);
-        $report->method('since')->willReturn(new \DateTimeImmutable('2026-03-24'));
+        $this->report = new FakeDeadStockReport($rows);
 
         $url = $this->createStub(SecureAdminUrl::class);
         $url->method('getUrl')->willReturnCallback(
@@ -92,7 +140,7 @@ class DeadStockTest extends TestCase
         $config = $this->createStub(ScopeConfigInterface::class);
         $config->method('getValue')->willReturn('EUR');
 
-        return new DeadStock($report, $url, $config);
+        return new DeadStock($this->report, $url, $config);
     }
 
     /**
