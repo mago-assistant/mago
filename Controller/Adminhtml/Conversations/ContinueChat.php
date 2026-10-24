@@ -20,7 +20,7 @@ use Magento\Framework\Controller\ResultInterface;
  */
 class ContinueChat extends Action implements HttpGetActionInterface
 {
-    public const ADMIN_RESOURCE = 'MagoAssistant_Mago::config';
+    public const ADMIN_RESOURCE = 'MagoAssistant_Mago::conversations';
 
     public function __construct(
         Context $context,

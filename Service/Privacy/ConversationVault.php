@@ -19,6 +19,15 @@ use MagoAssistant\Mago\Api\Privacy\VaultStorageInterface;
  */
 class ConversationVault
 {
+    /**
+     * Anything shaped like a token: the scheme form it is minted in, or the bracket form older rows
+     * still hold, with any type a stored row may carry (rows from before types were folded to
+     * lowercase letters hold mago://tax_id_3 or mago://vat-number_1). The number is read whole, so
+     * an unknown mago://email_60 is never taken for a known mago://email_6. Only tokens the vault
+     * knows are replaced; everything else stays as written.
+     */
+    private const TOKEN_PATTERN = '/mago:\/\/[^\s"\'<>\[\]]+?_\d+(?!\d)|\[[^\s"\'<>\[\]]+?_\d+\]/';
+
     /** @var array<string,string> "type\0value" => token */
     private array $tokenByValue = [];
 
@@ -32,6 +41,9 @@ class ConversationVault
     private ?array $concealMap = null;
 
     private ?int $conversationId = null;
+
+    /** @var array<string,array{0:string,1:string}>|null token => [value, type] minted while held */
+    private ?array $heldTokens = null;
 
     public function __construct(
         private readonly ?VaultStorageInterface $storage = null
@@ -62,6 +74,7 @@ class ConversationVault
 
     public function tokenise(string $value, string $type): string
     {
+        $type = PiiClass::tokenType($type);
         if ($value === '') {
             return $value;
         }
@@ -79,11 +92,44 @@ class ConversationVault
         $token = sprintf('mago://%s_%d', $type, $number);
         $this->remember($type, $value, $token);
 
-        if ($this->conversationId !== null && $this->storage !== null) {
-            $this->storage->persist($this->conversationId, $token, $value, $type);
+        if ($this->heldTokens !== null) {
+            $this->heldTokens[$token] = [$value, $type];
+            return $token;
         }
+        $this->persist($token, $value, $type);
 
         return $token;
+    }
+
+    /**
+     * Keep the tokens minted from now on in memory only, until releaseHeldTokens(). A tool result
+     * is tokenised whole before the response cap cuts it, and a token for a row past the cut is a
+     * value the model never saw that would still resolve: numbering is sequential, so the model
+     * (or text it read) can name mago://email_40 without being shown it.
+     */
+    public function holdNewTokens(): void
+    {
+        $this->heldTokens = [];
+    }
+
+    /**
+     * Persist the held tokens that occur in $shownText, what actually left for the model and the
+     * panel, and forget the others so they never resolve. The counters stay ahead for the rest of
+     * this request; a later request numbers on from what storage holds, which can reuse a forgotten
+     * number. That is safe because a forgotten token never left the server.
+     */
+    public function releaseHeldTokens(string $shownText): void
+    {
+        $held = $this->heldTokens ?? [];
+        $this->heldTokens = null;
+
+        foreach ($held as $token => [$value, $type]) {
+            if (preg_match('/' . preg_quote($token, '/') . '(?!\d)/', $shownText) === 1) {
+                $this->persist($token, $value, $type);
+                continue;
+            }
+            $this->forget($token, $value, $type);
+        }
     }
 
     public function rehydrate(string $text): string
@@ -92,12 +138,26 @@ class ConversationVault
             return $text;
         }
 
-        return strtr($text, $this->valueByToken);
+        // Whole tokens only: strtr() would read a known mago://email_6 inside an unknown
+        // mago://email_60 and hand back the wrong person's value with a 0 after it.
+        return (string)preg_replace_callback(
+            self::TOKEN_PATTERN,
+            fn (array $match): string => $this->valueByToken[$match[0]] ?? $match[0],
+            $text
+        );
     }
 
     public function has(string $token): bool
     {
         return isset($this->valueByToken[$token]);
+    }
+
+    /**
+     * The value behind one token, or null when this conversation never issued it.
+     */
+    public function valueOf(string $token): ?string
+    {
+        return $this->valueByToken[$token] ?? null;
     }
 
     /**
@@ -119,6 +179,19 @@ class ConversationVault
         }
 
         return $this->concealMap === [] ? $text : strtr($text, $this->concealMap);
+    }
+
+    private function persist(string $token, string $value, string $type): void
+    {
+        if ($this->conversationId !== null && $this->storage !== null) {
+            $this->storage->persist($this->conversationId, $token, $value, $type);
+        }
+    }
+
+    private function forget(string $token, string $value, string $type): void
+    {
+        unset($this->tokenByValue[$type . "\0" . $value], $this->valueByToken[$token]);
+        $this->concealMap = null;
     }
 
     /**

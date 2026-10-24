@@ -10,10 +10,12 @@ use Magento\Framework\AuthorizationInterface;
 use MagoAssistant\Mago\Service\Skills\PermissionChecker;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAction;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeAvailabilityAwareTool;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakePermissionChecker;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeSkill;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeTool;
+use MagoAssistant\Mago\Api\Acl;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -319,5 +321,94 @@ final class ToolRegistryTest extends TestCase
 
         $definitions = $registry->getToolDefinitions(self::ADMIN_USER_ID);
         self::assertSame(['view', 'do'], $definitions[0]['parameters']['properties']['action']['enum']);
+    }
+
+    #[Test]
+    public function itLeavesOutToolsThatAreNotAvailableOnThisStore(): void
+    {
+        $available = new FakeAvailabilityAwareTool('stock_level_msi', true);
+        $unavailable = new FakeAvailabilityAwareTool('stock_level', false);
+        $registry = new ToolRegistry(null, [$available, $unavailable]);
+
+        self::assertSame([$available], array_values($registry->getAllTools()));
+        self::assertSame(['stock_level_msi' => $available], $registry->getEnabledTools(self::ADMIN_USER_ID));
+        self::assertNull($registry->getToolByName('stock_level'));
+        self::assertNull($registry->getTool('stock_level', self::ADMIN_USER_ID));
+    }
+
+    /**
+     * A per-user tool without a grant stays in the list, so the model learns from ToolAccess that it
+     * is not granted instead of answering with another tool. An explicit Disabled row still hides it.
+     */
+    #[Test]
+    public function aPerUserToolStaysOfferedWithoutAGrantAndHiddenWhenDisabled(): void
+    {
+        $tool = new FakeTool('issue_tracker', ['list'], ['list'], Acl::MAGO_PER_USER);
+        $blanketOnly = (new FakePermissionChecker())->withDecision('issue_tracker', 'read', true);
+        $disabled = (new FakePermissionChecker())->withDecision('issue_tracker', 'read', false);
+
+        self::assertSame([$tool], array_values((new ToolRegistry($blanketOnly, [$tool]))->getEnabledTools(7)));
+        self::assertSame([], (new ToolRegistry($disabled, [$tool]))->getEnabledTools(7));
+    }
+
+    /**
+     * Holding assistant_write is not having been given a per-user tool: without an explicit row the
+     * model is offered its read actions only, and the legend and command menu leave it out (#220)
+     */
+    #[Test]
+    public function anUngrantedPerUserToolIsOfferedReadOnlyAndNotAsGranted(): void
+    {
+        $tool = new FakeTool('issue_tracker', ['list', 'create'], ['list'], Acl::MAGO_PER_USER);
+        $blanket = (new FakePermissionChecker())
+            ->withDecision('issue_tracker', 'read', true)
+            ->withDecision('issue_tracker', 'write', true);
+        $registry = new ToolRegistry($blanket, [$tool]);
+
+        self::assertSame(['list'], $registry->getToolDefinition($tool, 7)['parameters']['properties']['action']['enum']);
+        self::assertFalse($registry->hasWriteAccess($tool, 7));
+        self::assertFalse($registry->isGranted($tool, 7));
+    }
+
+    /**
+     * Narrowing a tool without read actions would leave the model nothing to call and so nothing
+     * to relay: a write-only per-user tool keeps its actions and is refused on the call (#217)
+     */
+    #[Test]
+    public function anUngrantedWriteOnlyPerUserToolKeepsItsActions(): void
+    {
+        $tool = new FakeTool('issue_tracker', ['create'], [], Acl::MAGO_PER_USER);
+        $blanket = (new FakePermissionChecker())->withDecision('issue_tracker', 'write', true);
+        $registry = new ToolRegistry($blanket, [$tool]);
+
+        self::assertSame([$tool], array_values($registry->getEnabledTools(7)));
+        self::assertSame(['create'], $registry->getToolDefinition($tool, 7)['parameters']['properties']['action']['enum']);
+        self::assertFalse($registry->isGranted($tool, 7));
+    }
+
+    #[Test]
+    public function anExplicitGrantGivesThePerUserToolItsGrantedActions(): void
+    {
+        $tool = new FakeTool('issue_tracker', ['list', 'create'], ['list'], Acl::MAGO_PER_USER);
+        $readRow = (new FakePermissionChecker())
+            ->withDecision('issue_tracker', 'read', true)
+            ->withExplicitGrant('issue_tracker', 'read');
+        $writeRow = (new FakePermissionChecker())
+            ->withDecision('issue_tracker', 'read', true)
+            ->withExplicitGrant('issue_tracker', 'read')
+            ->withExplicitGrant('issue_tracker', 'write');
+
+        self::assertTrue((new ToolRegistry($readRow, [$tool]))->isGranted($tool, 7));
+        self::assertFalse((new ToolRegistry($readRow, [$tool]))->hasWriteAccess($tool, 7));
+        self::assertTrue((new ToolRegistry($writeRow, [$tool]))->hasWriteAccess($tool, 7));
+        self::assertSame(
+            ['list', 'create'],
+            (new ToolRegistry($writeRow, [$tool]))->getToolDefinition($tool, 7)['parameters']['properties']['action']['enum']
+        );
+    }
+
+    #[Test]
+    public function aToolGatedByTheRoleCountsAsGranted(): void
+    {
+        self::assertTrue($this->registry(['cache_manager' => 'read'])->isGranted($this->cacheManager, self::ADMIN_ID));
     }
 }

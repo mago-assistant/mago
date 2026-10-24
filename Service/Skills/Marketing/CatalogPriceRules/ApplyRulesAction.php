@@ -6,14 +6,15 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
-use Magento\CatalogRule\Model\Rule\Job;
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
-class ApplyRulesAction implements ActionInterface
+class ApplyRulesAction implements CautionedActionInterface
 {
     public function __construct(
-        private readonly Job $ruleJob
+        private readonly CatalogRuleServices $catalogRules,
+        private readonly ErrorReporter $errorReporter
     ) {
     }
 
@@ -57,6 +58,21 @@ class ApplyRulesAction implements ActionInterface
             . 'Warn the user that price changes may not be visible immediately.';
     }
 
+    /**
+     * Applying is the step that changes storefront prices, for every active rule at once,
+     * including any created or changed since the last run.
+     */
+    public function getCautions(array $params, int $adminUserId): array
+    {
+        $count = $this->catalogRules->countActiveRules();
+
+        return [
+            'Recalculates the price of every product from the ' . $count . ' active catalog price '
+                . ($count === 1 ? 'rule' : 'rules')
+                . ', including any created or changed since they were last applied.',
+        ];
+    }
+
     public function execute(array $params, int $adminUserId): array
     {
         if (!$adminUserId) {
@@ -64,7 +80,7 @@ class ApplyRulesAction implements ActionInterface
         }
 
         try {
-            $this->ruleJob->applyAll();
+            $this->catalogRules->getJob()->applyAll();
 
             return [
                 'success' => true,
@@ -73,7 +89,8 @@ class ApplyRulesAction implements ActionInterface
                     . 'especially on stores with large product catalogs.',
             ];
         } catch (\Exception $e) {
-            return ['error' => 'Failed to apply catalog price rules: ' . $e->getMessage()];
+            $error = $this->errorReporter->reportToolFailure('catalog_price_rules apply_rules', $e);
+            return ['error' => 'Failed to apply catalog price rules: ' . $error];
         }
     }
 }

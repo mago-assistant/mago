@@ -46,7 +46,11 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.compute_matrix.outputs.matrix) }}
     steps:
+      # Next to the Magento install rather than around it, so Composer can symlink the module
+      # instead of copying it. A copy honours .gitattributes and would leave Test/ out.
       - uses: actions/checkout@v4
+        with:
+          path: mago
 
       - uses: graycoreio/github-actions-magento2/setup-magento@v8.10.0
         id: setup-magento
@@ -58,14 +62,11 @@ jobs:
           # mirror.mage-os.org, the action's default, carries magento/* but no mage-os/* at all.
           magento_repository: ${{ startsWith(matrix.magento, 'mage-os/') && 'https://repo.mage-os.org/' || 'https://mirror.mage-os.org/' }}
 
-      # MageOS_AiBase has no tagged release yet, so it comes off Packagist's dev-main under an
-      # inline alias, same workaround Test/End-2-end's CI already needs. Drop the alias once it
-      # is tagged.
-      - name: Add the extension and its unreleased AI base dependency
+      - name: Add the extension
         working-directory: ${{ steps.setup-magento.outputs.path }}
         run: |
-          composer config repositories.local path "$GITHUB_WORKSPACE"
-          composer require --no-install "mago-assistant/mago:@dev" "mage-os/module-ai-base:dev-main as 1.0.0"
+          composer config repositories.local path "$GITHUB_WORKSPACE/mago"
+          composer require --no-install "mago-assistant/magento2-mago:@dev"
 
       - uses: graycoreio/github-actions-magento2/cache-magento@v8.10.0
         with:
@@ -75,15 +76,13 @@ jobs:
       - name: Composer install
         working-directory: ${{ steps.setup-magento.outputs.path }}
         run: composer install
-        env:
-          COMPOSER_MIRROR_PATH_REPOS: 1
 
       - name: Register the extension's unit tests
         working-directory: ${{ steps.setup-magento.outputs.path }}
         run: |
           cat > /tmp/testsuite.xml << 'EOF'
                   <testsuite name="MagoAssistant_Mago_Unit_Tests">
-                      <directory>../../../vendor/mago-assistant/mago/Test/Unit</directory>
+                      <directory>../../../vendor/mago-assistant/magento2-mago/Test/Unit</directory>
                   </testsuite>
           EOF
           sed -i '/<testsuites>/r /tmp/testsuite.xml' dev/tests/unit/phpunit.xml.dist

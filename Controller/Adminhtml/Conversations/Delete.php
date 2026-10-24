@@ -8,17 +8,19 @@ namespace MagoAssistant\Mago\Controller\Adminhtml\Conversations;
 
 use Magento\Backend\App\Action;
 use Magento\Backend\App\Action\Context;
-use Magento\Framework\App\Action\HttpGetActionInterface;
+use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Controller\ResultInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 
-class Delete extends Action implements HttpGetActionInterface
+class Delete extends Action implements HttpPostActionInterface
 {
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::conversations_delete';
 
     public function __construct(
         Context $context,
-        private readonly ResourceConnection $resourceConnection
+        private readonly ResourceConnection $resourceConnection,
+        private readonly ErrorReporter $errorReporter
     ) {
         parent::__construct($context);
     }
@@ -49,7 +51,10 @@ class Delete extends Action implements HttpGetActionInterface
             $this->messageManager->addSuccessMessage(__('Conversation has been deleted.'));
         } catch (\Exception $e) {
             $this->messageManager->addErrorMessage(
-                __('An error occurred while deleting the conversation: %1', $e->getMessage())
+                __(
+                    'The conversation could not be deleted. Reference: %1',
+                    $this->errorReporter->log('Conversations Delete', $e)
+                )
             );
         }
 

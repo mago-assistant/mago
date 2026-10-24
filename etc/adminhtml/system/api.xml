@@ -18,15 +18,5 @@
             <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
             <comment>Stream AI responses in real-time via SSE</comment>
         </field>
-        <field id="internal_url" translate="label comment" type="text" sortOrder="90" showInDefault="1" showInWebsite="0" showInStore="0">
-            <label>Internal API URL</label>
-            <comment><![CDATA[Leave empty to use store base URL. For Docker setups, enter the nginx container URL (e.g. https://nginx:443). Used for internal REST API calls. These calls authenticate with an admin bearer token: over plain http to a non-loopback host that token travels unencrypted, so use https (or a loopback address) anywhere the URL crosses a network.]]></comment>
-            <frontend_model>MagoAssistant\Mago\Block\Adminhtml\System\Config\DetectUrl</frontend_model>
-        </field>
-        <field id="internal_ssl_verify" translate="label comment" type="select" sortOrder="95" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
-            <label>Verify TLS Certificate</label>
-            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-            <comment><![CDATA[Verify the TLS certificate on internal REST API calls. Keep enabled in production. Disable for local or Docker setups where the certificate does not match the internal URL host.]]></comment>
-        </field>
     </group>
 </include>

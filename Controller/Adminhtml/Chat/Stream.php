@@ -17,18 +17,21 @@ use MagoAssistant\Mago\Api\ChatServiceInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
 use MagoAssistant\Mago\Logger\DebugLogger;
-use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Model\Conversation\PageLocationRecorder;
 use MagoAssistant\Mago\Service\Ai\Client;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
 use MagoAssistant\Mago\Service\Conversation\NavigationNoteInjector;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Form\PageContextNormalizer;
+use MagoAssistant\Mago\Service\Http\EventStreamHeaders;
 use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 
 class Stream extends Action implements HttpPostActionInterface
 {
     use FormKeyJsonValidation;
+    use FinishesStreamedResponse;
+    use ReleasesSessionLock;
 
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::assistant_read';
 
@@ -39,7 +42,7 @@ class Stream extends Action implements HttpPostActionInterface
         private readonly ConfigRepository $configRepository,
         private readonly Client $client,
         private readonly Json $json,
-        private readonly ErrorLogger $errorLogger,
+        private readonly ErrorReporter $errorReporter,
         private readonly DebugLogger $debugLogger,
         private readonly FormKey $formKey,
         private readonly CommandRunner $commandRunner,
@@ -47,26 +50,24 @@ class Stream extends Action implements HttpPostActionInterface
         private readonly PageContextHolder $pageContextHolder,
         private readonly NavigationNoteInjector $navigationNoteInjector,
         private readonly PageLocationRecorder $pageLocationRecorder,
-        private readonly PrivacyService $privacyService
+        private readonly PrivacyService $privacyService,
+        private readonly EventStreamHeaders $eventStreamHeaders
     ) {
         parent::__construct($context);
     }
 
-    public function execute(): ResultInterface|HttpResponse
+    public function execute(): ResultInterface
     {
         /** @var HttpResponse $response */
         $response = $this->getResponse();
-        $response->setHeader('Content-Type', 'text/event-stream', true);
-        $response->setHeader('Cache-Control', 'no-cache', true);
-        $response->setHeader('Connection', 'keep-alive', true);
-        $response->setHeader('X-Accel-Buffering', 'no', true);
-        $response->sendHeaders();
+        $this->eventStreamHeaders->send($response);
 
         // Disable all output buffering for SSE
         while (ob_get_level()) {
             ob_end_clean();
         }
         ob_implicit_flush(true);
+        $this->releaseSessionLock();
 
         try {
             $rawBody = $this->getRequest()->getContent();
@@ -91,7 +92,7 @@ class Stream extends Action implements HttpPostActionInterface
             if (!$message) {
                 $this->sendSse('error', ['error' => 'Message is required']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             $user = $this->_auth->getUser();
@@ -99,13 +100,13 @@ class Stream extends Action implements HttpPostActionInterface
                 $this->debugLogger->addLog('Stream', 'No admin user in session');
                 $this->sendSse('error', ['error' => 'Admin user session not found']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             if (!$this->configRepository->isEnabled()) {
                 $this->sendSse('error', ['error' => 'The assistant is currently disabled. Enable it in Stores > Configuration > Mago Assistant.']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             $adminUserId = (int)$user->getId();
@@ -113,7 +114,7 @@ class Stream extends Action implements HttpPostActionInterface
 
             // Slash commands run against Magento directly and need no AI provider
             if ($this->commandRunner->isCommand($message)) {
-                $this->runCommand($message, $conversationId, $adminUserId, $adminName);
+                return $this->runCommand($message, $conversationId, $adminUserId, $adminName);
             }
 
             // Before the conversation row exists: an unconfigured store would otherwise persist the
@@ -121,9 +122,9 @@ class Stream extends Action implements HttpPostActionInterface
             try {
                 $this->client->resolve();
             } catch (\Throwable $e) {
-                $this->sendSse('error', ['error' => $e->getMessage()]);
+                $this->sendSse('error', ['error' => $this->errorReporter->report('Stream Controller', $e)]);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             $isNewConversation = $conversationId === null;
@@ -212,7 +213,7 @@ class Stream extends Action implements HttpPostActionInterface
             $this->debugLogger->addLog('Stream', [
                 'conversation_id' => $conversationId,
                 'message_count' => count($formattedMessages),
-                'admin_user' => $adminName,
+                'admin_user_id' => $adminUserId,
             ]);
 
             $result = $this->chatService->processMessageStreaming(
@@ -251,19 +252,18 @@ class Stream extends Action implements HttpPostActionInterface
                 'pending_confirmation' => $pendingConfirmation,
             ], true);
         } catch (\Throwable $e) {
-            $this->errorLogger->addLog('Stream Controller', $e->getMessage() . "\n" . $e->getTraceAsString());
-            $this->sendSse('error', ['error' => $e->getMessage()]);
+            $this->sendSse('error', ['error' => $this->errorReporter->report('Stream Controller', $e)]);
             $this->sendSse('done', [], true);
         }
 
-        $this->terminateResponse();
+        return $this->finishResponse();
     }
 
     /**
      * Answer a slash command: persist the exchange like a normal turn, then stream the reply as one
      * text chunk. The command's tool_status events pass straight through to the panel.
      */
-    private function runCommand(string $message, ?int $conversationId, int $adminUserId, string $adminName): never
+    private function runCommand(string $message, ?int $conversationId, int $adminUserId, string $adminName): ResultInterface
     {
         $isNewConversation = $conversationId === null;
         $conversationId = $this->resolveConversation($conversationId, $adminUserId);
@@ -282,6 +282,21 @@ class Stream extends Action implements HttpPostActionInterface
             'admin_user' => $adminName,
         ]);
 
+        // A permitted write subcommand (/cache flush, /index reindex, /cache clean) is put to the
+        // administrator on the same confirmation card as a write the model proposes, instead of
+        // running at once. The Confirm controller runs the calls once approved. Everything else —
+        // reads, /help, usage prompts and denials — keeps running directly through run() below.
+        // A call its tool already refuses (an indexer or cache type this store does not have) gets
+        // no card at all: nothing runs and the administrator reads why, exactly as the model would.
+        $confirmableToolCalls = $this->commandRunner->confirmableToolCalls($message, $adminUserId);
+        if ($confirmableToolCalls !== []) {
+            $refusal = $this->commandRunner->findRefusal($confirmableToolCalls, $adminUserId);
+            if ($refusal !== null) {
+                return $this->answerCommand($refusal, $conversationId);
+            }
+            return $this->confirmCommand($confirmableToolCalls, $conversationId);
+        }
+
         $content = $this->commandRunner->run(
             $message,
             $adminUserId,
@@ -296,6 +311,14 @@ class Stream extends Action implements HttpPostActionInterface
             ]);
         }
 
+        return $this->answerCommand($content, $conversationId);
+    }
+
+    /**
+     * Stream a slash command's reply as one text chunk, store it, and finish the response
+     */
+    private function answerCommand(string $content, int $conversationId): ResultInterface
+    {
         $this->sendSse('text', ['text' => $content]);
         $messageId = $this->conversationRepository->addMessage($conversationId, 'assistant', $content);
         $this->sendSse('done', [
@@ -303,7 +326,42 @@ class Stream extends Action implements HttpPostActionInterface
             'conversation_id' => $conversationId,
             'pending_confirmation' => false,
         ], true);
-        $this->terminateResponse();
+        return $this->finishResponse();
+    }
+
+    /**
+     * Stage a permitted write slash command as a pending confirmation and stop. This persists the
+     * assistant message with its tool_calls and pending_confirmation flag, then emits the confirm
+     * and done events, exactly as the model-write path does; the Confirm controller runs the calls
+     * when the administrator approves the card.
+     *
+     * @param array<int, array{id: string, name: string, input: array<string, mixed>}> $toolCalls
+     */
+    private function confirmCommand(array $toolCalls, int $conversationId): ResultInterface
+    {
+        $adminUserId = (int)($this->_auth->getUser()?->getId() ?? 0);
+        $result = $this->chatService->prepareToolConfirmation(
+            $toolCalls,
+            function (string $type, array $data) {
+                $this->sendSse($type, $data);
+            },
+            $adminUserId
+        );
+
+        $messageId = $this->conversationRepository->addMessage(
+            $conversationId,
+            'assistant',
+            (string)($result['content'] ?? ''),
+            $result['tool_calls'] ?? $toolCalls,
+            true
+        );
+
+        $this->sendSse('done', [
+            'message_id' => $messageId,
+            'conversation_id' => $conversationId,
+            'pending_confirmation' => true,
+        ], true);
+        return $this->finishResponse();
     }
 
     /**
@@ -326,13 +384,16 @@ class Stream extends Action implements HttpPostActionInterface
     /**
      * A full form snapshot can be hundreds of kilobytes of field labels and values per message;
      * logging it verbatim would put untrusted client data into the debug log untouched. Only the
-     * namespace, entity id and field count are worth keeping here.
+     * namespace, entity id and field count are worth keeping here. The form key is a CSRF secret
+     * and never belongs in a log.
      *
      * @param array<array-key, mixed> $postData
      * @return array<array-key, mixed>
      */
     private function redactedPostData(array $postData): array
     {
+        unset($postData['form_key']);
+
         if (!isset($postData['page_context'])) {
             return $postData;
         }
@@ -385,17 +446,5 @@ class Stream extends Action implements HttpPostActionInterface
         }
         echo $payload;
         flush();
-    }
-
-    /**
-     * Terminate response to prevent Magento from sending its own HTML response.
-     * SSE requires direct output, Magento's response object would override our headers.
-     *
-     * @SuppressWarnings("PHPMD.ExitExpression")
-     */
-    private function terminateResponse(): never
-    {
-        // phpcs:ignore Magento2.Security.LanguageConstruct.ExitUsage
-        exit(0);
     }
 }

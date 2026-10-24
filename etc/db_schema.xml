@@ -37,6 +37,51 @@
         </index>
     </table>
 
+    <table name="mago_flag" resource="default" engine="innodb" comment="Admin Assistant Answer Feedback">
+        <column xsi:type="int" name="entity_id" unsigned="true" nullable="false" identity="true" comment="Entity ID"/>
+        <column xsi:type="int" name="message_id" unsigned="true" nullable="true" comment="Flagged Message ID"/>
+        <column xsi:type="int" name="conversation_id" unsigned="true" nullable="true" comment="Conversation ID"/>
+        <column xsi:type="int" name="admin_user_id" unsigned="true" nullable="false" comment="Admin User Who Flagged"/>
+        <column xsi:type="varchar" name="status" nullable="false" length="20" default="open" comment="Status: open, resolved"/>
+        <!-- Flags made before thumbs feedback existed were all complaints, so they read as a thumbs down -->
+        <column xsi:type="varchar" name="rating" nullable="false" length="10" default="down" comment="Rating: up, down"/>
+        <column xsi:type="text" name="note" nullable="true" comment="What the admin said was wrong"/>
+        <column xsi:type="mediumtext" name="snapshot" nullable="true" comment="The flagged turn, copied at flag time, JSON"/>
+        <column xsi:type="varchar" name="answer_preview" nullable="true" length="255" comment="First part of the flagged answer, for the grid"/>
+        <column xsi:type="varchar" name="model" nullable="true" length="120" comment="Provider and model that answered"/>
+        <column xsi:type="varchar" name="skills" nullable="true" length="255" comment="Skills used in the flagged turn"/>
+        <column xsi:type="timestamp" name="created_at" nullable="false" default="CURRENT_TIMESTAMP" comment="Created At"/>
+        <column xsi:type="timestamp" name="updated_at" nullable="false" default="CURRENT_TIMESTAMP" on_update="true" comment="Updated At"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="entity_id"/>
+        </constraint>
+        <!-- The snapshot is the evidence, so a flag outlives the conversation it came from. -->
+        <constraint xsi:type="foreign" referenceId="MAGO_FLAG_MSG_ID" table="mago_flag" column="message_id" referenceTable="mago_message" referenceColumn="entity_id" onDelete="SET NULL"/>
+        <constraint xsi:type="foreign" referenceId="MAGO_FLAG_CONV_ID" table="mago_flag" column="conversation_id" referenceTable="mago_conversation" referenceColumn="entity_id" onDelete="SET NULL"/>
+        <constraint xsi:type="unique" referenceId="MAGO_FLAG_MESSAGE_ID_UNIQUE">
+            <column name="message_id"/>
+        </constraint>
+        <index referenceId="MAGO_FLAG_STATUS" indexType="btree">
+            <column name="status"/>
+        </index>
+        <index referenceId="MAGO_FLAG_RATING" indexType="btree">
+            <column name="rating"/>
+        </index>
+        <index referenceId="MAGO_FLAG_CREATED_AT" indexType="btree">
+            <column name="created_at"/>
+        </index>
+        <index referenceId="MAGO_FLAG_ADMIN_USER_ID" indexType="btree">
+            <column name="admin_user_id"/>
+        </index>
+        <!-- The grid offers a keyword box, and Magento's fulltext filter needs an index to use -->
+        <index referenceId="MAGO_FLAG_FULLTEXT" indexType="fulltext">
+            <column name="answer_preview"/>
+            <column name="note"/>
+            <column name="model"/>
+            <column name="skills"/>
+        </index>
+    </table>
+
     <table name="mago_skill_permission" resource="default" engine="innodb" comment="Admin Assistant Skill Permissions">
         <column xsi:type="int" name="entity_id" unsigned="true" nullable="false" identity="true" comment="Entity ID"/>
         <column xsi:type="int" name="admin_user_id" unsigned="true" nullable="false" comment="Admin User ID"/>
@@ -63,6 +108,8 @@
         <column xsi:type="int" name="input_tokens" unsigned="true" nullable="false" default="0" comment="Input Tokens"/>
         <column xsi:type="int" name="output_tokens" unsigned="true" nullable="false" default="0" comment="Output Tokens"/>
         <column xsi:type="int" name="total_tokens" unsigned="true" nullable="false" default="0" comment="Total Tokens"/>
+        <column xsi:type="int" name="cache_read_tokens" unsigned="true" nullable="true" comment="Prompt tokens served from the provider cache (NULL = not reported)"/>
+        <column xsi:type="int" name="cache_write_tokens" unsigned="true" nullable="true" comment="Prompt tokens written to the provider cache (NULL = not reported)"/>
         <column xsi:type="varchar" name="skill_names" nullable="true" length="255" comment="Comma-separated skill names"/>
         <column xsi:type="mediumtext" name="request_payload" nullable="true" comment="API Request Payload JSON"/>
         <column xsi:type="mediumtext" name="response_payload" nullable="true" comment="API Response Payload JSON"/>

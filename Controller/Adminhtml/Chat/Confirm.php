@@ -15,14 +15,19 @@ use Magento\Framework\Data\Form\FormKey;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\ChatServiceInterface;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
-use MagoAssistant\Mago\Logger\ErrorLogger;
+use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
+use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
 use MagoAssistant\Mago\Service\Conversation\NavigationNoteInjector;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Form\PageContextNormalizer;
+use MagoAssistant\Mago\Service\Http\EventStreamHeaders;
 
 class Confirm extends Action implements HttpPostActionInterface
 {
     use FormKeyJsonValidation;
+    use FinishesStreamedResponse;
+    use ReleasesSessionLock;
 
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::assistant_write';
 
@@ -31,34 +36,34 @@ class Confirm extends Action implements HttpPostActionInterface
         private readonly ChatServiceInterface $chatService,
         private readonly ConversationRepositoryInterface $conversationRepository,
         private readonly Json $json,
-        private readonly ErrorLogger $errorLogger,
+        private readonly ErrorReporter $errorReporter,
         private readonly FormKey $formKey,
         private readonly PageContextNormalizer $pageContextNormalizer,
         private readonly PageContextHolder $pageContextHolder,
-        private readonly NavigationNoteInjector $navigationNoteInjector
+        private readonly NavigationNoteInjector $navigationNoteInjector,
+        private readonly ConfirmationClaim $confirmationClaim,
+        private readonly EventStreamHeaders $eventStreamHeaders
     ) {
         parent::__construct($context);
     }
 
-    public function execute(): ResultInterface|HttpResponse
+    public function execute(): ResultInterface
     {
         /** @var HttpResponse $response */
         $response = $this->getResponse();
-        $response->setHeader('Content-Type', 'text/event-stream', true);
-        $response->setHeader('Cache-Control', 'no-cache', true);
-        $response->setHeader('Connection', 'keep-alive', true);
-        $response->setHeader('X-Accel-Buffering', 'no', true);
-        $response->sendHeaders();
+        $this->eventStreamHeaders->send($response);
 
         while (ob_get_level()) {
             ob_end_clean();
         }
         ob_implicit_flush(true);
+        $this->releaseSessionLock();
 
         try {
             $rawBody = $this->getRequest()->getContent();
             $postData = $this->json->unserialize($rawBody);
-            $messageId = (int)($postData['message_id'] ?? 0);
+            $confirmRequest = ConfirmRequest::fromPostData(is_array($postData) ? $postData : []);
+            $messageId = $confirmRequest->messageId;
 
             $rawPageContext = $postData['page_context'] ?? null;
             $pageContext = $this->pageContextNormalizer->normalize($rawPageContext);
@@ -67,7 +72,7 @@ class Confirm extends Action implements HttpPostActionInterface
             if (!$messageId) {
                 $this->sendSse('error', ['error' => 'message_id is required']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
             $user = $this->_auth->getUser();
@@ -75,25 +80,23 @@ class Confirm extends Action implements HttpPostActionInterface
             if (!$adminUserId) {
                 $this->sendSse('error', ['error' => 'Not authorized']);
                 $this->sendSse('done', []);
-                $this->terminateResponse();
+                return $this->finishResponse();
             }
 
-            $message = $this->conversationRepository->getMessageForUser($messageId, $adminUserId);
-            if (empty($message['pending_confirmation'])) {
-                $this->sendSse('error', ['error' => 'No pending confirmation for this message']);
-                $this->sendSse('done', []);
-                $this->terminateResponse();
-            }
+            // A bulk confirmation sends the ticked tool call ids; without the field everything runs
+            $selectedIds = $confirmRequest->selectedIds;
+
+            // Claimed before anything runs, so a second click or a parallel REST confirm gets an
+            // "already handled" error instead of running the same writes again
+            $message = $this->confirmationClaim->claimToConfirm($confirmRequest, $adminUserId);
+            // Claimed means it is never offered again, so a closed tab must not cut the batch short
+            // before every write ran and its outcome was stored
+            ignore_user_abort(true);
 
             $toolCalls = $message['tool_calls'] ?? [];
             if (is_string($toolCalls)) {
                 $toolCalls = $this->json->unserialize($toolCalls);
             }
-
-            // A bulk confirmation sends the ticked tool call ids; without the field everything runs
-            $selectedIds = isset($postData['tool_call_ids']) && is_array($postData['tool_call_ids'])
-                ? array_values(array_map('strval', $postData['tool_call_ids']))
-                : null;
 
             $conversationId = (int)$message['conversation_id'];
 
@@ -224,12 +227,11 @@ class Confirm extends Action implements HttpPostActionInterface
                 'pending_confirmation' => $pendingConfirmation,
             ], true);
         } catch (\Throwable $e) {
-            $this->errorLogger->addLog('Confirm Controller', $e->getMessage());
-            $this->sendSse('error', ['error' => $e->getMessage()]);
+            $this->sendSse('error', ['error' => $this->errorReporter->report('Confirm Controller', $e)]);
             $this->sendSse('done', [], true);
         }
 
-        $this->terminateResponse();
+        return $this->finishResponse();
     }
 
     /**
@@ -277,13 +279,5 @@ class Confirm extends Action implements HttpPostActionInterface
         }
         echo $payload;
         flush();
-    }
-
-    /**
-     * @SuppressWarnings("PHPMD.ExitExpression")
-     */
-    private function terminateResponse(): never
-    {
-        exit(0);
     }
 }

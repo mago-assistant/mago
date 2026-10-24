@@ -7,17 +7,20 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Analytics\CustomerData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
-use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Time\StoreTime;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class RecentSignupsAction implements ActionInterface
 {
     public function __construct(
-        private readonly InternalApiClient $apiClient,
+        private readonly InternalApiClientInterface $apiClient,
         private readonly PeriodParser $periodParser,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -44,7 +47,7 @@ class RecentSignupsAction implements ActionInterface
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results (default: 10). Use 1 for a question about a '
+                'description' => 'Number of results (default: 10, max: ' . ResultLimit::MAX . '). Use 1 for a question about a '
                     . 'single customer, such as the newest one.',
             ],
         ];
@@ -74,7 +77,7 @@ class RecentSignupsAction implements ActionInterface
             'email' => [PiiClass::TOKENISE, 'email'],
             'telephone' => [PiiClass::TOKENISE, 'phone'],
             'country' => [PiiClass::PUBLIC],
-            'city' => [PiiClass::PUBLIC],
+            'city' => [PiiClass::TOKENISE, 'city'],
             'group_id' => [PiiClass::PUBLIC],
             'registered' => [PiiClass::PUBLIC],
             'store_id' => [PiiClass::PUBLIC],
@@ -96,7 +99,7 @@ class RecentSignupsAction implements ActionInterface
         }
 
         $period = $params['period'] ?? '30days';
-        $limit = (int)($params['limit'] ?? 10);
+        $limit = ResultLimit::fromParams($params, 10);
         $from = $this->periodParser->getFromDate($period);
 
         $countParams = $this->apiClient->buildSearchCriteria(
@@ -130,7 +133,7 @@ class RecentSignupsAction implements ActionInterface
                 'country' => $address['country_id'] ?? null,
                 'city' => $address['city'] ?? null,
                 'group_id' => (int)($customer['group_id'] ?? 0),
-                'registered' => $customer['created_at'] ?? '',
+                'registered' => $this->storeTime->toLocal((string)($customer['created_at'] ?? '')),
                 'store_id' => (int)($customer['store_id'] ?? 0),
                 'admin_url' => $this->secureAdminUrl->getUrl('customer/index/edit', ['id' => $customerId]),
             ];

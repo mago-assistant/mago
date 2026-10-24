@@ -14,9 +14,15 @@ use Magento\Framework\DB\Sql\Expression;
 use Magento\Framework\Escaper;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
+use MagoAssistant\Mago\Service\Usage\CacheShare;
+use MagoAssistant\Mago\Service\Url\AdminPath;
 
 class ConversationView extends Template
 {
+    private const READABLE_JSON_FLAGS = JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+    private const SCRIPT_SAFE_JSON_FLAGS = JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
+        | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
+
     private ?array $conversation = null;
     private ?array $messages = null;
     private ?array $usageData = null;
@@ -28,9 +34,16 @@ class ConversationView extends Template
         private readonly TimezoneInterface $timezone,
         private readonly ConfigRepository $configRepository,
         private readonly AdminSession $adminSession,
+        private readonly CacheShare $cacheShare,
+        private readonly AdminPath $adminPath,
         array $data = []
     ) {
         parent::__construct($context, $data);
+    }
+
+    public function getAdminPath(): string
+    {
+        return $this->adminPath->get();
     }
 
     public function getConversationId(): int
@@ -123,6 +136,8 @@ class ConversationView extends Template
                 'total_tokens' => new Expression('SUM(total_tokens)'),
                 'input_tokens' => new Expression('SUM(input_tokens)'),
                 'output_tokens' => new Expression('SUM(output_tokens)'),
+                'cache_read_tokens' => new Expression('SUM(cache_read_tokens)'),
+                'cache_reported_input_tokens' => new Expression(CacheShare::REPORTED_INPUT_TOKENS_SUM),
                 'api_calls' => new Expression('COUNT(*)'),
             ])
             ->where('conversation_id = ?', $this->getConversationId());
@@ -207,6 +222,24 @@ class ConversationView extends Template
         return $this->configRepository->getAssistantName();
     }
 
+    public function getCacheShare(): string
+    {
+        $usage = $this->getUsageData();
+
+        return $this->cacheShare->format(
+            $usage['cache_read_tokens'] ?? null,
+            $usage['cache_reported_input_tokens'] ?? null
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $call Row from mago_usage_log
+     */
+    public function formatCallCacheShare(array $call): string
+    {
+        return $this->cacheShare->format($call['cache_read_tokens'] ?? null, $call['input_tokens'] ?? null);
+    }
+
     public function getEstimatedCost(): string
     {
         $usage = $this->getUsageData();
@@ -286,24 +319,20 @@ class ConversationView extends Template
         // Italic: *text*
         $html = (string)preg_replace('/(?<!\*)\*([^*]+)\*(?!\*)/', '<em>$1</em>', $html);
 
-        // Markdown links: [text](url)
+        // Markdown links [text](url) and bare URLs in one pass, so a bare URL inside a link's own
+        // href is never linked a second time (that nested <a> broke out of the href attribute).
+        // A link is http(s) or a path on this store: "//host" and "/\host" only look like paths.
         $html = (string)preg_replace_callback(
-            '/\[([^\]]+)\]\(((?:https?:\/\/[^ )]+|\/[^ )]+))\)/',
+            '/\[([^\]]+)\]\(((?:https?:\/\/[^ )]+|\/(?![\/\\\\\s])[^ )]+))\)|(https?:\/\/[^\s<]+)/',
             function ($m) {
-                $linkText = $m[1];
+                if (isset($m[3])) {
+                    return '<a href="' . $m[3] . '" target="_blank" rel="noopener noreferrer">' . $m[3] . '</a>';
+                }
                 $url = str_replace(["\n", "\r"], '', $m[2]);
-                $isAdmin = str_contains($url, '/admin') || str_starts_with($url, '/');
-                $target = $isAdmin ? '_self' : '_blank';
-                return '<a href="' . $url . '" target="' . $target . '" rel="noopener">'
-                    . $linkText . '</a>';
+                $target = str_starts_with($url, '/') ? '_self' : '_blank';
+                return '<a href="' . $url . '" target="' . $target . '" rel="noopener noreferrer">'
+                    . $m[1] . '</a>';
             },
-            $html
-        );
-
-        // Bare URLs not already in href
-        $html = (string)preg_replace(
-            '/(?<!href="|">)(https?:\/\/[^\s<]+)/',
-            '<a href="$1" target="_blank" rel="noopener">$1</a>',
             $html
         );
 
@@ -316,6 +345,9 @@ class ConversationView extends Template
         return strip_tags($html, '<p><br><strong><em><code><pre><a>');
     }
 
+    /**
+     * Readable JSON for output that is HTML-escaped afterwards. Not safe to print unescaped.
+     */
     public function formatJson(mixed $data): string
     {
         if (is_string($data)) {
@@ -326,11 +358,34 @@ class ConversationView extends Template
             }
         }
 
-        if (is_array($data)) {
-            $data = $this->decodeNestedJson($data);
+        return json_encode($this->decodeNestedValue($data), self::READABLE_JSON_FLAGS) ?: '';
+    }
+
+    /**
+     * JSON that can be printed unescaped inside a <script> block. Payloads hold stored customer
+     * input (reviews, addresses), so <, >, &, ' and " are always \u-escaped and a payload that
+     * isn't valid JSON is encoded as a JSON string instead of being passed through.
+     */
+    public function formatJsonForScript(mixed $data): string
+    {
+        if ($data === null || $data === '') {
+            return '';
         }
 
-        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
+        if (is_string($data)) {
+            try {
+                $data = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                return json_encode($data, self::SCRIPT_SAFE_JSON_FLAGS) ?: '""';
+            }
+        }
+
+        return json_encode($this->decodeNestedValue($data), self::SCRIPT_SAFE_JSON_FLAGS) ?: '""';
+    }
+
+    private function decodeNestedValue(mixed $data): mixed
+    {
+        return is_array($data) ? $this->decodeNestedJson($data) : $data;
     }
 
     private function decodeNestedJson(array $data): array

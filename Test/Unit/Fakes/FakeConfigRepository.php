@@ -11,14 +11,41 @@ use MagoAssistant\Mago\Api\Config\RepositoryInterface;
 
 class FakeConfigRepository implements RepositoryInterface
 {
-    private bool $isInternalSslVerifyEnabled = true;
-    private string $internalUrl = '';
+    private bool $addonFeedEnabled = true;
     private int $maxToolIterations = 0;
-    private bool $answerWidgets = false;    private int $maxResponseTokens = 0;
+    private int $customerNotificationInterval = 0;
+    private bool $answerWidgets = false;
+    private bool $voiceInput = false;
+    private int $maxResponseTokens = 0;
+    private bool $reindexAllowed = false;
+    private bool $isDebugEnabled = false;
+    private int $debugEnabledReads = 0;
+    private bool $isEnabled = true;
+    private string $docsSourceRepo = '';
+    private string $docsRef = '';
+
+    public function withDebugEnabled(bool $isEnabled): self
+    {
+        $this->isDebugEnabled = $isEnabled;
+
+        return $this;
+    }
+
+    public function getDebugEnabledReads(): int
+    {
+        return $this->debugEnabledReads;
+    }
 
     public function withMaxToolIterations(int $maxToolIterations): self
     {
         $this->maxToolIterations = $maxToolIterations;
+
+        return $this;
+    }
+
+    public function withCustomerNotificationInterval(int $minutes): self
+    {
+        $this->customerNotificationInterval = $minutes;
 
         return $this;
     }
@@ -41,28 +68,17 @@ class FakeConfigRepository implements RepositoryInterface
     {
         return $this->answerWidgets;
     }
-    public function withInternalSslVerifyEnabled(bool $isEnabled): self
+
+    public function withVoiceInput(bool $enabled): self
     {
-        $this->isInternalSslVerifyEnabled = $isEnabled;
+        $this->voiceInput = $enabled;
 
         return $this;
     }
 
-    public function withInternalUrl(string $internalUrl): self
+    public function isVoiceInputEnabled(): bool
     {
-        $this->internalUrl = $internalUrl;
-
-        return $this;
-    }
-
-    public function isInternalSslVerifyEnabled(): bool
-    {
-        return $this->isInternalSslVerifyEnabled;
-    }
-
-    public function getInternalUrl(): string
-    {
-        return $this->internalUrl;
+        return $this->voiceInput;
     }
 
     public function getExtensionVersion(): string
@@ -80,9 +96,16 @@ class FakeConfigRepository implements RepositoryInterface
         return '2.4.7';
     }
 
+    public function withEnabled(bool $isEnabled): self
+    {
+        $this->isEnabled = $isEnabled;
+
+        return $this;
+    }
+
     public function isEnabled(?int $storeId = null): bool
     {
-        return true;
+        return $this->isEnabled;
     }
 
     public function getStore(?int $storeId = null): StoreInterface
@@ -97,7 +120,9 @@ class FakeConfigRepository implements RepositoryInterface
 
     public function isDebugEnabled(): bool
     {
-        return false;
+        $this->debugEnabledReads++;
+
+        return $this->isDebugEnabled;
     }
 
     public function getProvider(): string
@@ -140,6 +165,11 @@ class FakeConfigRepository implements RepositoryInterface
         return $this->maxToolIterations;
     }
 
+    public function getCustomerNotificationInterval(): int
+    {
+        return $this->customerNotificationInterval;
+    }
+
     public function getAccentColor(): string
     {
         return '';
@@ -160,19 +190,39 @@ class FakeConfigRepository implements RepositoryInterface
         return '';
     }
 
+    public function isAddonFeedEnabled(): bool
+    {
+        return $this->addonFeedEnabled;
+    }
+
+    public function withAddonFeedEnabled(bool $enabled): self
+    {
+        $this->addonFeedEnabled = $enabled;
+
+        return $this;
+    }
+
+    public function withDocsSource(string $repo, string $ref): self
+    {
+        $this->docsSourceRepo = $repo;
+        $this->docsRef = $ref;
+
+        return $this;
+    }
+
     public function isDocsEnabled(): bool
     {
-        return false;
+        return $this->docsSourceRepo !== '';
     }
 
     public function getDocsSourceRepo(): string
     {
-        return '';
+        return $this->docsSourceRepo;
     }
 
     public function getDocsRef(): string
     {
-        return '';
+        return $this->docsRef;
     }
 
     public function getDocsTopK(): int
@@ -185,6 +235,11 @@ class FakeConfigRepository implements RepositoryInterface
         return 0;
     }
 
+    public function getHistoryRetentionDays(): int
+    {
+        return 0;
+    }
+
     public function getAiServiceId(): string
     {
         return '';
@@ -193,5 +248,17 @@ class FakeConfigRepository implements RepositoryInterface
     public function getMaxResponseTokens(): int
     {
         return $this->maxResponseTokens;
+    }
+
+    public function withReindexAllowed(bool $isAllowed): self
+    {
+        $this->reindexAllowed = $isAllowed;
+
+        return $this;
+    }
+
+    public function isReindexAllowed(): bool
+    {
+        return $this->reindexAllowed;
     }
 }

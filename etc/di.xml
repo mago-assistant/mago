@@ -4,6 +4,32 @@
     <!-- Config Repository -->
     <preference for="MagoAssistant\Mago\Api\Config\RepositoryInterface" type="MagoAssistant\Mago\Model\Config\Repository"/>
 
+    <!--
+        Internal API: tools call web API routes in-process, as the admin user they act for. The guards
+        and follow-ups stand in for the webapi_rest-only plugins a real REST request would have run.
+    -->
+    <preference for="MagoAssistant\Mago\Api\InternalApiClientInterface" type="MagoAssistant\Mago\Service\Api\InternalApiClient"/>
+    <preference for="MagoAssistant\Mago\Service\Api\InProcess\ExceptionMaskerInterface" type="MagoAssistant\Mago\Service\Api\InProcess\ExceptionMasker"/>
+    <preference for="MagoAssistant\Mago\Service\Api\InProcess\ConnectionTransactionInterface" type="MagoAssistant\Mago\Service\Api\InProcess\ConnectionTransaction"/>
+    <preference for="MagoAssistant\Mago\Service\Api\InProcess\AsyncQueueInterface" type="MagoAssistant\Mago\Service\Api\InProcess\WebapiAsyncQueue"/>
+    <!-- Only postAsync() queues; every other call must not build the async scheduler -->
+    <type name="MagoAssistant\Mago\Service\Api\InternalApiClient">
+        <arguments>
+            <argument name="asyncScheduler" xsi:type="object">MagoAssistant\Mago\Service\Api\InProcess\AsyncScheduler\Proxy</argument>
+        </arguments>
+    </type>
+    <type name="MagoAssistant\Mago\Service\Api\InProcess\ServiceDispatcher">
+        <arguments>
+            <argument name="guards" xsi:type="array">
+                <item name="product_design" xsi:type="object">MagoAssistant\Mago\Service\Api\InProcess\Guard\ProductDesignGuard</item>
+                <item name="cms_page_design" xsi:type="object">MagoAssistant\Mago\Service\Api\InProcess\Guard\CmsPageDesignGuard</item>
+            </argument>
+            <argument name="followUps" xsi:type="array">
+                <item name="configurable_stock_index" xsi:type="object">MagoAssistant\Mago\Service\Api\InProcess\FollowUp\ConfigurableStockIndex</item>
+            </argument>
+        </arguments>
+    </type>
+
     <!-- Chat Service -->
     <preference for="MagoAssistant\Mago\Api\ChatServiceInterface" type="MagoAssistant\Mago\Service\Ai\ChatService"/>
 
@@ -12,6 +38,14 @@
 
     <!-- WebApi -->
     <preference for="MagoAssistant\Mago\Api\WebApi\ChatManagementInterface" type="MagoAssistant\Mago\Model\WebApi\ChatManagement"/>
+    <preference for="MagoAssistant\Mago\Api\WebApi\IndexerManagementInterface" type="MagoAssistant\Mago\Model\WebApi\IndexerManagement"/>
+    <preference for="MagoAssistant\Mago\Api\Data\IndexerResultInterface" type="MagoAssistant\Mago\Model\Data\IndexerResult"/>
+    <type name="MagoAssistant\Mago\Api\WebApi\ChatManagementInterface">
+        <plugin name="mago_require_assistant_enabled" type="MagoAssistant\Mago\Plugin\Webapi\RequireAssistantEnabled"/>
+    </type>
+    <type name="MagoAssistant\Mago\Api\WebApi\IndexerManagementInterface">
+        <plugin name="mago_require_assistant_enabled" type="MagoAssistant\Mago\Plugin\Webapi\RequireAssistantEnabled"/>
+    </type>
 
     <!-- Module Info Repository -->
     <preference for="MagoAssistant\Mago\Api\ModuleInfo\RepositoryInterface" type="MagoAssistant\Mago\Model\ModuleInfo\Repository"/>
@@ -73,8 +107,47 @@
                 <item name="product_debug" xsi:type="object">MagoAssistant\Mago\Service\Skills\Debug\ProductDebug</item>
                 <item name="docs_search" xsi:type="object">MagoAssistant\Mago\Service\Skills\Docs\DocsSearch</item>
                 <item name="module_version" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\ModuleVersion</item>
+                <item name="bulk_status" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\BulkStatus</item>
                 <item name="page_form" xsi:type="object">MagoAssistant\Mago\Service\Skills\Form\PageForm</item>
+                <item name="stock_level" xsi:type="object">MagoAssistant\Mago\Service\Skills\Inventory\StockLevel</item>
+                <item name="stock_level_msi" xsi:type="object">MagoAssistant\Mago\Service\Skills\Inventory\StockLevelMsi</item>
                 <item name="dead_stock" xsi:type="object">MagoAssistant\Mago\Service\Skills\Inventory\DeadStock</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!-- Welcome screen example questions: each must be answerable by the tool/action it names -->
+    <type name="MagoAssistant\Mago\Service\Welcome\ExampleQuestions">
+        <arguments>
+            <argument name="questions" xsi:type="array">
+                <item name="low_stock" xsi:type="array">
+                    <item name="question" xsi:type="string" translate="true">Which products are running low on stock?</item>
+                    <item name="tool" xsi:type="string">product_data</item>
+                    <item name="action" xsi:type="string">low_stock</item>
+                    <item name="icon" xsi:type="string">stock</item>
+                    <item name="sortOrder" xsi:type="number">10</item>
+                </item>
+                <item name="revenue_vs_last_week" xsi:type="array">
+                    <item name="question" xsi:type="string" translate="true">Compare revenue this week with last week</item>
+                    <item name="tool" xsi:type="string">sales_data</item>
+                    <item name="action" xsi:type="string">revenue_summary</item>
+                    <item name="icon" xsi:type="string">chart</item>
+                    <item name="sortOrder" xsi:type="number">20</item>
+                </item>
+                <item name="orders_on_hold" xsi:type="array">
+                    <item name="question" xsi:type="string" translate="true">How many orders are on hold?</item>
+                    <item name="tool" xsi:type="string">sales_data</item>
+                    <item name="action" xsi:type="string">order_count</item>
+                    <item name="icon" xsi:type="string">orders</item>
+                    <item name="sortOrder" xsi:type="number">30</item>
+                </item>
+                <item name="best_sellers" xsi:type="array">
+                    <item name="question" xsi:type="string" translate="true">What are my best-selling products this month?</item>
+                    <item name="tool" xsi:type="string">sales_data</item>
+                    <item name="action" xsi:type="string">top_products</item>
+                    <item name="icon" xsi:type="string">bestseller</item>
+                    <item name="sortOrder" xsi:type="number">40</item>
+                </item>
             </argument>
         </arguments>
     </type>
@@ -153,12 +226,37 @@
     <type name="MagoAssistant\Mago\Service\Skills\Sales\OrderManager">
         <arguments>
             <argument name="actions" xsi:type="array">
+                <item name="get_document" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\GetDocumentAction</item>
+                <item name="list_documents" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\ListDocumentsAction</item>
                 <item name="add_comment" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\AddCommentAction</item>
                 <item name="update_status" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\UpdateStatusAction</item>
                 <item name="create_shipment" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\CreateShipmentAction</item>
                 <item name="create_invoice" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\CreateInvoiceAction</item>
                 <item name="create_creditmemo" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\CreateCreditmemoAction</item>
                 <item name="cancel" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\CancelAction</item>
+                <item name="resend_confirmation" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\ResendConfirmationAction</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <type name="MagoAssistant\Mago\Service\Skills\Sales\OrderManager\GetDocumentAction">
+        <arguments>
+            <argument name="documentTypes" xsi:type="array">
+                <item name="order" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\OrderDocument</item>
+                <item name="invoice" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\InvoiceDocument</item>
+                <item name="shipment" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\ShipmentDocument</item>
+                <item name="credit_memo" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\CreditmemoDocument</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <type name="MagoAssistant\Mago\Service\Skills\Sales\OrderManager\ListDocumentsAction">
+        <arguments>
+            <argument name="documentTypes" xsi:type="array">
+                <item name="order" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\OrderDocument</item>
+                <item name="invoice" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\InvoiceDocument</item>
+                <item name="shipment" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\ShipmentDocument</item>
+                <item name="credit_memo" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager\Document\CreditmemoDocument</item>
             </argument>
         </arguments>
     </type>
@@ -195,12 +293,69 @@
         </arguments>
     </type>
 
+    <!-- Docs downloads: a shared Guzzle client reuses a few handles across hundreds of files (#248) -->
+    <virtualType name="MagoAssistant\Mago\Service\Docs\GitHubGuzzleClient" type="GuzzleHttp\Client">
+        <arguments>
+            <argument name="config" xsi:type="array">
+                <item name="timeout" xsi:type="number">30</item>
+                <item name="connect_timeout" xsi:type="number">10</item>
+                <item name="allow_redirects" xsi:type="array">
+                    <item name="max" xsi:type="number">5</item>
+                    <item name="protocols" xsi:type="array">
+                        <item name="https" xsi:type="string">https</item>
+                    </item>
+                </item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MagoAssistant\Mago\Service\Docs\GitHubHttpClient" type="Magento\Framework\HTTP\AsyncClient\GuzzleAsyncClient">
+        <arguments>
+            <argument name="client" xsi:type="object">MagoAssistant\Mago\Service\Docs\GitHubGuzzleClient</argument>
+        </arguments>
+    </virtualType>
+    <type name="MagoAssistant\Mago\Service\Docs\GitHubDocsSource">
+        <arguments>
+            <argument name="httpClient" xsi:type="object">MagoAssistant\Mago\Service\Docs\GitHubHttpClient</argument>
+        </arguments>
+    </type>
+
     <!-- Docs indexing CLI command -->
     <type name="Magento\Framework\Console\CommandListInterface">
         <arguments>
             <argument name="commands" xsi:type="array">
                 <item name="mago_docs_index" xsi:type="object">MagoAssistant\Mago\Console\Command\IndexDocs</item>
+                <item name="mago_tool_verify" xsi:type="object">MagoAssistant\Mago\Console\Command\VerifyTool</item>
+                <item name="mago_tool_create" xsi:type="object">MagoAssistant\Mago\Console\Command\CreateTool</item>
             </argument>
+        </arguments>
+    </type>
+
+    <preference for="MagoAssistant\Mago\Service\Tool\Verify\AdminAreaInterface"
+                type="MagoAssistant\Mago\Service\Tool\Verify\AdminArea"/>
+
+    <!-- Every bin/magento run builds the command list, so the tool commands must not build the
+         registry (and every tool in it) until they actually run -->
+    <type name="MagoAssistant\Mago\Console\Command\VerifyTool">
+        <arguments>
+            <argument name="toolRegistry" xsi:type="object">MagoAssistant\Mago\Service\Tool\ToolRegistry\Proxy</argument>
+            <argument name="toolVerifier" xsi:type="object">MagoAssistant\Mago\Service\Tool\Verify\ToolVerifier\Proxy</argument>
+        </arguments>
+    </type>
+    <type name="MagoAssistant\Mago\Console\Command\CreateTool">
+        <arguments>
+            <argument name="aclResources" xsi:type="object">MagoAssistant\Mago\Service\Tool\Verify\AclResourceIndex\Proxy</argument>
+        </arguments>
+    </type>
+
+    <!-- The panel is on every admin page, also when the assistant is disabled or hidden, so it must
+         not build the registry (and every tool in it) until it actually renders -->
+    <type name="MagoAssistant\Mago\Block\Adminhtml\ChatPanel">
+        <arguments>
+            <argument name="toolRegistry" xsi:type="object">MagoAssistant\Mago\Service\Tool\ToolRegistry\Proxy</argument>
+            <argument name="commandRegistry" xsi:type="object">MagoAssistant\Mago\Service\Command\CommandRegistry\Proxy</argument>
+            <argument name="commandRunner" xsi:type="object">MagoAssistant\Mago\Service\Command\CommandRunner\Proxy</argument>
+            <argument name="formPolicy" xsi:type="object">MagoAssistant\Mago\Service\Form\FormPolicy\Proxy</argument>
+            <argument name="exampleQuestions" xsi:type="object">MagoAssistant\Mago\Service\Welcome\ExampleQuestions\Proxy</argument>
         </arguments>
     </type>
 
@@ -211,11 +366,7 @@
                 <item name="revenue_summary" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\SalesData\RevenueAction</item>
                 <item name="top_products" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\SalesData\TopProductsAction</item>
                 <item name="top_refunded" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\SalesData\TopRefundedAction</item>
-                <item name="recent_orders" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\SalesData\RecentOrdersAction</item>
                 <item name="order_count" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\SalesData\OrderCountAction</item>
-                <item name="lookup_order" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\SalesData\LookupOrderAction</item>
-                <item name="search_orders" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\SalesData\SearchOrdersAction</item>
-                <item name="customer_orders" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\SalesData\CustomerOrdersAction</item>
             </argument>
         </arguments>
     </type>
@@ -273,6 +424,19 @@
         </type>
 
         FormPolicy's own defaults already cover every form that carries personal data.
+
+        BlockedConfigPaths: the settings config_writer never changes from the chat (storefront and
+        admin URLs, mail server, every address customer mail goes to, two-factor and admin login security,
+        storefront head and footer scripts). A module adds glob patterns (* and ?) for settings of
+        its own; the defaults stay:
+
+        <type name="MagoAssistant\Mago\Service\Skills\Configuration\BlockedConfigPaths">
+            <arguments>
+                <argument name="additionalPatterns" xsi:type="array">
+                    <item name="vendor_gateway_url" xsi:type="string">vendor_section/gateway/*_url</item>
+                </argument>
+            </arguments>
+        </type>
     -->
 
     <!-- Skill Actions: PageForm -->
@@ -301,6 +465,29 @@
             <argument name="name" xsi:type="string">mago_conversations_listing_data_source</argument>
             <argument name="primaryFieldName" xsi:type="string">entity_id</argument>
             <argument name="requestFieldName" xsi:type="string">id</argument>
+        </arguments>
+    </type>
+
+    <!--
+        Answer Feedback grid. The standard DataProvider over a SearchResult collection, so the
+        toolbar's filters, sorting and paging are Magento's own rather than something to reimplement.
+    -->
+    <virtualType name="MagoFlagGridCollection" type="MagoAssistant\Mago\Model\ResourceModel\Flag\Grid">
+        <arguments>
+            <argument name="mainTable" xsi:type="string">mago_flag</argument>
+            <argument name="resourceModel" xsi:type="string">MagoAssistant\Mago\Model\ResourceModel\Flag</argument>
+        </arguments>
+    </virtualType>
+    <type name="Magento\Framework\View\Element\UiComponent\DataProvider\CollectionFactory">
+        <arguments>
+            <argument name="collections" xsi:type="array">
+                <item name="mago_flags_listing_data_source" xsi:type="string">MagoFlagGridCollection</item>
+            </argument>
+        </arguments>
+    </type>
+    <type name="MagoAssistant\Mago\Controller\Adminhtml\Flags\MassDelete">
+        <arguments>
+            <argument name="gridCollection" xsi:type="object" shared="false">MagoFlagGridCollection</argument>
         </arguments>
     </type>
 
@@ -345,6 +532,45 @@
                 <item name="create_product" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement\CreateProductAction</item>
                 <item name="add_configurable_variants" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement\AddConfigurableVariantsAction</item>
             </argument>
+        </arguments>
+    </type>
+    <!-- system.xml is only read in the adminhtml area; the REST chat and cron need the structure pinned to it -->
+    <virtualType name="MagoAssistantMagoAdminhtmlConfigStructure" type="Magento\Config\Model\Config\Structure\Proxy">
+        <arguments>
+            <argument name="instanceName" xsi:type="string">adminhtmlConfigStructure</argument>
+        </arguments>
+    </virtualType>
+    <type name="MagoAssistant\Mago\Service\Skills\Configuration\ConfigPathAccess">
+        <arguments>
+            <argument name="structure" xsi:type="object">MagoAssistantMagoAdminhtmlConfigStructure</argument>
+        </arguments>
+    </type>
+    <!-- config_writer saves through the field's backend model, which only the adminhtml structure declares -->
+    <virtualType name="MagoAssistantMagoAdminhtmlConfigStructureFactory" type="Magento\Config\Model\Config\StructureFactory">
+        <arguments>
+            <argument name="instanceName" xsi:type="string">adminhtmlConfigStructure</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MagoAssistantMagoPreparedValueFactory" type="Magento\Config\Model\PreparedValueFactory">
+        <arguments>
+            <argument name="structureFactory" xsi:type="object">MagoAssistantMagoAdminhtmlConfigStructureFactory</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MagoAssistantMagoAdminhtmlConfig" type="Magento\Config\Model\Config">
+        <arguments>
+            <argument name="configStructure" xsi:type="object">MagoAssistantMagoAdminhtmlConfigStructure</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MagoAssistantMagoAdminhtmlConfigFactory" type="Magento\Config\Model\ConfigFactory">
+        <arguments>
+            <argument name="instanceName" xsi:type="string">MagoAssistantMagoAdminhtmlConfig</argument>
+        </arguments>
+    </virtualType>
+    <type name="MagoAssistant\Mago\Service\Skills\Configuration\ConfigValueSaver">
+        <arguments>
+            <argument name="preparedValueFactory" xsi:type="object">MagoAssistantMagoPreparedValueFactory</argument>
+            <argument name="structure" xsi:type="object">MagoAssistantMagoAdminhtmlConfigStructure</argument>
+            <argument name="configFactory" xsi:type="object">MagoAssistantMagoAdminhtmlConfigFactory</argument>
         </arguments>
     </type>
 </config>

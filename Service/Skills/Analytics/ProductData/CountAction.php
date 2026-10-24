@@ -7,13 +7,13 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Analytics\ProductData;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
-use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class CountAction implements ActionInterface
 {
     public function __construct(
-        private readonly InternalApiClient $apiClient
+        private readonly InternalApiClientInterface $apiClient
     ) {
     }
 

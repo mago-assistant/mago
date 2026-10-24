@@ -6,24 +6,27 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
-use Magento\CatalogRule\Api\CatalogRuleRepositoryInterface;
 use Magento\CatalogRule\Model\Rule\Condition\Combine;
 use Magento\CatalogRule\Model\Rule\Condition\Product;
-use Magento\CatalogRule\Model\RuleFactory;
 use Magento\Customer\Model\ResourceModel\Group\CollectionFactory as CustomerGroupCollectionFactory;
+use Magento\Framework\DataObject;
 use Magento\Store\Model\StoreManagerInterface;
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Skills\Marketing\DiscountRuleCautions;
+use MagoAssistant\Mago\Service\Skills\Marketing\RuleIds;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class CreateRuleAction implements ActionInterface
+class CreateRuleAction implements CautionedActionInterface
 {
     public function __construct(
-        private readonly CatalogRuleRepositoryInterface $catalogRuleRepository,
-        private readonly RuleFactory $ruleFactory,
+        private readonly CatalogRuleServices $catalogRules,
         private readonly StoreManagerInterface $storeManager,
         private readonly CustomerGroupCollectionFactory $customerGroupCollectionFactory,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly ErrorReporter $errorReporter,
+        private readonly DiscountRuleCautions $cautions
     ) {
     }
 
@@ -50,7 +53,8 @@ class CreateRuleAction implements ActionInterface
             ],
             'discount_amount' => [
                 'type' => 'number',
-                'description' => 'Discount amount',
+                'description' => 'Discount amount, greater than 0. For "percent" and "to_percent" '
+                    . 'this is a percentage and must be at most 100.',
             ],
             'from_date' => [
                 'type' => 'string',
@@ -111,6 +115,26 @@ class CreateRuleAction implements ActionInterface
             . '"to_percent" = set price to X% of original, "to_fixed" = set price to X.';
     }
 
+    /**
+     * A new catalog rule changes the price of every matching product, and by default it reaches
+     * every website and customer group, guests included, at once: always worth a second look.
+     * An empty website or group list is kept as empty, as execute() saves it, and a comma list
+     * ("1,0") is read as the ids Magento's save splits it into.
+     */
+    public function getCautions(array $params, int $adminUserId): array
+    {
+        return array_values(array_filter([
+            $this->describeDiscount($params),
+            ...$this->cautions->describeScope(
+                RuleIds::fromInput($params['website_ids'] ?? null),
+                RuleIds::fromInput($params['customer_group_ids'] ?? null),
+                trim((string)($params['from_date'] ?? '')),
+                trim((string)($params['to_date'] ?? '')),
+                $adminUserId
+            ),
+        ]));
+    }
+
     public function execute(array $params, int $adminUserId): array
     {
         if (!$adminUserId) {
@@ -145,10 +169,12 @@ class CreateRuleAction implements ActionInterface
         }
 
         try {
-            $websiteIds = $params['website_ids'] ?? $this->getAllWebsiteIds();
-            $customerGroupIds = $params['customer_group_ids'] ?? $this->getAllCustomerGroupIds();
+            // Read the way getCautions() reads them, so the rule saved is the rule the card described
+            $websiteIds = RuleIds::fromInput($params['website_ids'] ?? null) ?? $this->getAllWebsiteIds();
+            $customerGroupIds = RuleIds::fromInput($params['customer_group_ids'] ?? null)
+                ?? $this->getAllCustomerGroupIds();
 
-            $rule = $this->ruleFactory->create();
+            $rule = $this->catalogRules->createRule();
             $rule->setData('name', $name);
             $rule->setData('is_active', 1);
             $rule->setData('simple_action', $simpleAction);
@@ -165,7 +191,7 @@ class CreateRuleAction implements ActionInterface
                 $rule->setData('to_date', $params['to_date']);
             }
 
-            $categoryIds = $params['category_ids'] ?? [];
+            $categoryIds = RuleIds::fromInput($params['category_ids'] ?? null) ?? [];
             if (!empty($categoryIds)) {
                 $conditions = [
                     'type' => Combine::class,
@@ -183,7 +209,14 @@ class CreateRuleAction implements ActionInterface
                 $rule->getConditions()->loadArray($conditions);
             }
 
-            $this->catalogRuleRepository->save($rule);
+            // The admin's save controller runs this and CatalogRuleRepositoryInterface::save() does
+            // not; without it a percentage above 100 indexes a negative price (ProductPriceCalculator).
+            $validation = $rule->validateData(new DataObject($rule->getData()));
+            if ($validation !== true) {
+                return ['error' => implode(' ', array_map('strval', (array)$validation))];
+            }
+
+            $this->catalogRules->getRepository()->save($rule);
             $ruleId = (int)$rule->getId();
 
             return [
@@ -198,8 +231,32 @@ class CreateRuleAction implements ActionInterface
                 ),
             ];
         } catch (\Exception $e) {
-            return ['error' => 'Failed to create catalog price rule: ' . $e->getMessage()];
+            $error = $this->errorReporter->reportToolFailure('catalog_price_rules create_rule', $e);
+            return ['error' => 'Failed to create catalog price rule: ' . $error];
         }
+    }
+
+    /**
+     * Empty for an unknown discount type, which execute() refuses anyway
+     *
+     * @param array<string, mixed> $params
+     */
+    private function describeDiscount(array $params): string
+    {
+        $amount = $this->cautions->formatAmount((float)($params['discount_amount'] ?? 0));
+        $categoryIds = RuleIds::fromInput($params['category_ids'] ?? null) ?? [];
+        $products = $categoryIds === []
+            ? 'every product'
+            : 'every product in ' . (count($categoryIds) === 1 ? 'category ' : 'categories ')
+                . implode(', ', $categoryIds);
+
+        return match ($params['discount_type'] ?? '') {
+            'percent' => 'Takes ' . $amount . '% off the price of ' . $products . '.',
+            'fixed' => 'Takes ' . $amount . ' off the price of ' . $products . '.',
+            'to_percent' => 'Sets the price of ' . $products . ' to ' . $amount . '% of its original price.',
+            'to_fixed' => 'Sets the price of ' . $products . ' to ' . $amount . '.',
+            default => '',
+        };
     }
 
     private function getAllWebsiteIds(): array

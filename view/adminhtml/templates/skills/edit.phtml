@@ -13,6 +13,8 @@ $users = $block->getAdminUsers();
 $permissions = $block->getCurrentPermissions();
 $saveUrl = $block->getSaveUrl();
 $backUrl = $block->getBackUrl();
+$canEdit = $block->canEdit();
+$defaultLabel = $block->getDefaultPermissionLabel();
 ?>
 
 <div class="admin__page-section">
@@ -68,9 +70,10 @@ $backUrl = $block->getBackUrl();
                                     </span>
                                 </td>
                                 <td class="data-grid-td">
-                                    <select name="permissions[<?= (int)$userId ?>]" class="admin__control-select">
+                                    <select name="permissions[<?= (int)$userId ?>]"
+                                            class="admin__control-select"<?= $canEdit ? '' : ' disabled' ?>>
                                         <option value=""<?= $current === '' ? ' selected' : '' ?>>
-                                            <?= $block->escapeHtml(__('Default (ACL)')) ?>
+                                            <?= $block->escapeHtml($defaultLabel) ?>
                                         </option>
                                         <option value="read"<?= $current === 'read' ? ' selected' : '' ?>>
                                             <?= $block->escapeHtml(__('Read Only')) ?>
@@ -95,8 +98,10 @@ $backUrl = $block->getBackUrl();
         <button type="button" class="action-default" onclick="window.location.href='<?= $block->escapeJs($backUrl) ?>'">
             <span><?= $block->escapeHtml(__('Back')) ?></span>
         </button>
-        <button type="submit" class="action-primary">
-            <span><?= $block->escapeHtml(__('Save Permissions')) ?></span>
-        </button>
+        <?php if ($canEdit): ?>
+            <button type="submit" class="action-primary">
+                <span><?= $block->escapeHtml(__('Save Permissions')) ?></span>
+            </button>
+        <?php endif; ?>
     </div>
 </form>

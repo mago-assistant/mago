@@ -26,7 +26,9 @@ class UsageLogger
         int $outputTokens,
         array $skillNames = [],
         ?array $requestPayload = null,
-        ?array $responsePayload = null
+        ?array $responsePayload = null,
+        ?int $cacheReadTokens = null,
+        ?int $cacheWriteTokens = null
     ): void {
         $connection = $this->resourceConnection->getConnection();
         $table = $this->resourceConnection->getTableName('mago_usage_log');
@@ -39,6 +41,8 @@ class UsageLogger
             'input_tokens' => $inputTokens,
             'output_tokens' => $outputTokens,
             'total_tokens' => $inputTokens + $outputTokens,
+            'cache_read_tokens' => $cacheReadTokens,
+            'cache_write_tokens' => $cacheWriteTokens,
             'skill_names' => !empty($skillNames) ? implode(',', $skillNames) : null,
         ];
 

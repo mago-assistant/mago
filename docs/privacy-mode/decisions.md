@@ -26,8 +26,8 @@ consolidated spec lives on issue #97.
 | 1 | Persist tokenised, not raw, in `mago_message` (storage limitation, erasure win); display sinks rehydrate from the vault | Done: typed message and conversation title stored scrubbed on every ingress path (Stream, WebApi); history view, stream and WebApi responses rehydrate |
 | 2 | Fail-closed: a tool that declares nothing has every field stripped | Done in 2.0.0 (V1 shipped lenient for unclassified tools as an interim state) |
 | 3 | Silent input-scrub classes: email, BSN, IBAN, VAT, phone (NL-anchored); non-blocking client-side hint for FP-prone patterns | Done: `PiiHeuristic` with checksums (mod-97, elfproef), hint under the chat input |
-| 4 | Streaming rehydration handles tokens split across chunks; the admin's browser sees cleartext | Done, deviation: server-side carry buffer instead of the planned client-side vault; functionally equivalent and simpler, the browser still receives cleartext |
-| 5 | Unresolved token on display shows a neutral label; on a write it refuses | Done: "[earlier record]" on display; writes refuse unresolved tokens and admin URL tokens; personal-class tokens write after a warned confirmation (#114) |
+| 4 | Streaming rehydration handles tokens split across chunks; the admin's browser sees cleartext | Done: a server-side carry buffer holds a partial token back, and each text event carries the values of the tokens in it. The panel rehydrates after rendering and sanitizing the markdown, as text, so a stored value (a review) can never become markup |
+| 5 | Unresolved token on display shows a neutral label; on a write it refuses | Done: "[earlier record]" on display; writes refuse unresolved tokens, admin URL tokens and customer-written text; every other token writes after a warned confirmation (#114) |
 | 6 | Dev tripwire: log-only in developer mode, throw only under a test flag, skip in production | Done: `EgressTripwire` on every provider egress, `throwOnHit` via di.xml |
 | 7 | Integration and sink tests ride the existing e2e workflow; WireMock-journal assertion scoped per turn | Done: `privacy-mode.spec.ts` (journal + stored-copy asserts) plus a global canary mapping that fails any spec leaking the canary |
 | 8 | Classification becomes a required method on the @api interfaces; accepted major bump 1.1.0 to 2.0.0 | Done in 2.0.0: `getFieldClassification()` on `ActionInterface` and `ToolInterface`, all first-party tools classified, registry and opt-in interface removed |
@@ -41,9 +41,9 @@ consolidated spec lives on issue #97.
   ids and order increment numbers; admin URLs (they embed the admin secret key, token type `url`).
 - **Free (non-personal)**: adequate-cell-size aggregates, catalog and product data, stock, CMS
   content, store configuration, url rewrites, cron/cache/indexer state, documentation.
-- **Coarse fields stay public deliberately**: `city`/`country` on a customer lookup are kept while
-  the identifiers beside them are stripped, so "which customers are in X" keeps working without
-  the row being linkable.
+- **Coarse fields**: `country` on a customer lookup stays public. `city` is tokenised (type
+  `city`): it is part of the address, and one city always gets the same token, so "which customers
+  are in X" still groups.
 
 ## Deviations from the original spec, and why
 
@@ -55,7 +55,10 @@ consolidated spec lives on issue #97.
   secret key. Heuristic-class tokens (name, email, IBAN, BSN, VAT, phone) originally refused too,
   which blocked legitimate writes such as a contact person in a CMS block or a form value read by
   `read_fields` and written back. They now rehydrate into confirmed writes; the confirmation card
-  shows the real value and a "may write personal data" warning. The rehydration-oracle chain
+  shows the real value and a "masked for privacy" warning, which now covers every rehydrated
+  token except an admin URL. Customer-written text (`reviewtext`, `reviewtitle`, `nickname`) is
+  refused like `url`: it is where a prompt injection arrives, and copying it into store data
+  would publish it under the store's name. The rehydration-oracle chain
   (prompt injection steering vaulted PII into public content) is mitigated by that card: every
   write needs the admin's approval with the value in plain sight. Id-class tokens rehydrate as
   before.

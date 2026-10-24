@@ -19,6 +19,7 @@
         <settings>
             <updateUrl path="mui/index/render"/>
         </settings>
+        <aclResource>MagoAssistant_Mago::conversations</aclResource>
         <dataProvider class="MagoAssistant\Mago\Ui\DataProvider\ConversationsDataProvider"
                       name="mago_conversations_listing_data_source">
             <settings>

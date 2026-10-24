@@ -14,14 +14,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - PHP_VERSION: php83-fpm
-            MAGEOS_VERSION: 3.3.0
-          - PHP_VERSION: php85-fpm
-            MAGEOS_VERSION: 3.4.0
+          - IMAGE: mage-os-community-edition
+            IMAGE_TAG: php83-fpm-mage-os1.1.0-sample-data
+          - IMAGE: mage-os-community-edition
+            IMAGE_TAG: latest-sample-data
+          - IMAGE: magento-project-community-edition
+            IMAGE_TAG: php83-fpm-magento2.4.8-sample-data
+          - IMAGE: magento-project-community-edition
+            IMAGE_TAG: latest-sample-data
+    name: ${{ matrix.IMAGE }} - ${{ matrix.IMAGE_TAG }}
     runs-on: ubuntu-latest
     env:
-      PHP_VERSION: ${{ matrix.PHP_VERSION }}
-      MAGEOS_VERSION: ${{ matrix.MAGEOS_VERSION }}
+      IMAGE: ${{ matrix.IMAGE }}
+      IMAGE_TAG: ${{ matrix.IMAGE_TAG }}
       BASE_URL: http://magento.test/
       COMPOSE_FILE: .github/workflows/templates/docker-compose.yml
     steps:
@@ -33,21 +38,19 @@ jobs:
           docker compose -f $COMPOSE_FILE up -d --quiet-pull
           timeout 90 bash -c 'until docker exec wiremock curl -sf http://localhost:8080/__admin/health > /dev/null; do sleep 2; done'
 
-      # MageOS_AiBase has no tagged release yet, so it comes off its branch under an inline alias
-      # that satisfies this module's ^1.0. Drop both lines once it is on Packagist.
-      # Its Symfony AI bridges are a `suggest`, which composer never installs on its own, and
-      # without one there is no client to call a provider with at all.
+      # MageOS_AiBase's Symfony AI bridges are a `suggest`, which composer never installs on its
+      # own, and without one there is no client to call a provider with at all. The bridge takes
+      # any version so composer picks the one that matches the symfony/ai-platform AiBase requires.
       - name: Install the AI base module and a provider bridge
         run: |
-          docker exec mage-os-community-edition composer config repositories.mage-os-ai-base vcs https://github.com/mage-os-lab/module-ai-base
-          docker exec mage-os-community-edition ./retry "composer require --no-update mage-os/module-ai-base:'dev-main as 1.0.0'"
-          docker exec mage-os-community-edition ./retry "composer require --no-update symfony/ai-lm-studio-platform"
+          docker exec mage-os-community-edition ./retry "composer require --no-update mage-os/module-ai-base:'^1.0'"
+          docker exec mage-os-community-edition ./retry "composer require --no-update symfony/ai-lm-studio-platform:'*'"
 
       - name: Upload the module into the Mage-OS container
         run: |
           sed -i '/version/d' ./composer.json
           docker cp $(pwd) mage-os-community-edition:/data/extensions/
-          docker exec mage-os-community-edition ./install-composer-package mago-assistant/mago:@dev
+          docker exec mage-os-community-edition ./install-composer-package mago-assistant/magento2-mago:@dev
 
       - name: Activate the extension
         run: |
@@ -62,6 +65,8 @@ jobs:
           docker exec mage-os-community-edition /bin/bash ./change-base-url $BASE_URL
           docker exec mage-os-community-edition /bin/bash ./disable-2fa
           docker exec mage-os-community-edition ./retry "bin/magento config:set mago/general/enabled 1"
+          # The voice input spec stubs the browser's speech recognition, but needs the button rendered.
+          docker exec mage-os-community-edition ./retry "bin/magento config:set mago/voice/enabled 1"
           # One MageOS_AiBase service row on the LM Studio bridge, whose base URL is a local
           # runtime address by design, so nothing has to be redirected to make this work. It speaks
           # OpenAI chat-completions and appends /v1/chat/completions itself, so the base URL stops
@@ -112,7 +117,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: E2E report - ${{ matrix.PHP_VERSION }} - mage-os ${{ matrix.MAGEOS_VERSION }}
+          name: E2E report - ${{ matrix.IMAGE }} - ${{ matrix.IMAGE_TAG }}
           retention-days: 7
           path: |
             Test/End-2-end/playwright-report
@@ -128,7 +133,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: E2E logs - ${{ matrix.PHP_VERSION }} - mage-os ${{ matrix.MAGEOS_VERSION }}
+          name: E2E logs - ${{ matrix.IMAGE }} - ${{ matrix.IMAGE_TAG }}
           retention-days: 7
           path: |
             mage-os-logs

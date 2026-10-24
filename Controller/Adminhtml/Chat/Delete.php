@@ -12,6 +12,7 @@ use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\Controller\Result\JsonFactory;
 use Magento\Framework\Controller\ResultInterface;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 
 class Delete extends Action implements HttpPostActionInterface
 {
@@ -20,7 +21,8 @@ class Delete extends Action implements HttpPostActionInterface
     public function __construct(
         Context $context,
         private readonly ConversationRepositoryInterface $conversationRepository,
-        private readonly JsonFactory $jsonFactory
+        private readonly JsonFactory $jsonFactory,
+        private readonly ErrorReporter $errorReporter
     ) {
         parent::__construct($context);
     }
@@ -46,7 +48,7 @@ class Delete extends Action implements HttpPostActionInterface
 
             return $result->setData(['success' => true]);
         } catch (\Throwable $e) {
-            return $result->setData(['error' => $e->getMessage()]);
+            return $result->setData(['error' => $this->errorReporter->report('Delete Controller', $e)]);
         }
     }
 }

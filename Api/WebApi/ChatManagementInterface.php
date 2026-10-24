@@ -47,10 +47,14 @@ interface ChatManagementInterface
     /**
      * Confirm a pending write action
      *
+     * A proposal whose tool calls carry "irreversible" or "caution" only runs with acknowledged
+     * set to true, the API's counterpart of the checkbox on the admin panel's card.
+     *
      * @param int $messageId
+     * @param bool $acknowledged The caller read the impacts and cautions and accepts them
      * @return string JSON response
      */
-    public function confirmAction(int $messageId): string;
+    public function confirmAction(int $messageId, bool $acknowledged = false): string;
 
     /**
      * Reject a pending write action

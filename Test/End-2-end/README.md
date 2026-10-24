@@ -22,7 +22,7 @@ Everything is read from environment variables, no config file to edit:
 | `ADMIN_USERNAME` | `exampleuser` | Admin username |
 | `ADMIN_PASSWORD` | `examplepassword123` | Admin password |
 | `WIREMOCK_ADMIN_URL` | `http://localhost:8080` | WireMock admin API, for request-journal assertions |
-| `MAGO_DEBUG_LOG` | `/var/www/html/var/log/mago-debug.log` | Path of the Mago debug log as seen from the test runner |
+| `MAGO_DEBUG_LOG` | `/var/www/html/var/log/mago-debug.log` | Base path of the Mago debug log as seen from the test runner; the log rotates daily, so the newest `mago-debug-*.log` next to it is read |
 
 ```bash
 BASE_URL="https://your-store.test/" npx playwright test
@@ -37,6 +37,7 @@ The module has to be switched on, otherwise the panel is not rendered at all:
 
 ```bash
 bin/magento config:set mago/general/enabled 1
+bin/magento config:set mago/voice/enabled 1
 bin/magento cache:flush
 ```
 
@@ -156,9 +157,11 @@ otherwise; a stub left behind by one test can still be present, and can still wi
 later test — this run or a later one — which makes stub selection arbitrary and the assertions
 against it meaningless without ever failing loudly. The checked-in, file-based mappings are the
 baseline every runtime stub is registered on top of and deleted back down to: `POST
-/__admin/mappings/reset` restores exactly **28** mappings (`cms-page.json`: 2,
+/__admin/mappings/reset` restores exactly **44** mappings (`cms-page.json`: 2,
 `deny-customer-facing-forms.json`: 3, `navigation-note.json`: 1, `page-context.json`: 3,
-`page-form.json`: 14, `store-scope.json`: 5 — the `page_form` specs account for 18 of them).
+`page-form.json`: 14, `privacy-canary-tripwire.json`: 1, `privacy-lookup.json`: 3,
+`raw-data-guard.json`: 2, `slash-confirm.json`: 2, `slash-history.json`: 2, `store-scope.json`: 5,
+`unknown-tool-id.json`: 6 — the `page_form` specs account for 18 of them).
 
 **Never assert on a Magento admin flash message.** Flash messages are session-stored and consumed
 by the very first render that reads them; every spec in this suite shares one admin session via

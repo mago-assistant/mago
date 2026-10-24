@@ -11,6 +11,7 @@ use Magento\Backend\App\Action\Context;
 use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Controller\ResultInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 
 class MassDelete extends Action implements HttpPostActionInterface
 {
@@ -18,7 +19,8 @@ class MassDelete extends Action implements HttpPostActionInterface
 
     public function __construct(
         Context $context,
-        private readonly ResourceConnection $resourceConnection
+        private readonly ResourceConnection $resourceConnection,
+        private readonly ErrorReporter $errorReporter
     ) {
         parent::__construct($context);
     }
@@ -59,7 +61,10 @@ class MassDelete extends Action implements HttpPostActionInterface
             );
         } catch (\Exception $e) {
             $this->messageManager->addErrorMessage(
-                __('An error occurred while deleting conversations: %1', $e->getMessage())
+                __(
+                    'The conversations could not be deleted. Reference: %1',
+                    $this->errorReporter->log('Conversations MassDelete', $e)
+                )
             );
         }
 

@@ -13,6 +13,8 @@ final class FakePermissionChecker extends PermissionChecker
     /** @var array<string, bool> */
     private array $decisions = [];
 
+    private array $explicitGrants = [];
+
     public function __construct()
     {
     }
@@ -27,5 +29,21 @@ final class FakePermissionChecker extends PermissionChecker
     public function isAllowed(int $adminUserId, string $skillName, string $action = 'read'): bool
     {
         return $this->decisions[$skillName . ':' . $action] ?? false;
+    }
+
+    /**
+     * An explicit per-user row, as the real checker reads it from mago_skill_permission; kept apart
+     * from withDecision() because isAllowed() also answers yes through the module-wide fallback.
+     */
+    public function withExplicitGrant(string $skillName, string $action): self
+    {
+        $this->explicitGrants[$skillName . ':' . $action] = true;
+
+        return $this;
+    }
+
+    public function isExplicitlyAllowed(int $adminUserId, string $skillName, string $action = 'read'): bool
+    {
+        return $this->explicitGrants[$skillName . ':' . $action] ?? false;
     }
 }

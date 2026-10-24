@@ -10,6 +10,7 @@ use Magento\UrlRewrite\Model\ResourceModel\UrlRewriteCollectionFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class SearchAction implements ActionInterface
 {
@@ -50,7 +51,7 @@ class SearchAction implements ActionInterface
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results to return (default: 20)',
+                'description' => 'Number of results to return (default: 20, max: ' . ResultLimit::MAX . ')',
             ],
         ];
     }
@@ -98,7 +99,7 @@ class SearchAction implements ActionInterface
             return ['error' => 'At least one filter parameter is required (request_path, target_path, entity_type, or store_id)'];
         }
 
-        $limit = (int)($params['limit'] ?? 20);
+        $limit = ResultLimit::fromParams($params, 20);
         $collection = $this->collectionFactory->create();
 
         if ($requestPath) {

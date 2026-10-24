@@ -61,6 +61,47 @@ test.describe('Backend integration', () => {
     expect(await storefront.text()).toContain('Created through the mocked provider.');
   });
 
+  /**
+   * A double submit, or the panel and the REST API at once, used to run the same write twice: both
+   * requests read the pending flag before either cleared it. Two confirms fired together must
+   * leave one running the write and the other told it was already handled.
+   */
+  test('Runs the write once when the same confirmation arrives twice at once', async ({page, request}) => {
+    await chatPanel.openOnDashboard(page);
+    await chatPanel.ask(page, 'Please run the E2E WireMock check and create the CMS page for it.');
+    await expect(chatPanel.confirmButton(page)).toBeVisible({timeout: PROVIDER_ROUND_TRIP_TIMEOUT});
+
+    const responses = await page.evaluate(async () => {
+      const config = (window as any).MAGO_CONFIG;
+      const post = (url: string, body: Record<string, unknown>) => fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+        body: JSON.stringify({...body, form_key: config.formKey}),
+        credentials: 'same-origin',
+      });
+
+      let messageId = 0;
+      for (let attempt = 0; attempt < 20 && !messageId; attempt++) {
+        const conversationId = parseInt(sessionStorage.getItem('mago_conv') ?? '0', 10);
+        const status = conversationId ? await (await post(config.statusUrl, {conversation_id: conversationId})).json() : {};
+        messageId = status.message_id ?? 0;
+        if (!messageId) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+
+      const confirm = async () => (await post(config.confirmUrl, {message_id: messageId})).text();
+      return Promise.all([confirm(), confirm()]);
+    });
+
+    const refused = responses.filter((body) => body.includes('already been handled'));
+    const ran = responses.filter((body) => body.includes('event: tool_status'));
+
+    expect(refused, 'exactly one confirm must be refused').toHaveLength(1);
+    expect(ran, 'exactly one confirm must run the write').toHaveLength(1);
+    expect(await magentoApi.findCmsPage(request, IDENTIFIER)).not.toBeNull();
+  });
+
   test('Makes no database change when the admin rejects', async ({page, request}) => {
     await chatPanel.openOnDashboard(page);
     await chatPanel.ask(page, 'Please run the E2E WireMock check and create the CMS page for it.');

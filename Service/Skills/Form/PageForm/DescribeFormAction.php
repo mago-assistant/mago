@@ -48,6 +48,11 @@ class DescribeFormAction extends AbstractPageFormReadAction
             return $this->noFormOpenResult();
         }
 
+        $accessRefusal = $this->findPageAccessRefusal($pageContext);
+        if ($accessRefusal !== null) {
+            return $accessRefusal;
+        }
+
         $filter = mb_strtolower(trim((string)($params['filter'] ?? '')));
         $fields = $this->filterFields($pageContext, $filter);
 
@@ -64,16 +69,24 @@ class DescribeFormAction extends AbstractPageFormReadAction
     }
 
     /**
+     * The fields the form shows, narrowed by the filter. A hidden field (a record id or a value
+     * carried along) is never offered: write_fields refuses it, so listing it would only invite a
+     * write the administrator could not check.
+     *
      * @return array<int,array<string,mixed>>
      */
     private function filterFields(PageContext $pageContext, string $filter): array
     {
+        $visibleFields = array_values(array_filter(
+            $pageContext->fields,
+            static fn (array $field): bool => !($field['hidden'] ?? false)
+        ));
         if ($filter === '') {
-            return $pageContext->fields;
+            return $visibleFields;
         }
 
         return array_values(array_filter(
-            $pageContext->fields,
+            $visibleFields,
             fn (array $field): bool => str_contains(mb_strtolower((string)$field['path']), $filter)
                 || str_contains(mb_strtolower((string)$field['label']), $filter)
         ));

@@ -23,6 +23,7 @@
             </storageConfig>
             <updateUrl path="mui/index/render"/>
         </settings>
+        <aclResource>MagoAssistant_Mago::skills_read</aclResource>
         <dataProvider class="MagoAssistant\Mago\Ui\DataProvider\SkillsDataProvider" name="mago_skills_listing_data_source">
             <settings>
                 <requestFieldName>name</requestFieldName>

@@ -26,6 +26,7 @@ if (!$conversation) {
     .mago-conv-messages > li { padding: 20px 24px; border-bottom: 1px solid #e8e8e8; }
     .mago-conv-messages > li:last-child { border-bottom: none; }
     .mago-conv-msg--user { background: #f0f1f3; }
+    .mago-conv-msg--user .mago-conv-body { white-space: pre-wrap; }
     .mago-conv-msg--assistant { background: #fafafa; padding-left: 39px !important; }
     .mago-conv-role-icon { display: inline-flex; vertical-align: -3px; color: #333; margin-right: 5px; }
     .mago-conv-body-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
@@ -112,6 +113,13 @@ if (!$conversation) {
                             <th><?= $escaper->escapeHtml(__('Tokens')) ?></th>
                             <td><?= /* @noEscape */ number_format((int)($usage['total_tokens'] ?? 0)) ?> <span style="color:#999;font-size:11px">(<?= /* @noEscape */ number_format((int)($usage['input_tokens'] ?? 0)) ?> in / <?= /* @noEscape */ number_format((int)($usage['output_tokens'] ?? 0)) ?> out)</span></td>
                         </tr>
+                        <?php $cacheShare = $block->getCacheShare(); ?>
+                        <?php if ($cacheShare !== ''): ?>
+                        <tr>
+                            <th><?= $escaper->escapeHtml(__('Cached')) ?></th>
+                            <td><?= $escaper->escapeHtml($cacheShare) ?> <span style="color:#999;font-size:11px">(<?= /* @noEscape */ number_format((int)$usage['cache_read_tokens']) ?> <?= $escaper->escapeHtml(__('of input tokens')) ?>)</span></td>
+                        </tr>
+                        <?php endif; ?>
                         <tr>
                             <th><?= $escaper->escapeHtml(__('Est. Cost')) ?></th>
                             <td><?= $escaper->escapeHtml($block->getEstimatedCost()) ?></td>
@@ -242,24 +250,16 @@ if (!$conversation) {
 </div>
 
 <script>
-require(['marked'], function(marked) {
-    var Renderer = marked.Renderer;
-    var r = new Renderer();
-    r.link = function(href, title, text) {
-        if (typeof href === 'object' && href !== null) { text = href.text; title = href.title; href = href.href; }
-        var isAdmin = href && (href.indexOf('/admin') !== -1 || href.charAt(0) === '/');
-        var target = isAdmin ? '_self' : '_blank';
-        return '<a href="' + href + '" target="' + target + '" rel="noopener">' + text + '</a>';
-    };
-    r.table = function(token) {
-        var html = Renderer.prototype.table.call(this, token);
-        return '<div class="mago-table-wrap">' + html + '</div>';
-    };
-    marked.use({ renderer: r, gfm: true, breaks: true });
+require(['MagoAssistant_Mago/js/markdown'], function(markdown) {
+    var renderer = markdown.create({
+        adminPath: '<?= $escaper->escapeJs($block->getAdminPath()) ?>',
+        tableLabel: '<?= $escaper->escapeJs(__('Table')) ?>'
+    });
 
-    // Re-render all assistant bodies with marked.js
+    // Re-render all assistant bodies the same way the chat panel does: sanitized, links and
+    // images held to the panel's rules, because a stored answer is model output too.
     document.querySelectorAll('.mago-conv-body[data-md]').forEach(function(el) {
-        el.innerHTML = marked.parse(el.getAttribute('data-md'));
+        el.innerHTML = renderer.renderText(el.getAttribute('data-md'));
     });
 
     // Raw / Rendered toggle
@@ -277,7 +277,7 @@ require(['marked'], function(marked) {
                         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                     el.innerHTML = '<pre class="mago-conv-raw-pre">' + raw + '</pre>';
                 } else {
-                    el.innerHTML = el.dataset.rendered || marked.parse(el.getAttribute('data-md'));
+                    el.innerHTML = el.dataset.rendered || renderer.renderText(el.getAttribute('data-md'));
                 }
             });
         });
@@ -307,13 +307,14 @@ if (!empty($apiCalls)):
             </thead>
             <tbody>
             <?php foreach ($apiCalls as $idx => $call): ?>
+                <?php $callCacheShare = $block->formatCallCacheShare($call); ?>
                 <tr>
                     <td style="padding:8px 15px;font-size:12px;"><?= /* @noEscape */ (int)($idx + 1) ?></td>
                     <td style="padding:8px 15px;font-size:12px;"><?= $escaper->escapeHtml($block->formatDateTime($call['created_at'])) ?></td>
                     <td style="padding:8px 15px;font-size:12px;"><?= $escaper->escapeHtml($call['model'] ?? '') ?></td>
                     <td style="padding:8px 15px;font-size:12px;">
                         <?= /* @noEscape */ number_format((int)($call['total_tokens'] ?? 0)) ?>
-                        <span style="color:#999;font-size:10px;">(<?= /* @noEscape */ number_format((int)($call['input_tokens'] ?? 0)) ?>in/<?= /* @noEscape */ number_format((int)($call['output_tokens'] ?? 0)) ?>out)</span>
+                        <span style="color:#999;font-size:10px;">(<?= /* @noEscape */ number_format((int)($call['input_tokens'] ?? 0)) ?>in/<?= /* @noEscape */ number_format((int)($call['output_tokens'] ?? 0)) ?>out<?php if ($callCacheShare !== ''): ?>, <?= $escaper->escapeHtml($callCacheShare) ?> <?= $escaper->escapeHtml(__('cached')) ?><?php endif; ?>)</span>
                     </td>
                     <td style="padding:8px 15px;font-size:12px;">
                         <?php if (!empty($call['skill_names'])): ?>
@@ -327,8 +328,8 @@ if (!empty($apiCalls)):
                             <button type="button" class="mago-conv-tool-toggle" onclick="magoOpenPayloadModal(<?= (int)$call['entity_id'] ?>)">
                                 <?= $escaper->escapeHtml(__('View')) ?>
                             </button>
-                            <script type="text/json" id="mago-payload-req-<?= (int)$call['entity_id'] ?>"><?= /* @noEscape */ $block->formatJson($call['request_payload'] ?? '') ?></script>
-                            <script type="text/json" id="mago-payload-res-<?= (int)$call['entity_id'] ?>"><?= /* @noEscape */ $block->formatJson($call['response_payload'] ?? '') ?></script>
+                            <script type="text/json" id="mago-payload-req-<?= (int)$call['entity_id'] ?>"><?= /* @noEscape */ $block->formatJsonForScript($call['request_payload'] ?? '') ?></script>
+                            <script type="text/json" id="mago-payload-res-<?= (int)$call['entity_id'] ?>"><?= /* @noEscape */ $block->formatJsonForScript($call['response_payload'] ?? '') ?></script>
                         <?php else: ?>
                             <span style="color:#ccc;font-size:11px;"><?= $escaper->escapeHtml(__('Not recorded')) ?></span>
                         <?php endif; ?>
@@ -368,9 +369,21 @@ require(['jquery', 'Magento_Ui/js/modal/modal'], function($, modal) {
     var $el = $('#mago-payload-modal');
     modal(opts, $el);
 
+    var readable = function(text) {
+        if (!text) {
+            return '';
+        }
+        try {
+            var value = JSON.parse(text);
+            return typeof value === 'string' ? value : JSON.stringify(value, null, 4);
+        } catch (e) {
+            return text;
+        }
+    };
+
     window.magoOpenPayloadModal = function(id) {
-        var req = $('#mago-payload-req-' + id).text();
-        var res = $('#mago-payload-res-' + id).text();
+        var req = readable($('#mago-payload-req-' + id).text());
+        var res = readable($('#mago-payload-res-' + id).text());
         $('#mago-payload-modal-req').text(req || 'Not recorded');
         $('#mago-payload-modal-res').text(res || 'Not recorded');
         $el.modal('openModal');

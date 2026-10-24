@@ -8,7 +8,6 @@
             <api>
                 <max_tokens>4096</max_tokens>
                 <streaming>1</streaming>
-                <internal_ssl_verify>1</internal_ssl_verify>
             </api>
             <chat>
                 <system_prompt><![CDATA[]]></system_prompt>
@@ -18,13 +17,24 @@
                 <accent_color>#F26322</accent_color>
                 <text_color>#FFFFFF</text_color>
             </chat>
+            <voice>
+                <enabled>0</enabled>
+            </voice>
             <tools>
                 <max_response_tokens>4000</max_response_tokens>
+                <allow_reindex>0</allow_reindex>
+                <customer_notification_interval>60</customer_notification_interval>
             </tools>
+            <privacy>
+                <history_retention_days>90</history_retention_days>
+            </privacy>
             <debug>
                 <debug>0</debug>
                 <payload_retention_days>30</payload_retention_days>
             </debug>
+            <addons>
+                <enabled>0</enabled>
+            </addons>
             <docs>
                 <enabled>0</enabled>
                 <source_repo>mage-os/mirror-commerce-admin.en</source_repo>

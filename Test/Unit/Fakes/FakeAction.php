@@ -11,6 +11,9 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 final class FakeAction implements ActionInterface
 {
+    /** @var array<string, mixed>|null The params of the last execute(), null while it never ran */
+    private ?array $executedParams = null;
+
     /**
      * @param array<string, array<string, mixed>> $parameterSchema
      * @param array<string, mixed>|null $result What execute() answers; null for the default echo
@@ -23,7 +26,8 @@ final class FakeAction implements ActionInterface
         private readonly array $parameterSchema = [],
         private readonly string $instructions = '',
         private readonly ?array $result = null,
-        private readonly ?array $fieldClassification = null
+        private readonly ?array $fieldClassification = null,
+        private readonly ?string $aclResource = null
     ) {
     }
 
@@ -44,7 +48,7 @@ final class FakeAction implements ActionInterface
 
     public function getAclResource(): ?string
     {
-        return null;
+        return $this->aclResource;
     }
 
     public function isReadOnly(): bool
@@ -54,7 +58,17 @@ final class FakeAction implements ActionInterface
 
     public function execute(array $params, int $adminUserId): array
     {
+        $this->executedParams = $params;
+
         return $this->result ?? ['executed' => $this->name, 'admin_user_id' => $adminUserId];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function executedParams(): ?array
+    {
+        return $this->executedParams;
     }
 
     public function getInstructions(): string

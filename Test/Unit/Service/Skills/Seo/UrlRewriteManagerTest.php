@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Seo;
 use MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeIrreversibleAction;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -53,6 +54,85 @@ class UrlRewriteManagerTest extends TestCase
 
         self::assertFalse($manager->isIrreversibleAction($input));
         self::assertSame([], $manager->getImpacts($input, self::ADMIN_USER_ID));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function internalTargets(): array
+    {
+        return [
+            'relative system path' => ['catalog/product/view/id/5'],
+            'relative url key' => ['new-url.html'],
+            'nested url key' => ['women/tops/shirt.html'],
+            'leading slash' => ['/new-url.html'],
+            'store root' => ['/'],
+            'query string' => ['search?q=shoes'],
+            'colon after the first segment' => ['blog/post:2024'],
+            'colon in the query string' => ['search?time=10:30'],
+            'absolute url as a later segment' => ['go/https://evil.example'],
+        ];
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function externalTargets(): array
+    {
+        return [
+            'https url' => ['https://evil.example/x'],
+            'https without slashes' => ['https:evil.example'],
+            'http with a single slash' => ['http:/evil.example'],
+            'uppercase scheme' => ['HTTPS://evil.example'],
+            'mixed case scheme' => ['HtTp://evil.example'],
+            'protocol relative' => ['//evil.example'],
+            'slash backslash' => ['/\\evil.example'],
+            'double backslash' => ['\\\\evil.example'],
+            'leading space' => [' https://evil.example'],
+            'leading tab' => ["\thttps://evil.example"],
+            'leading newline' => ["\nhttps://evil.example"],
+            'leading null byte' => ["\0https://evil.example"],
+            'javascript scheme' => ['javascript:alert(1)'],
+            'data scheme' => ['data:text/html,hi'],
+            'other scheme' => ['ftp://evil.example'],
+            'triple slash' => ['///evil.example'],
+            'backslash later in the path' => ['foo\\..\\evil'],
+            'whitespace only' => ['   '],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('internalTargets')]
+    public function anInternalTargetDoesNotWarn(string $target): void
+    {
+        $manager = $this->manager();
+        $input = ['action' => 'create', 'request_path' => 'old.html', 'target_path' => $target];
+
+        $isIrreversible = $manager->isIrreversibleAction($input);
+
+        self::assertFalse($isIrreversible);
+        self::assertSame([], $manager->getImpacts($input, self::ADMIN_USER_ID));
+    }
+
+    #[Test]
+    #[DataProvider('externalTargets')]
+    public function anyTargetThatIsNotAPlainInternalPathWarns(string $target): void
+    {
+        $manager = $this->manager();
+        $input = ['action' => 'create', 'request_path' => 'old.html', 'target_path' => $target];
+
+        $isIrreversible = $manager->isIrreversibleAction($input);
+
+        self::assertTrue($isIrreversible);
+        self::assertNotSame([], $manager->getImpacts($input, self::ADMIN_USER_ID));
+    }
+
+    #[Test]
+    public function anEmptyTargetDoesNotWarn(): void
+    {
+        $isIrreversible = $this->manager()->isIrreversibleAction(['action' => 'create', 'target_path' => '']);
+
+        self::assertFalse($isIrreversible);
     }
 
     #[Test]

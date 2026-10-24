@@ -11,10 +11,14 @@ use Magento\Backend\Block\Template\Context;
 use Magento\Backend\Model\Auth\Session as AdminSession;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
+use MagoAssistant\Mago\Api\Tool\PresentableToolInterface;
+use MagoAssistant\Mago\Model\Voice\PanelConfig as VoicePanelConfig;
 use MagoAssistant\Mago\Service\Command\CommandRegistry;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
+use MagoAssistant\Mago\Service\Url\AdminPath;
+use MagoAssistant\Mago\Service\Welcome\ExampleQuestions;
 
 class ChatPanel extends Template
 {
@@ -56,6 +60,9 @@ class ChatPanel extends Template
         private readonly CommandRegistry $commandRegistry,
         private readonly CommandRunner $commandRunner,
         private readonly FormPolicy $formPolicy,
+        private readonly ExampleQuestions $exampleQuestions,
+        private readonly VoicePanelConfig $voicePanelConfig,
+        private readonly AdminPath $adminPath,
         array $data = []
     ) {
         parent::__construct($context, $data);
@@ -82,15 +89,20 @@ class ChatPanel extends Template
 
     public function getJsConfig(): string
     {
-        return (string)$this->json->serialize([
+        return (string)$this->json->serialize(array_merge([
             'streamUrl' => $this->getUrl('mago/chat/stream'),
             'historyUrl' => $this->getUrl('mago/chat/history'),
             'loadUrl' => $this->getUrl('mago/chat/load'),
             'deleteUrl' => $this->getUrl('mago/chat/delete'),
             'confirmUrl' => $this->getUrl('mago/chat/confirm'),
             'rejectUrl' => $this->getUrl('mago/chat/reject'),
+            'addonsUrl' => $this->configRepository->isAddonFeedEnabled()
+                ? $this->getUrl('mago/chat/addons')
+                : '',
+            'flagUrl' => $this->getUrl('mago/chat/flag'),
             'statusUrl' => $this->getUrl('mago/chat/status'),
             'apiBaseUrl' => $this->getUrl('rest/V1/assistant'),
+            'adminPath' => $this->adminPath->get(),
             'isStreamingEnabled' => $this->configRepository->isStreamingEnabled(),
             'formFieldCap' => self::FORM_FIELD_CAP,
             'formValueLengthCap' => self::FORM_VALUE_LENGTH_CAP,
@@ -99,7 +111,7 @@ class ChatPanel extends Template
             'formDenyNamespaces' => $this->formPolicy->getDeniedNamespacePatterns(),
             'formDenyRoutes' => $this->formPolicy->getDeniedRoutePatterns(),
             'i18n' => $this->getPanelTranslations(),
-        ]);
+        ], $this->voicePanelConfig->getJsConfig()));
     }
 
     /**
@@ -129,8 +141,8 @@ class ChatPanel extends Template
             'You will leave this page.',
             'Unsaved edits on %1 will be lost.',
             'Nothing is saved until you click Save on the page.',
-            '...and %1 more field.',
-            '...and %1 more fields.',
+            'Show full value',
+            'Show all arguments',
             '(hidden)',
             'Staged %1 of %2 %3. Not saved yet: click Save on the page to keep %4.',
             'this change',
@@ -142,8 +154,48 @@ class ChatPanel extends Template
             'Opening %1...',
             'Waiting for the form on %1...',
             'Action rejected. No changes were made.',
+            'This writes values that were masked for privacy: personal or customer data, such as a name, an email address or an order number. Check them before you allow it.',
+            'I understand what this changes',
+            'I understand what these change',
+            'I understand what these change, and that some cannot be undone',
+            'Check these before you run them, and run only what you asked for yourself:',
             'CMS page',
             'CMS block',
+            'Delete conversation: %1',
+            '%1 suggestions. Use up and down to choose, Enter to insert.',
+            '1 suggestion. Press Enter to insert.',
+            'Table',
+            '%1 replied: %2',
+            'Waiting for your confirmation.',
+            '%1 is working…',
+            'New available add-ons',
+            'All add-ons',
+            'Rate this answer',
+            'Good answer',
+            'Bad answer',
+            'What was wrong with this answer? (optional)',
+            'What was helpful about this answer? (optional)',
+            'It said the order was shipped, but it was not',
+            'It found the right orders straight away',
+            'Send',
+            'Wrong information',
+            'Did not do what I asked',
+            'Missing something',
+            'Thanks for your feedback.',
+            'This feedback was already resolved, so the note was not added.',
+            'Feedback removed.',
+            'Could not save your feedback.',
+            'This feedback can only be removed under Answer Feedback.',
+            'Speak your message',
+            'Stop listening',
+            'Voice input',
+            'Speech is turned into text by your browser\'s own speech service (for example Google for Chrome). The audio goes to that vendor, not to %1 or the AI provider, and %1 has no control over how it is handled there. Only the resulting text reaches the assistant, and it is treated exactly like typed text.',
+            'Avoid speaking customer details aloud.',
+            'I understand, turn on the microphone',
+            'Not now',
+            'Microphone access was denied. Allow it in the browser to use voice input.',
+            'Speech recognition stopped (%1). Press the microphone to try again.',
+            'Could not start the microphone. Please try again.',
         ];
 
         return array_combine($sentences, array_map(static fn (string $sentence): string => (string)__($sentence), $sentences));
@@ -168,9 +220,14 @@ class ChatPanel extends Template
         $adminUserId = $this->getAdminUserId();
         $skills = [];
         foreach ($this->toolRegistry->getEnabledTools($adminUserId) as $tool) {
+            if (!$this->toolRegistry->isGranted($tool, $adminUserId)) {
+                continue;
+            }
             $definition = $this->toolRegistry->getToolDefinition($tool, $adminUserId);
             $skills[] = [
                 'name' => $definition['name'],
+                // The panel's card title; without one it derives a title from the name
+                'title' => $tool instanceof PresentableToolInterface ? $tool->getDisplayName() : null,
                 'description' => $definition['description'],
                 'readOnly' => $tool->isReadOnly() || !$this->toolRegistry->hasWriteAccess($tool, $adminUserId),
             ];
@@ -205,6 +262,14 @@ class ChatPanel extends Template
             ];
         }
         return (string)$this->json->serialize($commands);
+    }
+
+    /**
+     * @return list<array{question: string, icon: string}>
+     */
+    public function getExampleQuestions(): array
+    {
+        return $this->exampleQuestions->getForAdmin($this->getAdminUserId());
     }
 
     private function getAdminUserId(): ?int

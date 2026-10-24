@@ -60,6 +60,8 @@
             "input_tokens": true,
             "output_tokens": true,
             "total_tokens": true,
+            "cache_read_tokens": true,
+            "cache_write_tokens": true,
             "skill_names": true,
             "request_payload": true,
             "response_payload": true,
@@ -112,6 +114,36 @@
         },
         "index": {
             "MAGO_PII_TOKEN_CONVERSATION_ID": true
+        }
+    },
+    "mago_flag": {
+        "column": {
+            "admin_user_id": true,
+            "answer_preview": true,
+            "conversation_id": true,
+            "created_at": true,
+            "entity_id": true,
+            "message_id": true,
+            "model": true,
+            "note": true,
+            "rating": true,
+            "skills": true,
+            "snapshot": true,
+            "status": true,
+            "updated_at": true
+        },
+        "constraint": {
+            "MAGO_FLAG_CONV_ID": true,
+            "MAGO_FLAG_MESSAGE_ID_UNIQUE": true,
+            "MAGO_FLAG_MSG_ID": true,
+            "PRIMARY": true
+        },
+        "index": {
+            "MAGO_FLAG_ADMIN_USER_ID": true,
+            "MAGO_FLAG_CREATED_AT": true,
+            "MAGO_FLAG_FULLTEXT": true,
+            "MAGO_FLAG_RATING": true,
+            "MAGO_FLAG_STATUS": true
         }
     }
 }

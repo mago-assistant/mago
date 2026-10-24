@@ -1,0 +1,16 @@
+data: {"id":"chatcmpl-e2e-order-1","object":"chat.completion.chunk","created":1754000040,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-order-1","object":"chat.completion.chunk","created":1754000040,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"I will add "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-order-1","object":"chat.completion.chunk","created":1754000040,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"that note to the order."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-order-1","object":"chat.completion.chunk","created":1754000040,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_e2e_order_1","type":"function","function":{"name":"order_manager","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-order-1","object":"chat.completion.chunk","created":1754000040,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"action\":\"add_comment\",\"order_number\":\"000000001\","}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-order-1","object":"chat.completion.chunk","created":1754000040,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"comment\":\"E2E in-process order note\",\"notify_customer\":false}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-order-1","object":"chat.completion.chunk","created":1754000040,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1250,"completion_tokens":48,"total_tokens":1298}}
+
+data: [DONE]
+

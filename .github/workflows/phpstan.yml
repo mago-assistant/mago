@@ -14,29 +14,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - PHP_VERSION: php85-fpm
-            MAGENTO_VERSION: 2.4.9
+          - IMAGE_TAG: php83-fpm-magento2.4.8
+          - IMAGE_TAG: latest
 
-    name: Magento ${{ matrix.MAGENTO_VERSION }} - ${{ matrix.PHP_VERSION }}
+    name: Magento ${{ matrix.IMAGE_TAG }}
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Start Magento container
-        run: docker run --detach --name magento ghcr.io/controlaltdelete-nl/magento2-in-a-box/magento-project-community-edition:${{ matrix.PHP_VERSION }}-magento${{ matrix.MAGENTO_VERSION }}
+        run: docker run --detach --name magento ghcr.io/controlaltdelete-nl/magento2-in-a-box/magento-project-community-edition:${{ matrix.IMAGE_TAG }}
 
       - name: Install AI base module
         run: |
-          docker exec magento composer config repositories.mage-os-ai-base vcs https://github.com/mage-os-lab/module-ai-base
-          docker exec magento ./retry "composer require --no-update mage-os/module-ai-base:'dev-main as 1.0.0'"
-          docker exec magento ./retry "composer require --no-update symfony/ai-lm-studio-platform"
+          docker exec magento ./retry "composer require --no-update mage-os/module-ai-base:'^1.0'"
+          docker exec magento ./retry "composer require --no-update symfony/ai-lm-studio-platform:'*'"
 
       - name: Upload module into container
         run: |
           sed -i '/version/d' ./composer.json
           docker cp $(pwd) magento:/data/extensions/
-          docker exec magento ./install-composer-package mago-assistant/mago:@dev
+          docker exec magento ./install-composer-package mago-assistant/magento2-mago:@dev
 
       - name: Activate extension
         run: |

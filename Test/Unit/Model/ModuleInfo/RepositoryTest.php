@@ -37,9 +37,9 @@ class RepositoryTest extends TestCase
     public function itPrefersComposerOverAStaleVersionFieldInTheModuleComposerJson(): void
     {
         $repository = $this->repository(
-            (new FakePackageInfo())->withModule('MagoAssistant_Mago', 'mago-assistant/mago', '1.0.0'),
+            (new FakePackageInfo())->withModule('MagoAssistant_Mago', 'mago-assistant/magento2-mago', '1.0.0'),
             (new FakeModuleDeclarationLoader())->withModule('MagoAssistant_Mago'),
-            (new FakeInstalledPackages())->withPackage('mago-assistant/mago', '1.1.0')
+            (new FakeInstalledPackages())->withPackage('mago-assistant/magento2-mago', '1.1.0')
         );
 
         self::assertSame(

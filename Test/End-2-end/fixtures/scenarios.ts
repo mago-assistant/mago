@@ -288,3 +288,291 @@ export const formApplyNotAnObject: ChatScenario = {
         },
     ],
 }
+
+/* The panel escapes the answer's HTML before a ```mago block is parsed, but JSON's own \u003c escapes
+   survive that and decode to markup inside the spec: this is how a model smuggles HTML to a builder. */
+export const widgetAnswerWithUnicodeEscapedMarkup = (widgets: unknown): ChatScenario =>
+    widgetAnswerJson(JSON.stringify(widgets).replace(/</g, '\\u003c').replace(/>/g, '\\u003e'));
+
+export const widgetAnswer = (widgets: unknown): ChatScenario => widgetAnswerJson(JSON.stringify(widgets));
+
+const widgetAnswerJson = (json: string): ChatScenario => ({
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        { event: 'text', data: { text: 'Here you go.\n\n```mago\n' + json + '\n```\n' } },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: false },
+        },
+    ],
+})
+
+/* One answer of plain markdown, the way a prompt-injected model would write it. */
+export const markdownAnswer = (markdown: string): ChatScenario => ({
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        { event: 'text', data: { text: markdown } },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: false },
+        },
+    ],
+})
+
+/* An answer whose privacy tokens arrive the way the server sends them: intact in the text, with
+   the value behind each one beside it, for the panel to put in as text. A token split across two
+   deltas never happens (the server holds a partial one back), so each delta carries whole ones. */
+export const vaultAnswer = (deltas: string[], tokens: Record<string, string>): ChatScenario => ({
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        ...deltas.map((text) => ({ event: 'text', data: { text, tokens } })),
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: false },
+        },
+    ],
+})
+
+/* stageFieldChange, with a field value of the caller's choosing. */
+export const stageFieldValue = (value: string): ChatScenario => {
+    const input = {
+        action: 'write_fields',
+        form_namespace: 'product_form',
+        entity_id: '42',
+        store_id: '',
+        changes: [{ path: 'data.product.name', value }],
+    };
+
+    return {
+        ...stageFieldChange,
+        stream: [
+            { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+            ...textDeltas('I will update the product name for you. '),
+            { event: 'tool_call', data: { id: 'toolu_write_fields_1', name: 'page_form', input } },
+            {
+                event: 'confirm',
+                data: {
+                    tools: [{
+                        name: 'page_form',
+                        description: 'Read and write the admin form currently open in the browser',
+                        input,
+                    }],
+                },
+            },
+            {
+                event: 'done',
+                data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+            },
+        ],
+    };
+}
+
+/* Two writes in one turn: a config value the summary line used to leave out entirely, and CMS
+   content whose markup only starts after the first forty characters the summary showed. */
+export const BATCH_CONFIG_VALUE = 'https://batch-e2e.example.com/';
+export const BATCH_CMS_CONTENT = '<p>Spring collection is here, come and see it.</p><script>document.title="owned"</script>';
+
+const batchConfigCall = {
+    id: 'toolu_config_1',
+    name: 'config_writer',
+    input: { action: 'set', path: 'web/unsecure/base_link_url', scope: 'default', scope_id: 0, value: BATCH_CONFIG_VALUE },
+};
+const batchCmsCall = {
+    id: 'toolu_cms_2',
+    name: 'cms_data',
+    input: { action: 'update_page', identifier: 'home', content: BATCH_CMS_CONTENT },
+};
+
+export const batchWrites: ChatScenario = {
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        ...textDeltas('I will update the base link and the home page. '),
+        { event: 'tool_call', data: batchConfigCall },
+        { event: 'tool_call', data: batchCmsCall },
+        {
+            event: 'confirm',
+            data: {
+                tools: [
+                    { ...batchConfigCall, description: 'Write store configuration' },
+                    { ...batchCmsCall, description: 'Manage CMS pages and blocks' },
+                ],
+            },
+        },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+        },
+    ],
+    status: { message_id: MESSAGE_ID },
+    confirm: [
+        ...textDeltas('Updated the home page.'),
+        { event: 'done', data: { conversation_id: CONVERSATION_ID } },
+    ],
+    reject: { success: true },
+}
+
+const cancelOrderCall = {
+    id: 'toolu_cancel_1',
+    name: 'order_manager',
+    input: { action: 'cancel', order_number: '000000100' },
+};
+
+/* One write that cannot be undone: the card asks for a ticked acknowledgement before it runs. */
+export const irreversibleWrite: ChatScenario = {
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        ...textDeltas('I will cancel order 000000100. '),
+        { event: 'tool_call', data: cancelOrderCall },
+        {
+            event: 'confirm',
+            data: {
+                tools: [{
+                    ...cancelOrderCall,
+                    description: 'Manage orders',
+                    irreversible: true,
+                    impacts: ['Order #000000100 is canceled and cannot be reopened.'],
+                }],
+            },
+        },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+        },
+    ],
+    status: { message_id: MESSAGE_ID },
+    confirm: [
+        ...textDeltas('Order 000000100 is canceled.'),
+        { event: 'done', data: { conversation_id: CONVERSATION_ID } },
+    ],
+    reject: { success: true },
+}
+
+export const CHAINED_MESSAGE_ID = MESSAGE_ID + 1;
+
+/* A reversible write whose follow-up turn proposes a write that cannot be undone. */
+export const chainedIrreversibleWrite: ChatScenario = {
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        ...textDeltas('I will update the home page first. '),
+        { event: 'tool_call', data: batchCmsCall },
+        { event: 'confirm', data: { tools: [{ ...batchCmsCall, description: 'Manage CMS pages and blocks' }] } },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+        },
+    ],
+    status: { message_id: MESSAGE_ID },
+    confirm: [
+        ...textDeltas('The home page is updated. Next I will cancel order 000000100. '),
+        { event: 'tool_call', data: cancelOrderCall },
+        {
+            event: 'confirm',
+            data: {
+                tools: [{
+                    ...cancelOrderCall,
+                    description: 'Manage orders',
+                    irreversible: true,
+                    impacts: ['Order #000000100 is canceled and cannot be reopened.'],
+                }],
+            },
+        },
+        {
+            event: 'done',
+            data: { message_id: CHAINED_MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+        },
+    ],
+    reject: { success: true },
+}
+
+/* A batch where the config write carries a caution and the CMS write does not. */
+export const batchWritesWithCaution: ChatScenario = {
+    ...batchWrites,
+    stream: batchWrites.stream.map((event) => event.event !== 'confirm' ? event : {
+        event: 'confirm',
+        data: {
+            tools: [
+                {
+                    ...batchConfigCall,
+                    description: 'Write store configuration',
+                    caution: true,
+                    impacts: ['Changes the address of every storefront link.'],
+                },
+                { ...batchCmsCall, description: 'Manage CMS pages and blocks' },
+            ],
+        },
+    }),
+}
+
+/* A form write with more fields than the card used to list, one of them longer than its fold. */
+export const LONG_FIELD_VALUE = 'A long description that keeps going well past the point where the card folds it, '
+    + 'and ends with <b>markup</b> the admin must still be able to read in full.';
+
+const manyFieldChanges = [
+    ...Array.from({ length: 11 }, (_, i) => ({ path: 'data.product.custom_field_' + (i + 1), value: 'Value ' + (i + 1) })),
+    { path: 'data.product.description', value: LONG_FIELD_VALUE },
+];
+
+const stageManyFieldsInput = {
+    action: 'write_fields',
+    form_namespace: 'product_form',
+    entity_id: '42',
+    store_id: '',
+    changes: manyFieldChanges,
+};
+
+export const stageManyFieldChanges: ChatScenario = {
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        ...textDeltas('I will fill in these fields. '),
+        { event: 'tool_call', data: { id: 'toolu_write_fields_many', name: 'page_form', input: stageManyFieldsInput } },
+        {
+            event: 'confirm',
+            data: {
+                tools: [
+                    {
+                        name: 'page_form',
+                        description: 'Read and write the admin form currently open in the browser',
+                        input: stageManyFieldsInput,
+                    },
+                ],
+            },
+        },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+        },
+    ],
+    status: { message_id: MESSAGE_ID },
+    reject: { success: true },
+}
+
+/* An irreversible write proposed under an answer long enough to scroll the message list, the
+   shape a long conversation reloads into (issue #280). */
+export const invoiceOrderAfterLongAnswer: ChatScenario = {
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        { event: 'text', data: { text: Array.from({length: 40}, (_, i) => 'Order line ' + (i + 1) + '.').join('\n\n') } },
+        {
+            event: 'tool_call',
+            data: { id: 'toolu_invoice_1', name: 'order_manager', input: { action: 'create_invoice', order_number: '000000006' } },
+        },
+        {
+            event: 'confirm',
+            data: {
+                tools: [
+                    {
+                        name: 'order_manager',
+                        description: 'Manage orders',
+                        input: { action: 'create_invoice', order_number: '000000006' },
+                        irreversible: true,
+                    },
+                ],
+            },
+        },
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
+        },
+    ],
+    status: { message_id: MESSAGE_ID },
+}

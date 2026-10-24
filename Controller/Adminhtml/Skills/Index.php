@@ -14,7 +14,7 @@ use Magento\Framework\View\Result\PageFactory;
 
 class Index extends Action implements HttpGetActionInterface
 {
-    public const ADMIN_RESOURCE = 'MagoAssistant_Mago::config';
+    public const ADMIN_RESOURCE = 'MagoAssistant_Mago::skills_read';
 
     public function __construct(
         Context $context,

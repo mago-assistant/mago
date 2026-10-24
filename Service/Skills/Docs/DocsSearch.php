@@ -15,6 +15,15 @@ class DocsSearch extends AbstractSkill
         return 'docs_search';
     }
 
+    /**
+     * The assistant's own documentation holds no store data, so any logged-in admin may read it:
+     * Magento's root admin resource, which every admin holds, says exactly that.
+     */
+    public function getMagentoAcl(array $input = []): string
+    {
+        return 'Magento_Backend::admin';
+    }
+
     protected function getBaseDescription(): string
     {
         return 'Search the official Magento/Adobe Commerce admin documentation for how-to steps '

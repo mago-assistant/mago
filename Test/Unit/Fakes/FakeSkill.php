@@ -21,9 +21,15 @@ final class FakeSkill extends AbstractSkill
     public function __construct(
         private readonly string $name,
         AuthorizationInterface $authorization,
-        array $actions
+        array $actions,
+        private readonly string $magentoAcl = 'Magento_Backend::admin'
     ) {
         parent::__construct($authorization, $actions);
+    }
+
+    public function getMagentoAcl(array $input = []): string
+    {
+        return $this->magentoAcl;
     }
 
     public function getName(): string

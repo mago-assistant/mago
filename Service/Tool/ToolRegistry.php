@@ -6,7 +6,9 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Tool;
 
+use MagoAssistant\Mago\Api\Acl;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
+use MagoAssistant\Mago\Api\Tool\AvailabilityAwareToolInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
 use MagoAssistant\Mago\Service\Skills\PermissionChecker;
 
@@ -29,11 +31,15 @@ class ToolRegistry
         private readonly ?PermissionChecker $permissionChecker = null,
         array $tools = []
     ) {
-        $this->tools = $tools;
+        $this->tools = array_filter(
+            $tools,
+            static fn (ToolInterface $tool): bool => !$tool instanceof AvailabilityAwareToolInterface
+                || $tool->isAvailable()
+        );
     }
 
     /**
-     * Get all registered tools (regardless of enabled state)
+     * Get all registered tools that are available on this store (regardless of enabled state)
      *
      * @return ToolInterface[]
      */
@@ -93,7 +99,7 @@ class ToolRegistry
      * A user without write access to a mixed tool gets a definition narrowed to
      * the read-only actions: the action enum, and for action-scoped tools also
      * the description and the parameters, so denied write actions are not
-     * advertised to the model at all.
+     * advertised to the model at all. A tool without read actions is left whole.
      *
      * @param ToolInterface $tool
      * @param int|null $adminUserId
@@ -158,7 +164,9 @@ class ToolRegistry
     }
 
     /**
-     * Whether the admin user holds a write grant for the tool
+     * Whether the admin user holds a write grant for the tool. For a per-user tool only an explicit
+     * row counts, so an ungranted one is advertised with its read actions alone when it has any; a
+     * write-only one keeps its actions so the refusal can be relayed (#220).
      *
      * @param ToolInterface $tool
      * @param int|null $adminUserId
@@ -169,16 +177,57 @@ class ToolRegistry
         if ($this->permissionChecker === null) {
             return true;
         }
+        if ($this->isPerUser($tool)) {
+            return $this->permissionChecker->isExplicitlyAllowed($adminUserId ?? 0, $tool->getName(), 'write');
+        }
         return $this->permissionChecker->isAllowed($adminUserId ?? 0, $tool->getName(), 'write');
     }
 
+    /**
+     * Whether the admin has been given the tool, rather than only seeing it listed. A per-user tool
+     * stays in the model's list without a grant so the refusal can be relayed, but the slash
+     * legend and the command menu offer only what the admin can run.
+     *
+     * @param ToolInterface $tool
+     * @param int|null $adminUserId
+     * @return bool
+     */
+    public function isGranted(ToolInterface $tool, ?int $adminUserId): bool
+    {
+        if ($this->permissionChecker === null || !$this->isPerUser($tool)) {
+            return true;
+        }
+        return $this->permissionChecker->isExplicitlyAllowed(
+            $adminUserId ?? 0,
+            $tool->getName(),
+            $this->lowestAction($tool)
+        );
+    }
+
+    private function isPerUser(ToolInterface $tool): bool
+    {
+        return $tool->getMagentoAcl() === Acl::MAGO_PER_USER;
+    }
+
+    /**
+     * A tool gated per user (Acl::MAGO_PER_USER) stays in the list without a grant: ToolAccess
+     * refuses the call and the model relays that. Hidden, the model answers the question with
+     * whatever other tool comes close and presents a guess as the result.
+     */
     private function isToolAvailable(ToolInterface $tool, ?int $adminUserId): bool
     {
         if ($this->permissionChecker === null) {
             return true;
         }
-        $action = $this->supportsReadAction($tool) ? 'read' : 'write';
-        return $this->permissionChecker->isAllowed($adminUserId ?? 0, $tool->getName(), $action);
+        return $this->permissionChecker->isAllowed($adminUserId ?? 0, $tool->getName(), $this->lowestAction($tool));
+    }
+
+    /**
+     * The grant that opens the tool at all: read when it has a read action, write otherwise
+     */
+    private function lowestAction(ToolInterface $tool): string
+    {
+        return $this->supportsReadAction($tool) ? 'read' : 'write';
     }
 
     /**

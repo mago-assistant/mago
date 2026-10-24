@@ -6,16 +6,21 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CouponManager;
 
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
-use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Api\InternalApiClientInterface;
+use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Skills\Marketing\DiscountRuleCautions;
+use MagoAssistant\Mago\Service\Skills\Marketing\RuleIds;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class CreateRuleAction implements ActionInterface
+class CreateRuleAction implements CautionedActionInterface
 {
+    private const COUPON_TYPE_MANUAL = 0;
+
     public function __construct(
-        private readonly InternalApiClient $apiClient,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly InternalApiClientInterface $apiClient,
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly DiscountRuleCautions $cautions
     ) {
     }
 
@@ -36,13 +41,18 @@ class CreateRuleAction implements ActionInterface
                 'type' => 'string',
                 'description' => 'Name for the cart price rule (required)',
             ],
+            'description' => [
+                'type' => 'string',
+                'description' => 'Internal description of the rule, shown only in the admin (optional)',
+            ],
             'discount_type' => [
                 'type' => 'string',
                 'description' => 'Discount type: "percent", "fixed", or "free_shipping"',
             ],
             'discount_amount' => [
                 'type' => 'number',
-                'description' => 'Discount amount (e.g. 20 for 20% or 20 for $20 off)',
+                'description' => 'Discount amount (e.g. 20 for 20% or 20 for $20 off), 0 or greater. '
+                    . 'For "percent" this is a percentage and must be at most 100.',
             ],
             'coupon_code' => [
                 'type' => 'string',
@@ -98,6 +108,24 @@ class CreateRuleAction implements ActionInterface
             . 'If no website_ids or customer_group_ids are provided, the rule applies to all websites and customer groups.';
     }
 
+    /**
+     * A new cart rule changes what every matching order pays, and by default it reaches every cart
+     * on every website, guests included, at once and without a coupon: always worth a second look.
+     */
+    public function getCautions(array $params, int $adminUserId): array
+    {
+        return [
+            $this->describeDiscount($params),
+            ...$this->cautions->describeScope(
+                $this->chosenWebsiteIds($params),
+                $this->chosenCustomerGroupIds($params),
+                trim((string)($params['from_date'] ?? '')),
+                trim((string)($params['to_date'] ?? '')),
+                $adminUserId
+            ),
+        ];
+    }
+
     public function execute(array $params, int $adminUserId): array
     {
         $name = $params['name'] ?? '';
@@ -120,23 +148,25 @@ class CreateRuleAction implements ActionInterface
             default => 'by_percent',
         };
 
+        // A negative amount raises the grand total instead of discounting it, whatever the type.
+        if ($discountAmount < 0) {
+            return ['error' => 'discount_amount must be 0 or greater'];
+        }
+
+        // Stricter than Magento's own form, which clamps a percentage to 100 only at apply time:
+        // above 100 can only be a mistake in the call. free_shipping discards the amount.
+        if ($simpleAction === 'by_percent' && $discountType !== 'free_shipping' && $discountAmount > 100) {
+            return ['error' => 'discount_amount must be between 0 and 100 for a percentage discount'];
+        }
+
         // Determine coupon type and code
-        $couponCode = trim((string)($params['coupon_code'] ?? ''));
-        $couponType = $couponCode ? 2 : 1; // 2 = specific coupon, 1 = no coupon
+        $couponCode = $this->couponCode($params);
+        $couponType = $couponCode !== '' ? 2 : 1; // 2 = specific coupon, 1 = no coupon
 
-        // Build website IDs - default to all (excluding admin website 0)
-        $websiteIds = !empty($params['website_ids']) ? $params['website_ids'] : null;
-        if (!$websiteIds) {
-            $websiteIds = $this->getAllWebsiteIds($adminUserId);
-        }
-        $websiteIds = array_map('intval', array_values((array)$websiteIds));
-
-        // Build customer group IDs - default to all
-        $customerGroupIds = !empty($params['customer_group_ids']) ? $params['customer_group_ids'] : null;
-        if (!$customerGroupIds) {
-            $customerGroupIds = $this->getAllCustomerGroupIds($adminUserId);
-        }
-        $customerGroupIds = array_map('intval', array_values((array)$customerGroupIds));
+        // Read the way getCautions() reads them, so the rule saved is the rule the card described;
+        // none given means every website (the admin website left out) and every customer group
+        $websiteIds = $this->chosenWebsiteIds($params) ?? $this->getAllWebsiteIds($adminUserId);
+        $customerGroupIds = $this->chosenCustomerGroupIds($params) ?? $this->getAllCustomerGroupIds($adminUserId);
 
         $ruleData = [
             'rule' => [
@@ -156,10 +186,6 @@ class CreateRuleAction implements ActionInterface
                 'sort_order' => 0,
             ],
         ];
-
-        if ($couponCode) {
-            $ruleData['rule']['coupon_code'] = $couponCode;
-        }
 
         if ($discountType === 'free_shipping') {
             $ruleData['rule']['simple_free_shipping'] = '1';
@@ -181,11 +207,16 @@ class CreateRuleAction implements ActionInterface
 
         $ruleId = (int)($result['rule_id'] ?? 0);
 
+        $couponError = $couponCode !== '' ? $this->addCoupon($ruleId, $couponCode, $adminUserId) : null;
+        if ($couponError !== null) {
+            return ['error' => $couponError];
+        }
+
         return [
             'success' => true,
             'rule_id' => $ruleId,
             'name' => $result['name'] ?? $name,
-            'coupon_code' => $result['coupon_code'] ?? $couponCode ?: null,
+            'coupon_code' => $couponCode !== '' ? $couponCode : null,
             'discount_type' => $discountType,
             'discount_amount' => $discountAmount,
             'admin_url' => $this->secureAdminUrl->getUrl(
@@ -193,6 +224,78 @@ class CreateRuleAction implements ActionInterface
                 ['id' => $ruleId]
             ),
         ];
+    }
+
+    /**
+     * The REST rule has no coupon code field: a specific coupon is its own record, saved once the
+     * rule exists. A rule that cannot get its code is deleted again, or it would sit there active,
+     * expecting a coupon nobody can enter.
+     *
+     * @return string|null the error, or null once the coupon is saved
+     */
+    private function addCoupon(int $ruleId, string $couponCode, int $adminUserId): ?string
+    {
+        $result = $this->apiClient->post('coupons', [
+            'coupon' => [
+                'rule_id' => $ruleId,
+                'code' => $couponCode,
+                'is_primary' => true,
+                'type' => self::COUPON_TYPE_MANUAL,
+            ],
+        ], $adminUserId);
+        if (!isset($result['error'])) {
+            return null;
+        }
+
+        $this->apiClient->delete('salesRules/' . $ruleId, $adminUserId);
+
+        return 'Failed to create coupon ' . $couponCode . ', so the rule was not kept: ' . $result['error'];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function describeDiscount(array $params): string
+    {
+        $amount = $this->cautions->formatAmount((float)($params['discount_amount'] ?? 0));
+        $couponCode = $this->couponCode($params);
+        $discount = match ($params['discount_type'] ?? 'percent') {
+            'fixed' => 'Takes ' . $amount . ' off each item in',
+            'free_shipping' => 'Gives free shipping on',
+            default => 'Takes ' . $amount . '% off',
+        };
+
+        return $couponCode === ''
+            ? $discount . ' every cart, automatically and without a coupon.'
+            : $discount . ' carts that use coupon ' . $couponCode . '.';
+    }
+
+    /**
+     * Empty when the rule applies without a coupon. "0" is a coupon code like any other, not "none".
+     *
+     * @param array<string, mixed> $params
+     */
+    private function couponCode(array $params): string
+    {
+        return trim((string)($params['coupon_code'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return int[]|null null for every website
+     */
+    private function chosenWebsiteIds(array $params): ?array
+    {
+        return RuleIds::fromInput($params['website_ids'] ?? null) ?: null;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return int[]|null null for every customer group
+     */
+    private function chosenCustomerGroupIds(array $params): ?array
+    {
+        return RuleIds::fromInput($params['customer_group_ids'] ?? null) ?: null;
     }
 
     private function getAllWebsiteIds(int $adminUserId): array

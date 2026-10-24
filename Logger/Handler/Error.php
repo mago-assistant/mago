@@ -11,6 +11,10 @@ use Monolog\Logger;
 
 class Error extends Base
 {
-    protected $loggerType = Logger::ERROR;
+    /**
+     * Warnings too: ErrorLogger::addWarning() reports problems a developer must see without debug
+     * mode, such as an add-on action reading tool arguments it never declared
+     */
+    protected $loggerType = Logger::WARNING;
     protected $fileName = '/var/log/mago-error.log';
 }

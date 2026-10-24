@@ -6,7 +6,6 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Privacy;
 
-use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Privacy\ConversationVault;
 use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
 use MagoAssistant\Mago\Service\Privacy\PrivacyFilter;
@@ -27,7 +26,7 @@ class PageFormReadFieldsPrivacyTest extends TestCase
      */
     private function filter(array $result, ConversationVault $vault = new ConversationVault()): array
     {
-        $classes = (new ReadFieldsAction($this->createStub(PageContextHolder::class)))->getFieldClassification();
+        $classes = (new \ReflectionClass(ReadFieldsAction::class))->newInstanceWithoutConstructor()->getFieldClassification();
 
         return (new PrivacyFilter($vault, new PiiHeuristic()))->filter($classes, $result);
     }

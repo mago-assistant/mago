@@ -7,9 +7,16 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Command;
 
 use Magento\Framework\AuthorizationInterface;
+use MagoAssistant\Mago\Api\Acl;
+use MagoAssistant\Mago\Service\Acl\ToolAccess;
 use MagoAssistant\Mago\Service\Command\CommandRegistry;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
+use MagoAssistant\Mago\Service\Tool\ToolRegistry;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeCommand;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakePermissionChecker;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeTool;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeValidatingTool;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -110,7 +117,7 @@ final class CommandRunnerTest extends TestCase
     {
         $readOnlyCache = new FakeCommand('cache', true, false);
 
-        $withAcl = new CommandRunner(new CommandRegistry([$readOnlyCache]), $this->authorization(true));
+        $withAcl = new CommandRunner(new CommandRegistry([$readOnlyCache]), $this->authorization(true), new ToolRegistry(), $this->toolAccess());
         self::assertSame(['show'], array_keys($withAcl->getAvailableSubcommands($readOnlyCache, self::ADMIN_ID)));
 
         self::assertSame(
@@ -127,7 +134,7 @@ final class CommandRunnerTest extends TestCase
     public function skillPermissionDenialOnTheSubcommandIsReported(): void
     {
         $readOnlyCache = new FakeCommand('cache', true, false);
-        $runner = new CommandRunner(new CommandRegistry([$readOnlyCache]), $this->authorization(true));
+        $runner = new CommandRunner(new CommandRegistry([$readOnlyCache]), $this->authorization(true), new ToolRegistry(), $this->toolAccess());
 
         $reply = $runner->run('/cache apply config', self::ADMIN_ID, $this->noopChunk());
 
@@ -144,12 +151,149 @@ final class CommandRunnerTest extends TestCase
         self::assertSame([], $this->hidden->executions);
     }
 
+    #[Test]
+    public function confirmableToolCallsReturnsThePermittedWritesCalls(): void
+    {
+        self::assertSame(
+            [['id' => 'slash_apply_0', 'name' => 'fake_tool', 'input' => ['args' => ['config']]]],
+            $this->runner()->confirmableToolCalls('/cache apply config', self::ADMIN_ID)
+        );
+    }
+
+    #[Test]
+    public function confirmableToolCallsIsEmptyForReadsHelpAndUnknownCommands(): void
+    {
+        $runner = $this->runner();
+
+        self::assertSame([], $runner->confirmableToolCalls('/cache show', self::ADMIN_ID), 'read subcommand');
+        self::assertSame([], $runner->confirmableToolCalls('/help', self::ADMIN_ID), 'help');
+        self::assertSame([], $runner->confirmableToolCalls('/revenue today', self::ADMIN_ID), 'not a command');
+        self::assertSame([], $runner->confirmableToolCalls('/secret show', self::ADMIN_ID), 'unavailable command');
+    }
+
+    #[Test]
+    public function confirmableToolCallsIsEmptyWhenTheWriteAclIsMissing(): void
+    {
+        self::assertSame(
+            [],
+            $this->runner(false)->confirmableToolCalls('/cache apply config', self::ADMIN_ID),
+            'a write the session cannot run stays on run(), which renders the denial'
+        );
+    }
+
+    #[Test]
+    public function confirmableToolCallsIsEmptyWhenTheSkillGrantForbidsTheWrite(): void
+    {
+        $readOnlyCache = new FakeCommand('cache', true, false);
+        $runner = new CommandRunner(new CommandRegistry([$readOnlyCache]), $this->authorization(true), new ToolRegistry(), $this->toolAccess());
+
+        $calls = $runner->confirmableToolCalls('/cache apply config', self::ADMIN_ID);
+
+        self::assertSame([], $calls, 'a write the skill grant forbids stays on run(), which renders the denial');
+    }
+
+    #[Test]
+    public function confirmableToolCallsIsEmptyForAPermittedWriteThatMapsToNoCall(): void
+    {
+        $calls = $this->runner()->confirmableToolCalls('/cache apply', self::ADMIN_ID);
+
+        self::assertSame([], $calls, 'a write without a target stays on run(), which renders the usage prompt');
+    }
+
+    #[Test]
+    public function findRefusalIsNullWhenTheToolAcceptsEveryCall(): void
+    {
+        $runner = $this->runnerWithTools([new FakeValidatingTool('fake_tool', ['config', 'layout'])]);
+        $calls = $runner->confirmableToolCalls('/cache apply config layout', self::ADMIN_ID);
+
+        $refusal = $runner->findRefusal($calls, self::ADMIN_ID);
+
+        self::assertNull($refusal);
+    }
+
+    #[Test]
+    public function findRefusalExplainsTheRefusedIdAndListsTheValidOnes(): void
+    {
+        $runner = $this->runnerWithTools([new FakeValidatingTool('fake_tool', ['config', 'layout'])]);
+        $calls = $runner->confirmableToolCalls('/cache apply config bogus', self::ADMIN_ID);
+
+        $refusal = $runner->findRefusal($calls, self::ADMIN_ID);
+
+        self::assertSame("**Error:** Unknown id \"bogus\".\n\nValid IDs: `config`, `layout`", $refusal);
+    }
+
+    #[Test]
+    public function findRefusalReportsEveryRefusedCall(): void
+    {
+        $runner = $this->runnerWithTools([new FakeValidatingTool('fake_tool', ['config'])]);
+        $calls = [
+            ['id' => 'slash_apply_0', 'name' => 'fake_tool', 'input' => ['args' => ['first']]],
+            ['id' => 'slash_apply_1', 'name' => 'fake_tool', 'input' => ['args' => ['config']]],
+            ['id' => 'slash_apply_2', 'name' => 'fake_tool', 'input' => ['args' => ['second']]],
+        ];
+
+        $refusal = (string)$runner->findRefusal($calls, self::ADMIN_ID);
+
+        self::assertSame(2, substr_count($refusal, '**Error:**'));
+        self::assertStringContainsString('Unknown id "first".', $refusal);
+        self::assertStringContainsString('Unknown id "second".', $refusal);
+    }
+
+    #[Test]
+    public function findRefusalIsNullForAToolThatDoesNotValidateItsCalls(): void
+    {
+        $runner = $this->runnerWithTools([new FakeTool('fake_tool', ['apply'], [])]);
+        $calls = $runner->confirmableToolCalls('/cache apply bogus', self::ADMIN_ID);
+
+        $refusal = $runner->findRefusal($calls, self::ADMIN_ID);
+
+        self::assertNull($refusal);
+    }
+
     private function runner(bool $canWrite = true): CommandRunner
     {
         return new CommandRunner(
             new CommandRegistry([$this->cache, $this->hidden]),
-            $this->authorization($canWrite)
+            $this->authorization($canWrite),
+            new ToolRegistry(),
+            $this->toolAccess()
         );
+    }
+
+    /**
+     * @param \MagoAssistant\Mago\Api\Tool\ToolInterface[] $tools
+     */
+    private function runnerWithTools(array $tools): CommandRunner
+    {
+        return new CommandRunner(
+            new CommandRegistry([$this->cache, $this->hidden]),
+            $this->authorization(true),
+            new ToolRegistry(null, $tools),
+            $this->toolAccess()
+        );
+    }
+
+    private function toolAccess(?FakePermissionChecker $permissions = null): ToolAccess
+    {
+        return new ToolAccess(new FakeAuthorization(), $permissions ?? new FakePermissionChecker());
+    }
+
+    /**
+     * Validation can reach the external service of a per-user tool (a project list, say), so a call
+     * the admin was not granted gets its denial and the tool is never asked.
+     */
+    #[Test]
+    public function anUngrantedPerUserToolIsDeniedBeforeItValidates(): void
+    {
+        $tool = new FakeValidatingTool('issue_tracker', ['known'], Acl::MAGO_PER_USER);
+
+        $refusal = $this->runnerWithTools([$tool])->findRefusal(
+            [['id' => 'call_1', 'name' => 'issue_tracker', 'input' => ['args' => ['unknown']]]],
+            1
+        );
+
+        self::assertStringContainsString('you have not been given it', (string)$refusal);
+        self::assertSame(0, $tool->getRefusalChecks());
     }
 
     private function authorization(bool $canWrite): AuthorizationInterface

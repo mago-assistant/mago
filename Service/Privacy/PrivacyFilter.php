@@ -51,6 +51,66 @@ class PrivacyFilter
     }
 
     /**
+     * Dotted paths of the scalars filter() drops only because no rule covers them. A declared STRIP
+     * and the always-allowed keys are deliberate, so they are not reported. Tool authors use this to
+     * find fields they forgot to classify (mago:tool:verify).
+     *
+     * @param array<string,array{0:string,1?:string}> $classes
+     * @param array<array-key,mixed> $result
+     * @return string[]
+     */
+    public function findUndeclaredPaths(array $classes, array $result): array
+    {
+        return $this->collectUndeclared($result, $classes, null, '');
+    }
+
+    /**
+     * A list element carries no key of its own, so it answers to the rule of the key the list sits
+     * under; a named key always re-matches against the map.
+     *
+     * @param array<string,array{0:string,1?:string}> $classes
+     * @param array{0:string,1?:string}|null $inherited
+     * @return array{0:string,1?:string}|null
+     */
+    private function ruleFor(int|string $key, array $classes, ?array $inherited): ?array
+    {
+        return is_string($key)
+            ? ($classes[$key] ?? $classes[PiiClass::ANY] ?? null)
+            : $inherited;
+    }
+
+    /**
+     * @param array<array-key,mixed> $node
+     * @param array<string,array{0:string,1?:string}> $classes
+     * @param array{0:string,1?:string}|null $inherited
+     * @return string[]
+     */
+    private function collectUndeclared(array $node, array $classes, ?array $inherited, string $path): array
+    {
+        $found = [];
+        foreach ($node as $key => $value) {
+            $rule = $this->ruleFor($key, $classes, $inherited);
+            $childPath = $path === '' ? (string)$key : $path . '.' . $key;
+
+            if ($rule !== null && $rule[0] === PiiClass::STRIP) {
+                continue;
+            }
+
+            if (is_array($value)) {
+                $childInherited = is_string($key) ? $rule : $inherited;
+                $found = [...$found, ...$this->collectUndeclared($value, $classes, $childInherited, $childPath)];
+                continue;
+            }
+
+            if ($rule === null && !in_array($key, self::ALWAYS_ALLOW, true)) {
+                $found[] = $childPath;
+            }
+        }
+
+        return $found;
+    }
+
+    /**
      * @param array<array-key,mixed> $node
      * @param array<string,array{0:string,1?:string}> $classes
      * @param array{0:string,1?:string}|null $inherited Rule for numeric keys, from the enclosing key
@@ -61,12 +121,7 @@ class PrivacyFilter
         $out = [];
         foreach ($node as $key => $value) {
             $keyStr = is_string($key) ? $key : null;
-
-            // A list element carries no key of its own, so it answers to the rule of the key the
-            // list sits under; a named key always re-matches against the map.
-            $rule = $keyStr !== null
-                ? ($classes[$keyStr] ?? $classes[PiiClass::ANY] ?? null)
-                : $inherited;
+            $rule = $this->ruleFor($key, $classes, $inherited);
 
             // An explicit STRIP rule wins over the structure: a field declared STRIP is dropped
             // whether it arrives as a scalar or as a nested array (so a customer object under a
@@ -123,9 +178,10 @@ class PrivacyFilter
         // "mago://email_1" planted in a wildcard-public tool's data (a poisoned product name, CMS
         // text) cannot reach the model and be echoed into an argument that then rehydrates to a real
         // value. Both shapes are defanged: conversations minted before the change still hold the
-        // bracket form, and a forgery can wear either.
-        $value = (string)preg_replace('/\[([a-z]+_\d+)\]/', '($1)', $value);
-        $value = (string)preg_replace('#mago://([a-z]+_\d+)#', '($1)', $value);
+        // bracket form, and a forgery can wear either, also with the markdown escapes a token is
+        // resolved through (#160): "mago://email\_1" would otherwise rehydrate once echoed.
+        $value = (string)preg_replace('/\\\\?\[([a-z]+)\\\\?_(\d+)\\\\?\]/', '($1_$2)', $value);
+        $value = (string)preg_replace('#mago\\\\?:\\\\?/\\\\?/([a-z]+)\\\\?_(\d+)#', '($1_$2)', $value);
 
         // A value the vault already tokenised (an order number, an id) has no signature the
         // heuristic can match when a tool echoes it back in free text; the vault itself does.

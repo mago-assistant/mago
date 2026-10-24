@@ -11,6 +11,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Block\Adminhtml\ChatPanel;
 use MagoAssistant\Mago\Model\Form\PageContext;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
+use MagoAssistant\Mago\Service\Form\PageAccess;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Url\EntityRouteMap;
 use MagoAssistant\Mago\Service\Url\NewEntityUrlBuilder;
@@ -55,6 +56,11 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
  * (customer, order, admin user, ...) just because no form happened to be open yet to deny. Denying
  * only once a form_write directive's target no longer matches an open, already-denied form would
  * leave this path uncovered entirely, since there is no open form here to check in the first place.
+ *
+ * The Magento ACL resource of the page is checked the same way (PageAccess, #203): the form open
+ * now before staging on it, the navigation target before sending the browser there. Both run in
+ * findRefusal(), so a denied page is refused before the confirmation prompt and again on the
+ * confirm request, against the page context that request carries.
  */
 class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActionInterface
 {
@@ -69,9 +75,10 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
         private readonly EntityRouteMap $entityRouteMap,
         private readonly SecureAdminUrl $secureAdminUrl,
         private readonly NewEntityUrlBuilder $newEntityUrlBuilder,
-        private readonly FormPolicy $formPolicy
+        private readonly FormPolicy $formPolicy,
+        PageAccess $pageAccess
     ) {
-        parent::__construct($pageContextHolder);
+        parent::__construct($pageContextHolder, $pageAccess);
     }
 
     public function getName(): string
@@ -88,7 +95,8 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
             . 'pass entity_type (and entity_id, or an empty entity_id to create a new one) and the '
             . 'browser navigates to that form, the New form for a new entity, and stages the values '
             . 'there. Use this to create a product, category, CMS page or CMS block from the chat. '
-            . 'Does not save the form.';
+            . 'Customers, customer addresses, orders and admin users cannot be created or edited '
+            . 'this way. Does not save the form.';
     }
 
     public function isReadOnly(): bool
@@ -165,6 +173,10 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
      */
     public function findRefusal(array $params): ?array
     {
+        if ($this->isDeniedEntityType($this->entityTypeParam($params))) {
+            return $this->deniedFormResult();
+        }
+
         $pageContext = $this->getPageContext();
         if ($pageContext === null) {
             return $this->findNavigationRefusal($params, $this->routeFor($params) === null);
@@ -172,6 +184,11 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
 
         if ($this->isRequestForAnotherForm($params, $pageContext)) {
             return $this->findNavigationRefusal($params, false);
+        }
+
+        $accessRefusal = $this->findPageAccessRefusal($pageContext);
+        if ($accessRefusal !== null) {
+            return $accessRefusal;
         }
 
         $targetMismatch = $this->findTargetMismatch($params, $pageContext);
@@ -196,8 +213,13 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
         }
 
         $route = $this->routeFor($params);
-        if ($route === null || $this->isDeniedNavigationTarget($this->entityTypeParam($params), $route)) {
+        if ($route === null) {
             return $this->deniedFormResult();
+        }
+
+        $accessRefusal = $this->findRouteAccessRefusal($route);
+        if ($accessRefusal !== null) {
+            return $accessRefusal;
         }
 
         return $this->normalizeChanges($params['changes'] ?? null) === [] ? $this->missingChangesResult() : null;
@@ -237,7 +259,7 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
 
     private function entityTypeParam(array $params): string
     {
-        return trim((string)($params[self::PARAM_ENTITY_TYPE] ?? ''));
+        return strtolower(trim((string)($params[self::PARAM_ENTITY_TYPE] ?? '')));
     }
 
     private function entityIdParam(array $params): string
@@ -272,7 +294,10 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
     }
 
     /**
-     * Checked before a form_navigate directive is ever built, against the same FormPolicy the
+     * Checked first in findRefusal(), whatever form is open, so before a form_navigate directive is
+     * ever built and also when there is nothing to navigate to: "create a customer" has no New route,
+     * and without this it fell through to "no form open" and the model told the administrator about
+     * a technical issue instead of the privacy refusal (issue #256). It runs against the same FormPolicy the
      * open-form path already enforces (PageContextNormalizer, form-bridge.js), rather than a second
      * list or a second notion of what "denied" means. Two independent inputs are checked, because
      * either alone misses one of today's two denied, navigable entity types:
@@ -287,14 +312,27 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
      *   additionalDeniedNamespacePatterns (the commented example there shows the shape), checking the
      *   route alone would silently let navigate-then-act bypass that denial.
      *
+     * Both the edit route and the New route are checked, since routeFor() navigates to either.
+     *
      * Checking both, through FormPolicy::isDenied() itself, is what keeps this correct without
      * editing whenever a pattern is added via di.xml's additionalDeniedNamespacePatterns or
      * additionalDeniedRoutePatterns - a new pattern is denied here the same instant it is denied
      * everywhere else, because there is only ever the one list.
      */
-    private function isDeniedNavigationTarget(string $entityType, string $route): bool
+    private function isDeniedEntityType(string $entityType): bool
     {
-        return $this->formPolicy->isDenied($entityType . '_form', $route);
+        if ($entityType === '') {
+            return false;
+        }
+
+        $routes = [$this->entityRouteMap->getRoute($entityType), $this->entityRouteMap->getNewRoute($entityType)];
+        foreach ($routes as $route) {
+            if ($this->formPolicy->isDenied($entityType . '_form', (string)$route)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -421,6 +459,10 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
             }
             if ($field['disabled']) {
                 return '"' . $change['path'] . '" is disabled on this form and cannot be written to.';
+            }
+            if ($field['hidden'] ?? false) {
+                return '"' . $change['path'] . '" is a hidden field on this form (a record id or a value carried '
+                    . 'along), never shown to the administrator, so it is not written to from the chat.';
             }
         }
 

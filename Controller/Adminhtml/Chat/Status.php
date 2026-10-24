@@ -14,6 +14,7 @@ use Magento\Framework\Controller\ResultInterface;
 use Magento\Framework\Data\Form\FormKey;
 use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 
 /**
  * Fallback endpoint to check if a conversation has a pending confirmation.
@@ -30,7 +31,8 @@ class Status extends Action implements HttpPostActionInterface
         private readonly ConversationRepositoryInterface $conversationRepository,
         private readonly JsonFactory $jsonFactory,
         private readonly Json $json,
-        private readonly FormKey $formKey
+        private readonly FormKey $formKey,
+        private readonly ErrorReporter $errorReporter
     ) {
         parent::__construct($context);
     }
@@ -75,7 +77,10 @@ class Status extends Action implements HttpPostActionInterface
 
             return $result->setData(['pending_confirmation' => false]);
         } catch (\Throwable $e) {
-            return $result->setData(['pending_confirmation' => false, 'error' => $e->getMessage()]);
+            return $result->setData([
+                'pending_confirmation' => false,
+                'error' => $this->errorReporter->report('Status Controller', $e),
+            ]);
         }
     }
 }

@@ -16,6 +16,16 @@
                     <resource id="MagoAssistant_Mago::conversations" title="Manage Conversations" sortOrder="30">
                         <resource id="MagoAssistant_Mago::conversations_delete" title="Delete Conversations" sortOrder="10"/>
                     </resource>
+                    <resource id="MagoAssistant_Mago::flags" title="Answer Feedback" sortOrder="40">
+                        <resource id="MagoAssistant_Mago::flags_export" title="Export Answer Feedback" sortOrder="10"/>
+                        <resource id="MagoAssistant_Mago::flags_delete" title="Delete Answer Feedback" sortOrder="20"/>
+                    </resource>
+                    <resource id="MagoAssistant_Mago::statistics" title="View Statistics" sortOrder="50"/>
+                    <resource id="MagoAssistant_Mago::skills" title="Skills &amp; Permissions" sortOrder="60">
+                        <resource id="MagoAssistant_Mago::skills_read" title="View Skill Permissions" sortOrder="10"/>
+                        <resource id="MagoAssistant_Mago::skills_write" title="Edit Skill Permissions" sortOrder="20"/>
+                    </resource>
+                    <resource id="MagoAssistant_Mago::reindex_all" title="Reindex All Indexers" sortOrder="70"/>
                 </resource>
             </resource>
         </resources>

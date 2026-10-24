@@ -12,6 +12,8 @@ use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\Controller\Result\JsonFactory;
 use Magento\Framework\Controller\ResultInterface;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
+use MagoAssistant\Mago\Service\Flag\FlagRepository;
 use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 
 class Load extends Action implements HttpPostActionInterface
@@ -22,7 +24,9 @@ class Load extends Action implements HttpPostActionInterface
         Context $context,
         private readonly ConversationRepositoryInterface $conversationRepository,
         private readonly JsonFactory $jsonFactory,
-        private readonly PrivacyService $privacyService
+        private readonly PrivacyService $privacyService,
+        private readonly FlagRepository $flagRepository,
+        private readonly ErrorReporter $errorReporter
     ) {
         parent::__construct($context);
     }
@@ -47,22 +51,37 @@ class Load extends Action implements HttpPostActionInterface
             $conversation = $this->conversationRepository->getByIdForUser($conversationId, $adminUserId);
             $messages = $this->conversationRepository->getMessages($conversationId);
 
-            // Stored messages are tokenised; rehydrate them for the admin's history view, using the
-            // conversation's own vault. A no-op when the vault is empty (no persistence yet).
+            // Stored messages are tokenised and go out that way, with the conversation's own vault
+            // values beside them: the panel renders each message first and only then puts the
+            // values in, as text, so a value can never become markup.
             $this->privacyService->beginConversation($conversationId);
+
+            // How answers were already rated, so a reloaded conversation shows its thumbs instead of
+            // offering to rate them again.
+            $ratings = $this->flagRepository->ratingsAmong(array_column($messages, 'entity_id'));
             foreach ($messages as $index => $message) {
-                if (isset($message['content']) && is_string($message['content'])) {
-                    $messages[$index]['content'] = $this->privacyService->displayText($message['content']);
-                }
+                $messages[$index]['rating'] = $ratings[(int)($message['entity_id'] ?? 0)] ?? null;
             }
 
             return $result->setData([
                 'entity_id' => $conversation['entity_id'],
                 'title' => $this->privacyService->displayText((string)$conversation['title']),
                 'messages' => $messages,
+                'tokens' => $this->tokenValuesOf($messages),
             ]);
         } catch (\Throwable $e) {
-            return $result->setData(['error' => $e->getMessage()]);
+            return $result->setData(['error' => $this->errorReporter->report('Load Controller', $e)]);
         }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $messages
+     * @return array<string, string>
+     */
+    private function tokenValuesOf(array $messages): array
+    {
+        return $this->privacyService->tokenValues(
+            implode("\n", array_filter(array_column($messages, 'content'), 'is_string'))
+        );
     }
 }

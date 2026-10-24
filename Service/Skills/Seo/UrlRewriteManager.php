@@ -10,6 +10,8 @@ use MagoAssistant\Mago\Service\Skills\AbstractSkill;
 
 class UrlRewriteManager extends AbstractSkill
 {
+    private const INTERNAL_PATH_PATTERN = '#\A/?(?![/\\\\])[^\x00-\x20\x7F\\\\:/?\#]*(?:[/?\#][^\x00-\x20\x7F\\\\]*)?\z#';
+
     public function getName(): string
     {
         return 'url_rewrite_manager';
@@ -47,7 +49,9 @@ class UrlRewriteManager extends AbstractSkill
     }
 
     /**
-     * A create whose target is an absolute off-site URL rather than an internal path.
+     * A create whose target is not unmistakably an internal store path. Fail closed: anything that is not
+     * a plain relative path (optionally with one leading slash, no scheme, no authority, no backslash,
+     * no whitespace or control characters) is treated as leaving the store.
      */
     private function isExternalRedirect(array $input): bool
     {
@@ -55,9 +59,14 @@ class UrlRewriteManager extends AbstractSkill
             return false;
         }
 
-        $target = trim((string)($input['target_path'] ?? ''));
+        $target = (string)($input['target_path'] ?? '');
 
-        return $target !== '' && (str_starts_with($target, '//') || parse_url($target, PHP_URL_HOST) !== null);
+        return $target !== '' && !$this->isInternalPath($target);
+    }
+
+    private function isInternalPath(string $target): bool
+    {
+        return preg_match(self::INTERNAL_PATH_PATTERN, $target) === 1;
     }
 
     protected function getBaseInstructions(): string

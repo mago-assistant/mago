@@ -6,12 +6,12 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Sales\OrderManager;
 
-use MagoAssistant\Mago\Service\Api\InternalApiClient;
+use MagoAssistant\Mago\Api\InternalApiClientInterface;
 
 class OrderResolver
 {
     public function __construct(
-        private readonly InternalApiClient $apiClient
+        private readonly InternalApiClientInterface $apiClient
     ) {
     }
 

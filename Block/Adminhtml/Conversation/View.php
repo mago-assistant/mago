@@ -45,10 +45,13 @@ class View extends Container
                 'delete',
                 [
                     'label' => __('Delete'),
+                    // Deleting changes state, so the controller only takes POST: deleteConfirm posts
+                    // the id with the form key, the way the flag view and Magento's own pages do.
                     'onclick' => sprintf(
-                        "confirmSetLocation('%s', '%s')",
-                        __('Are you sure you want to delete this conversation?'),
-                        $this->getUrl('mago/conversations/delete', ['id' => $conversationId])
+                        'deleteConfirm(%s, %s, %s)',
+                        $this->jsLiteral((string)__('Are you sure you want to delete this conversation?')),
+                        $this->jsLiteral($this->getUrl('mago/conversations/delete')),
+                        $this->jsLiteral(['data' => ['id' => $conversationId]])
                     ),
                     'class' => 'delete',
                 ]
@@ -84,5 +87,15 @@ class View extends Container
         );
 
         return $currentUserId === $ownerId;
+    }
+
+    /**
+     * A value as a JavaScript literal that is also safe inside the button's onclick attribute.
+     *
+     * @param string|array<string, mixed> $value
+     */
+    private function jsLiteral(string|array $value): string
+    {
+        return (string)json_encode($value, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP);
     }
 }

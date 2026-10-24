@@ -28,6 +28,9 @@ class UsageStats
                 'total_input_tokens' => new Expression('SUM(input_tokens)'),
                 'total_output_tokens' => new Expression('SUM(output_tokens)'),
                 'total_tokens' => new Expression('SUM(total_tokens)'),
+                'total_cache_read_tokens' => new Expression('SUM(cache_read_tokens)'),
+                'total_cache_write_tokens' => new Expression('SUM(cache_write_tokens)'),
+                'total_cache_reported_input_tokens' => new Expression(CacheShare::REPORTED_INPUT_TOKENS_SUM),
                 'unique_users' => new Expression('COUNT(DISTINCT admin_user_id)'),
             ]);
 
@@ -45,6 +48,14 @@ class UsageStats
             'total_input_tokens' => $inputTokens,
             'total_output_tokens' => $outputTokens,
             'total_tokens' => (int)($result['total_tokens'] ?? 0),
+            // SUM() over only-NULL rows is NULL: nothing in the period reported cache figures
+            'total_cache_read_tokens' => isset($result['total_cache_read_tokens'])
+                ? (int)$result['total_cache_read_tokens']
+                : null,
+            'total_cache_write_tokens' => isset($result['total_cache_write_tokens'])
+                ? (int)$result['total_cache_write_tokens']
+                : null,
+            'total_cache_reported_input_tokens' => (int)($result['total_cache_reported_input_tokens'] ?? 0),
             'unique_users' => (int)($result['unique_users'] ?? 0),
             'estimated_cost' => $this->estimateCost($inputTokens, $outputTokens),
         ];
@@ -164,6 +175,44 @@ class UsageStats
                 'tokens' => 0,
             ];
             $current = $current->modify('+1 day');
+        }
+
+        return $trend;
+    }
+
+    /**
+     * Requests and tokens per hour for today, the full day, 00:00 to 23:00 (hours still to come are 0).
+     * Same row shape as getDailyTrend(), with "date" as "Y-m-d H:00".
+     */
+    public function getHourlyTrend(): array
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $table = $this->resourceConnection->getTableName('mago_usage_log');
+        $now = new \DateTimeImmutable();
+        $from = $now->format('Y-m-d 00:00:00');
+        $hourExpr = new Expression("DATE_FORMAT(created_at, '%Y-%m-%d %H:00')");
+
+        $select = $connection->select()
+            ->from($table, [
+                'date' => $hourExpr,
+                'requests' => new Expression('COUNT(*)'),
+                'tokens' => new Expression('SUM(total_tokens)'),
+            ])
+            ->where('created_at >= ?', $from)
+            ->group($hourExpr)
+            ->order('date ASC');
+
+        $dataByHour = [];
+        foreach ($connection->fetchAll($select) as $row) {
+            $dataByHour[$row['date']] = $row;
+        }
+
+        $trend = [];
+        $current = new \DateTimeImmutable($from);
+        for ($h = 0; $h < 24; $h++) {
+            $key = $current->format('Y-m-d H:00');
+            $trend[] = $dataByHour[$key] ?? ['date' => $key, 'requests' => 0, 'tokens' => 0];
+            $current = $current->modify('+1 hour');
         }
 
         return $trend;

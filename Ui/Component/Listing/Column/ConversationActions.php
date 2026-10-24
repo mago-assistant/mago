@@ -49,6 +49,7 @@ class ConversationActions extends Column
                                 ['id' => $item['entity_id']]
                             ),
                             'label' => __('Delete'),
+                            'post' => true,
                             'confirm' => [
                                 'title' => __('Delete Conversation'),
                                 'message' => __('Are you sure you want to delete this conversation?'),

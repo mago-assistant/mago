@@ -15,9 +15,19 @@ class SalesData extends AbstractSkill
         return 'sales_data';
     }
 
+    /**
+     * Every action here reads sales figures, which is what the Sales menu covers; top_refunded
+     * narrows to Magento_Sales::creditmemo on top of it.
+     */
+    public function getMagentoAcl(array $input = []): string
+    {
+        return 'Magento_Sales::sales';
+    }
+
     protected function getBaseDescription(): string
     {
-        return 'Query sales/order data: revenue, orders, top products, customer orders.';
+        return 'Sales reports over a period: revenue, order counts, top products and top refunded products. '
+            . 'For specific orders, invoices, shipments or credit memos use order_manager.';
     }
 
     protected function getBaseInstructions(): string

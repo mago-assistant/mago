@@ -6,23 +6,29 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Configuration;
 
-use Magento\Config\Model\ResourceModel\Config as ConfigResource;
 use Magento\Framework\App\Cache\TypeListInterface;
-use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use Magento\Framework\App\Config\ScopeConfigInterface;
+use Magento\Framework\Exception\LocalizedException;
+use MagoAssistant\Mago\Api\Tool\HighImpactToolInterface;
+use MagoAssistant\Mago\Api\Tool\ValidatingToolInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 
-class ConfigWriter implements ToolInterface
+class ConfigWriter implements HighImpactToolInterface, ValidatingToolInterface
 {
-    private const BLOCKED_PATTERNS = [
-        '*key*', '*secret*', '*password*', '*token*', '*credential*',
-        'payment/*', '*api_key*', '*private*', '*encrypt*',
-    ];
+    /**
+     * Credentials, payment settings and Mago's own settings (ConfigPathAccess::isBlocked())
+     */
+    private const PROTECTED_PATH_REFUSAL = ['error' => 'Cannot modify this configuration path for security reasons'];
 
     public function __construct(
-        private readonly ConfigResource $configResource,
+        private readonly ConfigValueSaver $valueSaver,
         private readonly TypeListInterface $cacheTypeList,
-        private readonly StoreScopeContext $scopeContext
+        private readonly StoreScopeContext $scopeContext,
+        private readonly ConfigPathAccess $pathAccess,
+        private readonly ConfigWriteImpact $impact,
+        private readonly ScopeConfigInterface $scopeConfig,
+        private readonly BlockedConfigPaths $blockedPaths
     ) {
     }
 
@@ -33,7 +39,11 @@ class ConfigWriter implements ToolInterface
 
     public function getDescription(): string
     {
-        return 'Modify Magento store configuration values. Requires merchant confirmation before execution. Sensitive paths are blocked.';
+        return 'Modify Magento store configuration values. Requires merchant confirmation before execution. '
+            . 'Credentials, payment config and Mago\'s own settings are blocked, and so are the storefront and admin '
+            . 'URLs, the mail server, the store email addresses and every other address customer mail goes to, '
+            . 'two-factor and admin login security and the storefront head and footer scripts: for those, tell the '
+            . 'user to change them under Stores > Configuration.';
     }
 
     public function getParameterSchema(): array
@@ -67,15 +77,34 @@ class ConfigWriter implements ToolInterface
 
     public function execute(array $params): array
     {
-        $path = $params['path'] ?? '';
+        $path = $this->pathAccess->normalise($params['path'] ?? '');
         $value = $params['value'] ?? '';
 
         if (!$path) {
             return ['error' => 'Path parameter is required'];
         }
 
-        if ($this->isBlockedPath($path)) {
-            return ['error' => 'Cannot modify this configuration path for security reasons'];
+        if (!is_scalar($value)) {
+            return ['error' => 'The value must be text, a number or true/false'];
+        }
+        $value = (string)$value;
+
+        if ($this->pathAccess->isBlocked($path)) {
+            return self::PROTECTED_PATH_REFUSAL;
+        }
+
+        if (!$this->pathAccess->isAllowed($path)) {
+            return ['error' => 'Access denied: you do not have the permission for this configuration section'];
+        }
+
+        // Refused before the card already (findRefusal); checked again for a confirm that skips it,
+        // after the section check so an admin without the section learns nothing about its paths
+        if ($this->blockedPaths->isBlocked($path)) {
+            return $this->blockedPathRefusal($path);
+        }
+
+        if (!$this->pathAccess->isDeclared($path)) {
+            return ['error' => 'This path is not a setting under Stores > Configuration, so it cannot be set here'];
         }
 
         $scope = (string)($params['scope'] ?? StoreScopeContext::SCOPE_DEFAULT);
@@ -88,10 +117,14 @@ class ConfigWriter implements ToolInterface
 
         $scopeLabel = $this->scopeContext->describeScope($scope, $scopeId);
 
-        $this->configResource->saveConfig($path, $value, $scope, $scopeId);
+        try {
+            $this->valueSaver->save($path, $value, $scope, $scopeId);
+        } catch (LocalizedException $e) {
+            return ['error' => $e->getMessage()];
+        }
         $this->cacheTypeList->cleanType('config');
 
-        return [
+        $result = [
             'success' => true,
             'path' => $path,
             'value' => $value,
@@ -100,6 +133,106 @@ class ConfigWriter implements ToolInterface
             'scope_label' => $scopeLabel,
             'message' => sprintf('Configuration "%s" has been set to "%s" on %s', $path, $value, $scopeLabel),
         ];
+        // A sensitive value goes back to the model only under masked_value, which becomes a token.
+        if ($this->pathAccess->isSensitive($path)) {
+            unset($result['value']);
+            $result[ConfigReader::MASKED_VALUE] = $value;
+            $result['message'] = sprintf('Configuration "%s" has been set on %s', $path, $scopeLabel);
+        }
+
+        return $result;
+    }
+
+    /**
+     * A change to a setting where a write proposed from text the assistant read would hurt most
+     * comes to the admin with what it changes, from what, and a reminder to check they asked for
+     * it (#245). Paths this tool refuses anyway need no caution.
+     *
+     * @param array $input
+     * @param int $adminUserId
+     * @return string[]
+     */
+    public function getCautions(array $input, int $adminUserId): array
+    {
+        $path = $this->pathAccess->normalise($input['path'] ?? '');
+        $scope = (string)($input['scope'] ?? StoreScopeContext::SCOPE_DEFAULT);
+        $scopeId = (int)($input['scope_id'] ?? 0);
+        if ($path === '' || $this->pathAccess->isBlocked($path) || $this->blockedPaths->isBlocked($path)
+            || $this->scopeContext->validateScope($scope, $scopeId) !== null
+        ) {
+            return [];
+        }
+
+        $reason = $this->impact->reasonFor($path);
+        if ($reason === null) {
+            return [];
+        }
+        $scopeLabel = $this->scopeContext->describeScope($scope, $scopeId);
+        // The card is stored with the conversation; a sensitive value stays out of it.
+        $change = $this->pathAccess->isSensitive($path)
+            ? sprintf('On %s it changes to the value shown above.', $scopeLabel)
+            : $this->describeChange($path, $scope, $scopeId, $scopeLabel, $input['value'] ?? null);
+
+        return [
+            $reason,
+            $change,
+            'Allow it only if you asked for this change yourself: text the assistant read, such as a '
+                . 'product, a review or a page, can try to make it propose one.',
+        ];
+    }
+
+    /**
+     * @param string $path
+     * @param string $scope
+     * @param int $scopeId
+     * @param string $scopeLabel
+     * @param mixed $newValue
+     * @return string
+     */
+    private function describeChange(
+        string $path,
+        string $scope,
+        int $scopeId,
+        string $scopeLabel,
+        mixed $newValue
+    ): string {
+        $current = $this->scopeConfig->getValue($path, $scope, $scopeId);
+
+        return sprintf(
+            'On %s it changes from "%s" to "%s".',
+            $scopeLabel,
+            is_scalar($current) ? (string)$current : '',
+            is_scalar($newValue) ? (string)$newValue : ''
+        );
+    }
+
+    /**
+     * A setting this tool never writes is refused before the confirmation card: there is nothing to
+     * allow. Both checks run again in execute().
+     */
+    public function findRefusal(array $input): ?array
+    {
+        $path = $this->pathAccess->normalise($input['path'] ?? '');
+
+        // A section the admin lacks is left to execute(), which denies it without describing its paths
+        return match (true) {
+            $path === '', !$this->pathAccess->isAllowed($path) => null,
+            $this->pathAccess->isBlocked($path) => self::PROTECTED_PATH_REFUSAL,
+            $this->blockedPaths->isBlocked($path) => $this->blockedPathRefusal($path),
+            default => null,
+        };
+    }
+
+    /**
+     * @return array{error: string}
+     */
+    private function blockedPathRefusal(string $path): array
+    {
+        return ['error' => sprintf(
+            'Changing "%s" from the chat is turned off: a wrong value here can hand over the store, its admin '
+                . 'or its mail. Change it under Stores > Configuration, where Magento checks the value.',
+            $path
+        )];
     }
 
     public function isReadOnly(): bool
@@ -125,9 +258,8 @@ class ConfigWriter implements ToolInterface
 
     public function getFieldClassification(string $action = ''): array
     {
-        // Config values are dynamic paths; wildcard-public preserves today's denylist behavior,
-        // the config egress surface itself is tracked as issue #106 (denylist to allowlist).
         return [
+            ConfigReader::MASKED_VALUE => [PiiClass::TOKENISE, 'config'],
             'message' => [PiiClass::PUBLIC],
             PiiClass::ANY => [PiiClass::PUBLIC],
         ];
@@ -135,30 +267,6 @@ class ConfigWriter implements ToolInterface
 
     public function getMagentoAcl(array $input = []): string
     {
-        return 'Magento_Config::config';
-    }
-
-    private function isBlockedPath(string $path): bool
-    {
-        $pathLower = strtolower($path);
-        foreach (self::BLOCKED_PATTERNS as $pattern) {
-            $regex = '/^' . str_replace(['*', '/'], ['.*', '\/'], $pattern) . '$/';
-            if (preg_match($regex, $pathLower)) {
-                return true;
-            }
-        }
-        $segments = explode('/', $pathLower);
-        $blockedWords = ['key', 'secret', 'password', 'token', 'credential', 'private', 'encrypt'];
-        foreach ($segments as $segment) {
-            foreach ($blockedWords as $word) {
-                if (str_contains($segment, $word)) {
-                    return true;
-                }
-            }
-        }
-        if (str_starts_with($pathLower, 'payment/')) {
-            return true;
-        }
-        return false;
+        return $this->pathAccess->aclResourceFor($this->pathAccess->normalise($input['path'] ?? ''));
     }
 }

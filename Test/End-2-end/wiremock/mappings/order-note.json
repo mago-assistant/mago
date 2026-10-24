@@ -1,0 +1,59 @@
+{
+  "mappings": [
+    {
+      "name": "Order note - turn 2, the comment was added",
+      "priority": 1,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/chat/completions",
+        "bodyPatterns": [
+          {"contains": "E2E order note check"},
+          {"contains": "\"role\":\"tool\""},
+          {"matches": "(?s).*success(\\\\u0022|\\\\\"|\")+:true.*"}
+        ]
+      },
+      "response": {
+        "status": 200,
+        "headers": {"Content-Type": "text/event-stream"},
+        "bodyFileName": "order-note-summary.sse",
+        "chunkedDribbleDelay": {"numberOfChunks": 10, "totalDuration": 100}
+      }
+    },
+    {
+      "name": "Order note - turn 2 fallback, the tool reported a failure",
+      "priority": 2,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/chat/completions",
+        "bodyPatterns": [
+          {"contains": "E2E order note check"},
+          {"contains": "\"role\":\"tool\""}
+        ]
+      },
+      "response": {
+        "status": 200,
+        "headers": {"Content-Type": "text/event-stream"},
+        "bodyFileName": "order-note-failed.sse",
+        "chunkedDribbleDelay": {"numberOfChunks": 10, "totalDuration": 100}
+      }
+    },
+    {
+      "name": "Order note - turn 1, add a note to the order",
+      "priority": 3,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/chat/completions",
+        "bodyPatterns": [
+          {"contains": "E2E order note check"},
+          {"doesNotMatch": "(?s).*\"role\":\"tool\".*"}
+        ]
+      },
+      "response": {
+        "status": 200,
+        "headers": {"Content-Type": "text/event-stream"},
+        "bodyFileName": "order-note-tool-call.sse",
+        "chunkedDribbleDelay": {"numberOfChunks": 20, "totalDuration": 200}
+      }
+    }
+  ]
+}

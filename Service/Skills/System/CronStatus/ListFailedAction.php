@@ -10,12 +10,15 @@ use Magento\Cron\Model\ResourceModel\Schedule\CollectionFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
+use MagoAssistant\Mago\Service\Time\StoreTime;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
 class ListFailedAction implements ActionInterface
 {
     public function __construct(
         private readonly CollectionFactory $collectionFactory,
-        private readonly PeriodParser $periodParser
+        private readonly PeriodParser $periodParser,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -34,7 +37,7 @@ class ListFailedAction implements ActionInterface
         return [
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Number of results to return (default: 20)',
+                'description' => 'Number of results to return (default: 20, max: ' . ResultLimit::MAX . ')',
             ],
             'since' => [
                 'type' => 'string',
@@ -78,7 +81,7 @@ class ListFailedAction implements ActionInterface
 
     public function execute(array $params, int $adminUserId): array
     {
-        $limit = (int)($params['limit'] ?? 20);
+        $limit = ResultLimit::fromParams($params, 20);
         $since = $params['since'] ?? '';
         $jobCode = $params['job_code'] ?? '';
 
@@ -108,12 +111,21 @@ class ListFailedAction implements ActionInterface
                 'job_code' => $schedule->getData('job_code'),
                 'status' => $schedule->getData('status'),
                 'messages' => $schedule->getData('messages'),
-                'scheduled_at' => $schedule->getData('scheduled_at'),
-                'executed_at' => $schedule->getData('executed_at'),
-                'finished_at' => $schedule->getData('finished_at'),
+                'scheduled_at' => $this->localTime($schedule->getData('scheduled_at')),
+                'executed_at' => $this->localTime($schedule->getData('executed_at')),
+                'finished_at' => $this->localTime($schedule->getData('finished_at')),
             ];
         }
 
         return ['failed_jobs' => $jobs, 'count' => count($jobs)];
+    }
+
+    /**
+     * @param mixed $utc
+     * @return string|null
+     */
+    private function localTime(mixed $utc): ?string
+    {
+        return is_string($utc) && $utc !== '' ? $this->storeTime->toLocal($utc) : null;
     }
 }

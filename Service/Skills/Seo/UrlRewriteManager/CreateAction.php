@@ -10,6 +10,7 @@ use Magento\UrlRewrite\Model\ResourceModel\UrlRewrite as UrlRewriteResource;
 use Magento\UrlRewrite\Model\ResourceModel\UrlRewriteCollectionFactory;
 use Magento\UrlRewrite\Model\UrlRewriteFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
@@ -19,7 +20,8 @@ class CreateAction implements ActionInterface
         private readonly UrlRewriteFactory $urlRewriteFactory,
         private readonly UrlRewriteResource $urlRewriteResource,
         private readonly UrlRewriteCollectionFactory $collectionFactory,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly ErrorReporter $errorReporter
     ) {
     }
 
@@ -159,7 +161,8 @@ class CreateAction implements ActionInterface
                 ],
             ];
         } catch (\Exception $e) {
-            return ['error' => 'Failed to create URL rewrite: ' . $e->getMessage()];
+            $error = $this->errorReporter->reportToolFailure('url_rewrite_manager create', $e);
+            return ['error' => 'Failed to create URL rewrite: ' . $error];
         }
     }
 }

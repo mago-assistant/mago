@@ -12,7 +12,7 @@ const INTERACTION_TIMEOUT_MS = 5000;
 
 /* Below the suite's 25s test timeout (playwright.config.ts) so a stuck bind still fails with an
    explaining message instead of surfacing as a bare test timeout, but with enough headroom that
-   a busy dev instance loading chat-panel.js under require(['marked'], ...) does not trip it. */
+   a busy dev instance loading chat-panel.js and its markdown renderer does not trip it. */
 const TOGGLE_BIND_TIMEOUT_MS = 20000;
 
 /**
@@ -54,6 +54,16 @@ const LISTING_RECIPES: Record<string, ListingRecipe> = {
   'mago/skills': {
     menuHrefContains: '/mago/skills/',
     listingNamespace: 'mago_skills_listing',
+  },
+  'mago/conversations': {
+    menuHrefContains: '/mago/conversations/',
+    listingNamespace: 'mago_conversations_listing',
+    actionKey: 'view',
+  },
+  'mago/flags': {
+    menuHrefContains: '/mago/flags/',
+    listingNamespace: 'mago_flags_listing',
+    actionKey: 'view',
   },
   'customer/index': {
     menuHrefContains: '/customer/index/',
@@ -303,7 +313,7 @@ export default class ChatPanel {
   }
 
   /**
-   * chat-panel.js is pulled in through require(['marked'], ...), so the toggle exists in
+   * chat-panel.js is pulled in through an async require(), so the toggle exists in
    * the markup well before its click handler is bound. Clicking in that window is a silent
    * no-op, which shows up as the panel never opening.
    */
@@ -380,6 +390,52 @@ export default class ChatPanel {
     return this.assistantMessages(page).last();
   }
 
+  rateButton(page: Page, rating: 'up' | 'down'): Locator {
+    return this.lastAssistantMessage(page).locator('.mago-msg-rate[data-rating="' + rating + '"]');
+  }
+
+  feedbackLine(page: Page): Locator {
+    return this.lastAssistantMessage(page).locator('.mago-feedback-line');
+  }
+
+  feedbackCard(page: Page): Locator {
+    return this.lastAssistantMessage(page).locator('.mago-feedback-ask');
+  }
+
+  /**
+   * Rates the last answer and returns the id of the feedback the server stored. The thumbs only show
+   * on hover until the answer is rated, so the message is hovered first.
+   */
+  async rateLastAnswer(page: Page, rating: 'up' | 'down'): Promise<number> {
+    await this.lastAssistantMessage(page).hover();
+
+    const response = page.waitForResponse((r) => r.url().includes('mago/chat/flag'));
+    await this.rateButton(page, rating).click({timeout: INTERACTION_TIMEOUT_MS});
+    const body = await (await response).json();
+
+    if (!body.flag_id) {
+      throw new Error('Rating the answer failed: ' + JSON.stringify(body));
+    }
+
+    return body.flag_id;
+  }
+
+  /**
+   * Rates the last answer and adds a note in the card that follows the thumb.
+   */
+  async rateLastAnswerWithNote(page: Page, rating: 'up' | 'down', note: string): Promise<number> {
+    const flagId = await this.rateLastAnswer(page, rating);
+
+    const card = this.feedbackCard(page);
+    await card.locator('input').fill(note);
+
+    const response = page.waitForResponse((r) => r.url().includes('mago/chat/flag'));
+    await card.getByRole('button', {name: 'Send', exact: true}).click({timeout: INTERACTION_TIMEOUT_MS});
+    await response;
+
+    return flagId;
+  }
+
   toolTags(page: Page): Locator {
     return page.locator('#mago-messages .mago-tool-tag');
   }
@@ -403,6 +459,29 @@ export default class ChatPanel {
 
   rejectButton(page: Page): Locator {
     return page.locator('#mago-messages .mago-btn--reject');
+  }
+
+  /**
+   * The "I understand ..." checkbox of a card whose write cannot be undone or carries a caution
+   */
+  acknowledgement(page: Page): Locator {
+    return page.locator('#mago-messages .mago-check');
+  }
+
+  /**
+   * One tick row per write on a batch confirmation card, and the folded list of every argument
+   * that sits under each row.
+   */
+  batchRows(page: Page): Locator {
+    return page.locator('#mago-messages .mago-bulk-row');
+  }
+
+  batchArguments(page: Page): Locator {
+    return page.locator('#mago-messages .mago-bulk-details');
+  }
+
+  fieldChanges(page: Page): Locator {
+    return page.locator('#mago-messages .mago-field-change');
   }
 
   slashMenu(page: Page): Locator {

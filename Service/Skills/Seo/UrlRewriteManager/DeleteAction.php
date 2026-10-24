@@ -9,13 +9,15 @@ namespace MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager;
 use Magento\UrlRewrite\Model\ResourceModel\UrlRewrite as UrlRewriteResource;
 use Magento\UrlRewrite\Model\UrlRewriteFactory;
 use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 class DeleteAction implements IrreversibleActionInterface
 {
     public function __construct(
         private readonly UrlRewriteFactory $urlRewriteFactory,
-        private readonly UrlRewriteResource $urlRewriteResource
+        private readonly UrlRewriteResource $urlRewriteResource,
+        private readonly ErrorReporter $errorReporter
     ) {
     }
 
@@ -77,7 +79,8 @@ class DeleteAction implements IrreversibleActionInterface
                 }
             }
         } catch (\Exception $e) {
-            $lines[] = 'The rewrite could not be inspected: ' . $e->getMessage();
+            $error = $this->errorReporter->reportToolFailure('url_rewrite_manager delete impacts', $e);
+            $lines[] = 'The rewrite could not be inspected: ' . $error;
         }
         if ($lines === []) {
             $lines[] = 'URL rewrite ' . $rewriteId . ' is removed; visitors on its URL get a 404.';
@@ -118,7 +121,8 @@ class DeleteAction implements IrreversibleActionInterface
                 'message' => 'URL rewrite deleted: "' . $requestPath . '" (ID: ' . $rewriteId . ')',
             ];
         } catch (\Exception $e) {
-            return ['error' => 'Failed to delete URL rewrite: ' . $e->getMessage()];
+            $error = $this->errorReporter->reportToolFailure('url_rewrite_manager delete', $e);
+            return ['error' => 'Failed to delete URL rewrite: ' . $error];
         }
     }
 }
