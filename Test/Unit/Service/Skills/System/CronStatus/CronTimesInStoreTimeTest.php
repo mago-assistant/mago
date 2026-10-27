@@ -24,7 +24,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Issue #266: every cron_status action returns its times on the store's clock, while the queries
+ * Every cron_status action returns its times on the store's clock, while the queries
  * and the stuck/health math keep comparing UTC with UTC.
  */
 class CronTimesInStoreTimeTest extends TestCase

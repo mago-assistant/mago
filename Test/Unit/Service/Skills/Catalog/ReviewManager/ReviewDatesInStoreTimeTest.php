@@ -18,7 +18,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Issue #266: the review lists show created_at as the review grid does, on the store's clock.
+ * The review lists show created_at as the review grid does, on the store's clock.
  */
 class ReviewDatesInStoreTimeTest extends TestCase
 {
