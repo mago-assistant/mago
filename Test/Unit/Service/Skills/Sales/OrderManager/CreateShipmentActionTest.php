@@ -7,6 +7,8 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Sales\OrderManager;
 
 use Magento\Framework\Stdlib\DateTime\DateTime;
+use MagoAssistant\Mago\Api\Skill\ConditionallyIrreversibleActionInterface;
+use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\CreateShipmentAction;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\CustomerNotificationGuard;
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager\OrderResolver;
@@ -30,7 +32,6 @@ class CreateShipmentActionTest extends TestCase
         $result = $action->execute(['order_number' => '000000008'], self::ADMIN_USER_ID);
 
         self::assertTrue($result['success']);
-        self::assertFalse($action->isIrreversible(['order_number' => '000000008']));
         self::assertSame(['notify' => false], $apiClient->calls()[0]['payload']);
         self::assertSame(self::ADMIN_USER_ID, $apiClient->calls()[0]['admin_user_id']);
     }
@@ -49,6 +50,30 @@ class CreateShipmentActionTest extends TestCase
         );
         self::assertCount(1, $apiClient->calls());
         self::assertSame(['notify' => true], $apiClient->calls()[0]['payload']);
+    }
+
+    #[Test]
+    public function itStaysIrreversibleWhetherOrNotTheCustomerIsEmailed(): void
+    {
+        $action = $this->actionWith(new FakeInternalApiClient());
+
+        self::assertInstanceOf(IrreversibleActionInterface::class, $action);
+        self::assertNotInstanceOf(ConditionallyIrreversibleActionInterface::class, $action);
+    }
+
+    #[Test]
+    public function theCardSaysAShipmentCannotBeDeletedAndAddsTheEmailWhenSent(): void
+    {
+        $action = $this->actionWith(new FakeInternalApiClient());
+
+        self::assertSame(
+            ['Creates a shipment for order #000000008; a shipment cannot be deleted.'],
+            $action->getImpacts(['order_number' => '000000008'], self::ADMIN_USER_ID)
+        );
+
+        $impacts = $action->getImpacts(['order_number' => '000000008', 'notify_customer' => true], self::ADMIN_USER_ID);
+        self::assertCount(2, $impacts);
+        self::assertStringContainsString('receives an e-mail about the shipment', $impacts[1]);
     }
 
     private function actionWith(FakeInternalApiClient $apiClient): CreateShipmentAction

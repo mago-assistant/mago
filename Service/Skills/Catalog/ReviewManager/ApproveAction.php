@@ -7,10 +7,10 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Catalog\ReviewManager;
 
 use Magento\Review\Model\Review;
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
-class ApproveAction implements ActionInterface
+class ApproveAction implements CautionedActionInterface
 {
     public function __construct(
         private readonly ReviewServices $reviewServices
@@ -62,6 +62,19 @@ class ApproveAction implements ActionInterface
         return '';
     }
 
+    public function getCautions(array $params, int $adminUserId): array
+    {
+        $review = $this->loadReview((int)($params['review_id'] ?? 0));
+        if ($review === null || (int)$review->getStatusId() === Review::STATUS_APPROVED) {
+            return [];
+        }
+
+        return [
+            'Review #' . (int)$review->getId() . ' goes live on its product page in the storefront right away: '
+                . 'every shopper can read its title, text and rating.',
+        ];
+    }
+
     public function execute(array $params, int $adminUserId): array
     {
         if (!$adminUserId) {
@@ -73,21 +86,30 @@ class ApproveAction implements ActionInterface
             return ['error' => 'review_id is required'];
         }
 
-        $review = $this->reviewServices->createReview();
-        $reviewResource = $this->reviewServices->getReviewResource();
-        $reviewResource->load($review, $reviewId);
-
-        if (!$review->getId()) {
+        $review = $this->loadReview($reviewId);
+        if ($review === null) {
             return ['error' => 'Review not found: ' . $reviewId];
         }
 
         $review->setStatusId(Review::STATUS_APPROVED);
-        $reviewResource->save($review);
+        $this->reviewServices->getReviewResource()->save($review);
         $review->aggregate();
 
         return [
             'success' => true,
             'message' => 'Review #' . $reviewId . ' has been approved',
         ];
+    }
+
+    private function loadReview(int $reviewId): ?Review
+    {
+        if (!$reviewId) {
+            return null;
+        }
+
+        $review = $this->reviewServices->createReview();
+        $this->reviewServices->getReviewResource()->load($review, $reviewId);
+
+        return $review->getId() ? $review : null;
     }
 }

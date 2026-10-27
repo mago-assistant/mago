@@ -6,12 +6,12 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Sales\OrderManager;
 
-use MagoAssistant\Mago\Api\Skill\ConditionallyIrreversibleActionInterface;
+use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class CreateShipmentAction implements ConditionallyIrreversibleActionInterface
+class CreateShipmentAction implements IrreversibleActionInterface
 {
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
@@ -92,16 +92,17 @@ class CreateShipmentAction implements ConditionallyIrreversibleActionInterface
             . 'Set notify_customer to true only when the user wants the customer to get the shipment e-mail.';
     }
 
-    public function isIrreversible(array $params): bool
-    {
-        return !empty($params['notify_customer']);
-    }
-
     public function getImpacts(array $params, int $adminUserId): array
     {
-        $orderNumber = (string)($params['order_number'] ?? '');
+        $orderNumber = trim((string)($params['order_number'] ?? ''));
+        $orderLabel = $orderNumber !== '' ? ' for order #' . $orderNumber : '';
 
-        return [$this->notificationGuard->describeEmail($orderNumber, 'the shipment')];
+        $impacts = ['Creates a shipment' . $orderLabel . '; a shipment cannot be deleted.'];
+        if (!empty($params['notify_customer'])) {
+            $impacts[] = $this->notificationGuard->describeEmail($orderNumber, 'the shipment');
+        }
+
+        return $impacts;
     }
 
     public function execute(array $params, int $adminUserId): array
