@@ -33,6 +33,16 @@ class StoreTimeTest extends TestCase
     }
 
     #[Test]
+    public function aMissingColumnValueStaysNull(): void
+    {
+        $storeTime = $this->storeTimeIn('Europe/Amsterdam');
+
+        self::assertSame('2026-10-08 00:30:00', $storeTime->toLocalOrNull('2026-10-07 22:30:00'));
+        self::assertNull($storeTime->toLocalOrNull(null));
+        self::assertNull($storeTime->toLocalOrNull(''));
+    }
+
+    #[Test]
     public function itFallsBackToUtcWithoutAUsableTimezone(): void
     {
         self::assertSame('2026-10-07 22:30:00', $this->storeTimeIn('')->toLocal('2026-10-07 22:30:00'));

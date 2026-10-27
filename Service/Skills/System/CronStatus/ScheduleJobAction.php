@@ -12,13 +12,15 @@ use Magento\Cron\Model\Schedule;
 use Magento\Cron\Model\ScheduleFactory;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 
 class ScheduleJobAction implements ActionInterface
 {
     public function __construct(
         private readonly CollectionFactory $collectionFactory,
         private readonly ScheduleFactory $scheduleFactory,
-        private readonly ScheduleResource $scheduleResource
+        private readonly ScheduleResource $scheduleResource,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -116,7 +118,7 @@ class ScheduleJobAction implements ActionInterface
             'success' => true,
             'schedule_id' => (int)$schedule->getData('schedule_id'),
             'job_code' => $jobCode,
-            'scheduled_at' => $now,
+            'scheduled_at' => $this->storeTime->toLocal($now),
             'message' => 'Job "' . $jobCode . '" has been scheduled. '
                 . 'It will be picked up by the next cron run (usually within 1 minute).',
         ];

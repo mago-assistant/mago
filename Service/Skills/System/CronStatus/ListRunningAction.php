@@ -10,11 +10,13 @@ use Magento\Cron\Model\ResourceModel\Schedule\CollectionFactory;
 use Magento\Cron\Model\Schedule;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 
 class ListRunningAction implements ActionInterface
 {
     public function __construct(
-        private readonly CollectionFactory $collectionFactory
+        private readonly CollectionFactory $collectionFactory,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -88,7 +90,7 @@ class ListRunningAction implements ActionInterface
             $jobs[] = [
                 'schedule_id' => (int)$schedule->getData('schedule_id'),
                 'job_code' => $schedule->getData('job_code'),
-                'executed_at' => $executedAt,
+                'executed_at' => $this->storeTime->toLocalOrNull($executedAt),
                 'running_since' => $runningSince,
                 'possibly_stuck' => $possiblyStuck,
             ];

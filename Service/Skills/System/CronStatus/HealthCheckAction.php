@@ -10,11 +10,13 @@ use Magento\Cron\Model\ResourceModel\Schedule\CollectionFactory;
 use Magento\Cron\Model\Schedule;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 
 class HealthCheckAction implements ActionInterface
 {
     public function __construct(
-        private readonly CollectionFactory $collectionFactory
+        private readonly CollectionFactory $collectionFactory,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -101,7 +103,7 @@ class HealthCheckAction implements ActionInterface
             $stuckJobs[] = [
                 'schedule_id' => (int)$schedule->getData('schedule_id'),
                 'job_code' => $schedule->getData('job_code'),
-                'executed_at' => $schedule->getData('executed_at'),
+                'executed_at' => $this->storeTime->toLocalOrNull($schedule->getData('executed_at')),
             ];
         }
 
@@ -116,7 +118,7 @@ class HealthCheckAction implements ActionInterface
         // Determine cron_active
         $cronActive = $lastSuccessTime !== null;
 
-        // Determine overall status
+        // Determine overall status (UTC against UTC; only the returned times are local)
         $status = $this->determineStatus(
             $statusCounts,
             $lastSuccessTime,
@@ -126,10 +128,10 @@ class HealthCheckAction implements ActionInterface
 
         return [
             'cron_active' => $cronActive,
-            'last_success' => $lastSuccessTime,
+            'last_success' => $this->storeTime->toLocalOrNull($lastSuccessTime),
             'last_24h' => $statusCounts,
             'stuck_jobs' => $stuckJobs,
-            'oldest_pending' => $oldestPendingTime,
+            'oldest_pending' => $this->storeTime->toLocalOrNull($oldestPendingTime),
             'status' => $status,
         ];
     }

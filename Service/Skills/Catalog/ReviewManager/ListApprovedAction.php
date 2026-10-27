@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\ReviewManager;
 use Magento\Review\Model\Review;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Time\StoreTime;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
@@ -16,7 +17,8 @@ class ListApprovedAction implements ActionInterface
 {
     public function __construct(
         private readonly ReviewServices $reviewServices,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly StoreTime $storeTime
     ) {
     }
 
@@ -94,7 +96,7 @@ class ListApprovedAction implements ActionInterface
                 'nickname' => $review->getNickname(),
                 'detail' => $review->getDetail(),
                 'product_id' => (int)$review->getEntityPkValue(),
-                'created_at' => $review->getCreatedAt(),
+                'created_at' => $this->storeTime->toLocalOrNull($review->getCreatedAt()),
                 'admin_url' => $this->secureAdminUrl->getUrl('review/product/edit', ['id' => $reviewId]),
             ];
         }
