@@ -149,6 +149,7 @@ only appears in browsers with built-in speech recognition, such as Chrome, Edge 
 | Skill area | Tools | Access |
 |------------|-------|--------|
 | Store Analytics | `sales_data`, `product_data`, `customer_data` | Read |
+| Inventory | `dead_stock` (obsolete and slow-moving inventory, CSV export) | Read |
 | Store Configuration | `config_reader`, `config_writer`, `cache_manager`, `indexer_manager` | Read / Write |
 | Content Management | `cms_data`, `content_generator` | Read / Write |
 | Navigation | `admin_navigator` | Read |

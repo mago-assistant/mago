@@ -111,6 +111,7 @@
                 <item name="page_form" xsi:type="object">MagoAssistant\Mago\Service\Skills\Form\PageForm</item>
                 <item name="stock_level" xsi:type="object">MagoAssistant\Mago\Service\Skills\Inventory\StockLevel</item>
                 <item name="stock_level_msi" xsi:type="object">MagoAssistant\Mago\Service\Skills\Inventory\StockLevelMsi</item>
+                <item name="dead_stock" xsi:type="object">MagoAssistant\Mago\Service\Skills\Inventory\DeadStock</item>
             </argument>
         </arguments>
     </type>
