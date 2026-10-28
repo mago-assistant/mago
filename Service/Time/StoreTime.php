@@ -48,6 +48,17 @@ class StoreTime
         return $this->convert($utcDateTime, new \DateTimeZone('UTC'), $this->zone());
     }
 
+    /**
+     * Converts a stored column value for the model; a NULL or empty column stays NULL.
+     *
+     * @param mixed $utcDateTime a stored column value, possibly NULL or empty
+     * @return string|null
+     */
+    public function toLocalOrNull(mixed $utcDateTime): ?string
+    {
+        return is_string($utcDateTime) && $utcDateTime !== '' ? $this->toLocal($utcDateTime) : null;
+    }
+
     private function convert(string $dateTime, \DateTimeZone $from, \DateTimeZone $to): string
     {
         $parsed = \DateTimeImmutable::createFromFormat(self::FORMAT, $dateTime, $from);
