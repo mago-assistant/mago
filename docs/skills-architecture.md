@@ -127,7 +127,9 @@ named in the input, so a skill needs no extra code. `ChatService` asks the tool 
 confirmation and adds `irreversible: true` plus the `impacts` to that tool in the `confirm` event;
 the chat panel then shows the "cannot be undone" card with an acknowledgement checkbox instead of
 a plain Allow button. Built-in irreversible actions: `order_manager` `cancel`,
-`create_creditmemo` and `resend_confirmation`, `url_rewrite_manager` `delete`.
+`create_invoice`, `create_shipment`, `create_creditmemo` and `resend_confirmation`,
+`url_rewrite_manager` `delete`. An invoice or shipment cannot be deleted once created; when
+`notify_customer` is true the card also names the e-mail.
 
 A write that can be reverted but changes something the admin should weigh first implements
 `MagoAssistant\Mago\Api\Tool\HighImpactToolInterface`: `getCautions(array $input, int $adminUserId)`
@@ -139,7 +141,8 @@ for irreversible actions. Every discount write uses it: `coupon_manager` and
 `catalog_price_rules` `create_rule` name the discount, whether it needs a coupon, and the
 websites, customer groups (guests called out) and dates it applies to; `create_coupon` says how
 many working codes it creates for which rule; `apply_rules` says it reprices every product from
-all active catalog rules.
+all active catalog rules. `review_manager` `approve` says the review goes live on its product
+page right away; an already approved review gets the plain card.
 `config_writer` uses it for storefront scripts, admin security, URLs, mail routing, developer,
 environment and sensitive settings, with the current and the new value (#245). The ACL still
 decides whether the admin may make the change at all.
@@ -156,9 +159,9 @@ defaults cannot be removed that way.
 
 An action that is only irreversible for some calls implements
 `ConditionallyIrreversibleActionInterface` and answers `isIrreversible(array $params)`; the other
-calls get the plain Allow button. The `order_manager` actions `add_comment`, `update_status`,
-`create_invoice` and `create_shipment` do this: they are irreversible when `notify_customer` is
-true, because a sent e-mail cannot be recalled.
+calls get the plain Allow button. The `order_manager` actions `add_comment` and `update_status`
+do this: they are irreversible when `notify_customer` is true, because a sent e-mail cannot be
+recalled.
 
 The acknowledgement is checked on the server too. `ConfirmationClaim::claimToConfirm()` reads the
 `irreversible` and `caution` flags stored on the proposal, the same copy the card was drawn from,
