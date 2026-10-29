@@ -23,6 +23,7 @@ use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 
 class SkillsDataProvider extends DataProvider
 {
+    /** @var list<array<string, mixed>>|null */
     private ?array $skillsData = null;
 
     public function __construct(
@@ -57,6 +58,9 @@ class SkillsDataProvider extends DataProvider
         );
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
     private function getSkillsData(): array
     {
         if ($this->skillsData !== null) {
