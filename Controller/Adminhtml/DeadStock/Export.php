@@ -35,7 +35,7 @@ class Export extends Action implements HttpGetActionInterface
         $type = (string)$this->getRequest()->getParam('type');
         if (!in_array($type, DeadStockReport::TYPES, true)) {
             $this->messageManager->addErrorMessage(__('Unknown dead stock report type.'));
-            return $this->resultRedirectFactory->create()->setPath('admin/dashboard');
+            return $this->resultRedirectFactory->create()->setPath('adminhtml/dashboard');
         }
 
         $months = DeadStockReport::clampMonths(

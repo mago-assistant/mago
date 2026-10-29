@@ -1,0 +1,12 @@
+data: {"id":"chatcmpl-e2e-adminusers-1","object":"chat.completion.chunk","created":1754000201,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-adminusers-1","object":"chat.completion.chunk","created":1754000201,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"Let me find the admin users page."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-adminusers-1","object":"chat.completion.chunk","created":1754000201,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_e2e_adminusers_1","type":"function","function":{"name":"admin_navigator","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-adminusers-1","object":"chat.completion.chunk","created":1754000201,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"query\":\"admin users\",\"category\":\"System\",\"limit\":1}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-adminusers-1","object":"chat.completion.chunk","created":1754000201,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1300,"completion_tokens":30,"total_tokens":1330}}
+
+data: [DONE]
+

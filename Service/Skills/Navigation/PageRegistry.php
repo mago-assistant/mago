@@ -10,10 +10,14 @@ class PageRegistry
 {
     /**
      * [route, label, category, keywords[]]
+     *
+     * The first segment of a route is Magento's route id ("adminhtml"), not the front name in the
+     * URL ("admin"): the secret key is signed with it, and a key signed for the front name is
+     * refused on arrival with a redirect to the dashboard.
      */
     private const PAGES = [
         // Dashboard
-        ['admin/dashboard', 'Dashboard', 'Dashboard', ['dashboard', 'home', 'overview', 'start']],
+        ['adminhtml/dashboard', 'Dashboard', 'Dashboard', ['dashboard', 'home', 'overview', 'start']],
 
         // Sales
         ['sales/order', 'Orders', 'Sales', ['orders', 'order', 'sales', 'purchases', 'bestellingen']],
@@ -35,7 +39,7 @@ class PageRegistry
         ['sales_rule/promo_quote', 'Cart Price Rules', 'Marketing', ['cart', 'price', 'rule', 'coupon', 'discount', 'promo', 'korting', 'kortingscode']],
         ['newsletter/subscriber', 'Newsletter Subscribers', 'Marketing', ['newsletter', 'subscriber', 'email', 'nieuwsbrief']],
         ['search/term', 'Search Terms', 'Marketing', ['search', 'terms', 'zoekterm']],
-        ['admin/url_rewrite', 'URL Rewrites', 'Marketing', ['url', 'rewrite', 'redirect', 'seo']],
+        ['adminhtml/url_rewrite', 'URL Rewrites', 'Marketing', ['url', 'rewrite', 'redirect', 'seo']],
 
         // Content
         ['cms/page', 'CMS Pages', 'Content', ['cms', 'page', 'pages', 'content', 'pagina']],
@@ -67,9 +71,9 @@ class PageRegistry
         // System
         ['adminhtml/cache', 'Cache Management', 'System', ['cache', 'flush', 'clean', 'refresh', 'legen']],
         ['indexer/indexer/list', 'Index Management', 'System', ['index', 'indexer', 'reindex', 'indexeren']],
-        ['admin/user', 'Admin Users', 'System', ['admin', 'user', 'users', 'beheerder', 'gebruikers']],
-        ['admin/user_role', 'Admin Roles', 'System', ['admin', 'role', 'roles', 'permissions', 'acl', 'rechten']],
-        ['integration/integration', 'Integrations', 'System', ['integration', 'api', 'integratie']],
+        ['adminhtml/user', 'Admin Users', 'System', ['admin', 'user', 'users', 'beheerder', 'gebruikers']],
+        ['adminhtml/user_role', 'Admin Roles', 'System', ['admin', 'role', 'roles', 'permissions', 'acl', 'rechten']],
+        ['adminhtml/integration', 'Integrations', 'System', ['integration', 'api', 'integratie']],
         ['backup/index', 'Backups', 'System', ['backup', 'backups', 'restore']],
     ];
 
