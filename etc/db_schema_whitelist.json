@@ -11,7 +11,8 @@
             "PRIMARY": true
         },
         "index": {
-            "MAGO_CONVERSATION_ADMIN_USER_ID": true
+            "MAGO_CONVERSATION_ADMIN_USER_ID": true,
+            "MAGO_CONVERSATION_FULLTEXT": true
         }
     },
     "mago_message": {

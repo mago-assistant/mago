@@ -13,6 +13,10 @@
         <index referenceId="MAGO_CONVERSATION_ADMIN_USER_ID" indexType="btree">
             <column name="admin_user_id"/>
         </index>
+        <!-- The grid offers a keyword box, and Magento's fulltext filter needs an index to use -->
+        <index referenceId="MAGO_CONVERSATION_FULLTEXT" indexType="fulltext">
+            <column name="title"/>
+        </index>
     </table>
 
     <table name="mago_message" resource="default" engine="innodb" comment="Admin Assistant Messages">
