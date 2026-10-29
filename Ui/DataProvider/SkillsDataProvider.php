@@ -17,6 +17,7 @@ use Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider;
 use Magento\Framework\Api\Search\ReportingInterface;
 use Magento\Framework\Api\Search\SearchCriteriaBuilder;
 use Magento\Framework\Api\FilterBuilder;
+use MagoAssistant\Mago\Service\Tool\AdminDescription;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 
 class SkillsDataProvider extends DataProvider
@@ -36,6 +37,7 @@ class SkillsDataProvider extends DataProvider
         private readonly SearchResultFactory $searchResultFactory,
         private readonly DocumentFactory $documentFactory,
         private readonly AttributeValueFactory $attributeValueFactory,
+        private readonly AdminDescription $adminDescription,
         array $meta = [],
         array $data = []
     ) {
@@ -69,7 +71,7 @@ class SkillsDataProvider extends DataProvider
 
             $this->skillsData[] = [
                 'name' => $name,
-                'description' => $tool->getDescription(),
+                'description' => $this->adminDescription->of($tool),
                 'category' => $category,
                 'type' => $tool->isReadOnly() ? 'read' : 'write',
                 'assigned_users' => $assignedUsers[$name] ?? '',
