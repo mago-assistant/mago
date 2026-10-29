@@ -32,6 +32,17 @@
         </dataProvider>
     </dataSource>
 
+    <listingToolbar name="listing_top">
+        <columnsControls name="columns_controls"/>
+        <filterSearch name="fulltext"/>
+        <filters name="listing_filters"/>
+        <paging name="listing_paging">
+            <settings>
+                <pageSize>50</pageSize>
+            </settings>
+        </paging>
+    </listingToolbar>
+
     <columns name="mago_skills_columns">
         <column name="name" sortOrder="10">
             <settings>
@@ -50,6 +61,8 @@
             <settings>
                 <label translate="true">Category</label>
                 <filter>select</filter>
+                <options class="MagoAssistant\Mago\Ui\Source\SkillCategory"/>
+                <dataType>select</dataType>
             </settings>
         </column>
         <column name="type" sortOrder="40" component="MagoAssistant_Mago/js/grid/columns/badge">
