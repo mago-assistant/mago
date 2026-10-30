@@ -32,6 +32,9 @@ class XlsxWriter implements TabularWriterInterface
     /** Characters XML 1.0 does not allow; Excel reports the file as corrupt when one is present */
     private const INVALID_XML_CHARACTERS = '/[^\x{9}\x{A}\x{D}\x{20}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u';
 
+    /** The letters a column reference is spelled with */
+    private const COLUMN_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
     public function getContentType(): string
     {
         return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -226,7 +229,7 @@ class XlsxWriter implements TabularWriterInterface
     {
         $letters = '';
         for ($index = $columnIndex; $index >= 0; $index = intdiv($index, 26) - 1) {
-            $letters = chr(ord('A') + $index % 26) . $letters;
+            $letters = self::COLUMN_LETTERS[$index % 26] . $letters;
         }
 
         return $letters . $rowNumber;
