@@ -80,7 +80,10 @@ class PageRegistry
     private array $pages;
 
     /**
-     * @param array $additionalPages Additional pages [route, label, category, keywords[]]
+     * @param array $additionalPages Additional pages [route, label, category, keywords[]]. The route
+     *                               starts with the route id ("adminhtml/..."), not the front name
+     *                               ("admin/..."): a link signed for the front name is still offered
+     *                               but redirects to the dashboard.
      */
     public function __construct(array $additionalPages = [])
     {

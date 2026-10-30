@@ -21,18 +21,26 @@ final class MagentoObjectManager
         return self::$objectManager ??= self::boot();
     }
 
+    public static function isAvailable(): bool
+    {
+        return is_file(self::bootstrapFile());
+    }
+
     private static function boot(): ObjectManagerInterface
     {
-        $bootstrapFile = dirname(__DIR__, 5) . '/app/bootstrap.php';
-
-        if (!is_file($bootstrapFile)) {
+        if (!self::isAvailable()) {
             Assert::markTestSkipped('Integration tests need the module mounted inside a Magento install.');
         }
 
-        require_once $bootstrapFile;
+        require_once self::bootstrapFile();
         $objectManager = Bootstrap::create(BP, $_SERVER)->getObjectManager();
         $objectManager->get(State::class)->setAreaCode(self::AREA);
 
         return $objectManager;
+    }
+
+    private static function bootstrapFile(): string
+    {
+        return dirname(__DIR__, 5) . '/app/bootstrap.php';
     }
 }

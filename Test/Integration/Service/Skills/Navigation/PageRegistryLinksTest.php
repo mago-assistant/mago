@@ -31,8 +31,13 @@ use PHPUnit\Framework\TestCase;
  *    the admin to the startup page: the dashboard.
  *
  * 2. The ACL resource. AdminNavigator::mayOpen() hides a page AdminRouteAcl resolves no resource
- *    for, and AdminRouteAcl resolves by front name only. A page registered under its route id
- *    ("adminhtml/cache") signs a key Magento accepts but is never offered.
+ *    for. AdminRouteAcl reads the first segment as a front name and falls back to the route id, so
+ *    a page registered under its route id ("adminhtml/cache") is offered as well as signed right.
+ *
+ * The pages come from the PageRegistry the object manager builds, so pages an integrator adds
+ * through additionalPages in di.xml are checked too. Outside a Magento install the provider falls
+ * back to the built-in pages, because a skip thrown from a data provider is reported as an error;
+ * setUp() then skips the tests.
  */
 final class PageRegistryLinksTest extends TestCase
 {
@@ -64,9 +69,14 @@ final class PageRegistryLinksTest extends TestCase
      */
     public static function registryPages(): array
     {
+        $pageRegistry = MagentoObjectManager::isAvailable()
+            ? MagentoObjectManager::get()->get(PageRegistry::class)
+            : new PageRegistry();
+        $pages = $pageRegistry->getAll();
+
         return array_combine(
-            array_map(static fn(array $page): string => $page['label'] . ' (' . $page['route'] . ')', (new PageRegistry())->getAll()),
-            array_map(static fn(array $page): array => [$page['route']], (new PageRegistry())->getAll())
+            array_map(static fn(array $page): string => $page['label'] . ' (' . $page['route'] . ')', $pages),
+            array_map(static fn(array $page): array => [$page['route']], $pages)
         );
     }
 
