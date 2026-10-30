@@ -24,15 +24,16 @@ final class ArrayGridQuery
 
     /**
      * @param list<array<string, mixed>> $rows
+     * @param list<string> $keywordFields The columns the keyword search box looks in
      * @return array{totalRecords: int, items: list<array<string, mixed>>}
      */
-    public function apply(array $rows, SearchCriteriaInterface $criteria): array
+    public function apply(array $rows, SearchCriteriaInterface $criteria, array $keywordFields): array
     {
         $matching = array_values(array_filter(
             $rows,
-            fn (array $row): bool => $this->matchesEveryGroup($row, $criteria->getFilterGroups() ?? [])
+            fn (array $row): bool => $this->matchesEveryGroup($row, $criteria->getFilterGroups() ?? [], $keywordFields)
         ));
-        $sorted = $this->sort($matching, $criteria->getSortOrders() ?? []);
+        $sorted = $this->sort($matching, $this->sortOrdersWithAField($criteria->getSortOrders() ?? []));
 
         return [
             'totalRecords' => count($sorted),
@@ -43,11 +44,12 @@ final class ArrayGridQuery
     /**
      * @param array<string, mixed> $row
      * @param FilterGroup[] $groups
+     * @param list<string> $keywordFields
      */
-    private function matchesEveryGroup(array $row, array $groups): bool
+    private function matchesEveryGroup(array $row, array $groups, array $keywordFields): bool
     {
         foreach ($groups as $group) {
-            if (!$this->matchesAnyFilter($row, $group->getFilters() ?? [])) {
+            if (!$this->matchesAnyFilter($row, $group->getFilters() ?? [], $keywordFields)) {
                 return false;
             }
         }
@@ -58,14 +60,15 @@ final class ArrayGridQuery
     /**
      * @param array<string, mixed> $row
      * @param Filter[] $filters
+     * @param list<string> $keywordFields
      */
-    private function matchesAnyFilter(array $row, array $filters): bool
+    private function matchesAnyFilter(array $row, array $filters, array $keywordFields): bool
     {
         if ($filters === []) {
             return true;
         }
         foreach ($filters as $filter) {
-            if ($this->matches($row, $filter)) {
+            if ($this->matches($row, $filter, $keywordFields)) {
                 return true;
             }
         }
@@ -75,8 +78,9 @@ final class ArrayGridQuery
 
     /**
      * @param array<string, mixed> $row
+     * @param list<string> $keywordFields
      */
-    private function matches(array $row, Filter $filter): bool
+    private function matches(array $row, Filter $filter, array $keywordFields): bool
     {
         $value = $filter->getValue();
         $cell = (string)($row[$filter->getField()] ?? '');
@@ -85,7 +89,7 @@ final class ArrayGridQuery
             self::CONDITION_LIKE => preg_match($this->likeToRegex((string)$value), $cell) === 1,
             self::CONDITION_EQUALS => $cell === (string)$value,
             self::CONDITION_IN => in_array($cell, array_map('strval', (array)$value), true),
-            self::CONDITION_FULLTEXT => $this->containsKeyword($row, (string)$value),
+            self::CONDITION_FULLTEXT => $this->containsKeyword($row, $keywordFields, (string)$value),
             default => throw new \InvalidArgumentException(
                 'Unsupported grid filter condition: ' . $filter->getConditionType()
             ),
@@ -94,10 +98,11 @@ final class ArrayGridQuery
 
     /**
      * @param array<string, mixed> $row
+     * @param list<string> $keywordFields
      */
-    private function containsKeyword(array $row, string $keyword): bool
+    private function containsKeyword(array $row, array $keywordFields, string $keyword): bool
     {
-        $cells = array_filter($row, 'is_scalar');
+        $cells = array_filter(array_intersect_key($row, array_flip($keywordFields)), 'is_scalar');
 
         return array_filter($cells, static fn ($cell): bool => mb_stripos((string)$cell, $keyword) !== false) !== [];
     }
@@ -118,6 +123,21 @@ final class ArrayGridQuery
             },
             $tokens
         )) . '$/isu';
+    }
+
+    /**
+     * The search criteria builder always sends one sort order, with a null field when the grid is
+     * not sorted: that order keeps the rows as they are
+     *
+     * @param SortOrder[] $sortOrders
+     * @return SortOrder[]
+     */
+    private function sortOrdersWithAField(array $sortOrders): array
+    {
+        return array_values(array_filter(
+            $sortOrders,
+            static fn (SortOrder $sortOrder): bool => (string)$sortOrder->getField() !== ''
+        ));
     }
 
     /**

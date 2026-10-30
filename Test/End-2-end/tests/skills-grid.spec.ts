@@ -35,8 +35,9 @@ const isSortedByName = (names: string[], direction: 'asc' | 'desc'): boolean => 
   return JSON.stringify(direction === 'asc' ? sorted : sorted.reverse()) === JSON.stringify(names);
 };
 
-const renderedWith = (page: Page, parameter: string) => page.waitForResponse(
-  (response) => response.url().includes('mui/index/render') && decodeURIComponent(response.url()).includes(parameter)
+const renderedWith = (page: Page, parameter: string, value: string) => page.waitForResponse(
+  (response) => response.url().includes('mui/index/render')
+    && new URL(response.url()).searchParams.get(parameter) === value
 );
 
 test('it lists the skills sorted by name', async ({page}) => {
@@ -47,7 +48,7 @@ test('it lists the skills sorted by name', async ({page}) => {
 
 test('it sorts the skills by name descending after clicking the header', async ({page}) => {
   await chatPanel.openSkillsGrid(page);
-  const rendered = renderedWith(page, 'sorting[direction]=desc');
+  const rendered = renderedWith(page, 'sorting[direction]', 'desc');
 
   await page.locator('th.data-grid-th._sortable', {hasText: 'Name'}).click();
   const body = await (await rendered).json();
@@ -57,7 +58,7 @@ test('it sorts the skills by name descending after clicking the header', async (
 
 test('it finds a skill by keyword', async ({page}) => {
   await chatPanel.openSkillsGrid(page);
-  const rendered = renderedWith(page, 'search=credit memos');
+  const rendered = renderedWith(page, 'search', 'credit memos');
 
   await page.locator('#fulltext').fill('credit memos');
   await page.locator('#fulltext').press('Enter');
@@ -76,7 +77,7 @@ test('it shows the toolbar with the record count above the skills', async ({page
 
 test('it shows only the skills of the category picked in the filters', async ({page}) => {
   await chatPanel.openSkillsGrid(page);
-  const rendered = renderedWith(page, 'filters[category]=Sales');
+  const rendered = renderedWith(page, 'filters[category]', 'Sales');
 
   await page.locator('button[data-action="grid-filter-expand"]').click();
   await page.locator('.admin__data-grid-filters select[name="category"]').selectOption('Sales');
@@ -85,4 +86,15 @@ test('it shows only the skills of the category picked in the filters', async ({p
 
   expect(body.items.length).toBeGreaterThan(0);
   expect(body.items.every((item: any) => item.category === 'Sales')).toBe(true);
+});
+
+test('it does not match a keyword against the type or assigned users of a skill', async ({page}) => {
+  await chatPanel.openSkillsGrid(page);
+  const rendered = renderedWith(page, 'search', 'write');
+
+  await page.locator('#fulltext').fill('write');
+  await page.locator('#fulltext').press('Enter');
+  const body = await (await rendered).json();
+
+  expect(body.items.every((item: any) => [item.name, item.description, item.category].join(' ').toLowerCase().includes('write'))).toBe(true);
 });

@@ -26,6 +26,7 @@ final class ArrayGridQueryTest extends TestCase
         ['name' => 'product_data', 'description' => 'Query product catalog data.', 'category' => 'Catalog', 'type' => 'read'],
         ['name' => 'admin_navigator', 'description' => 'Find admin pages.', 'category' => 'Navigation', 'type' => 'read'],
     ];
+    private const KEYWORD_FIELDS = ['name', 'description', 'category'];
 
     private ArrayGridQuery $query;
 
@@ -37,7 +38,7 @@ final class ArrayGridQueryTest extends TestCase
     #[Test]
     public function itReturnsEveryRowInOriginalOrderWithoutCriteria(): void
     {
-        $result = $this->query->apply(self::ROWS, new SearchCriteria());
+        $result = $this->applyQuery(self::ROWS, new SearchCriteria());
 
         self::assertSame(5, $result['totalRecords']);
         self::assertSame(self::ROWS, $result['items']);
@@ -46,7 +47,7 @@ final class ArrayGridQueryTest extends TestCase
     #[Test]
     public function itSortsByNameAscending(): void
     {
-        $result = $this->query->apply(self::ROWS, $this->criteria([], [$this->sort('name', 'ASC')]));
+        $result = $this->applyQuery(self::ROWS, $this->criteria([], [$this->sort('name', 'ASC')]));
 
         self::assertSame(
             ['admin_navigator', 'cache_manager', 'config_reader', 'product_data', 'sales_data'],
@@ -57,7 +58,7 @@ final class ArrayGridQueryTest extends TestCase
     #[Test]
     public function itSortsByNameDescending(): void
     {
-        $result = $this->query->apply(self::ROWS, $this->criteria([], [$this->sort('name', 'DESC')]));
+        $result = $this->applyQuery(self::ROWS, $this->criteria([], [$this->sort('name', 'DESC')]));
 
         self::assertSame(
             ['sales_data', 'product_data', 'config_reader', 'cache_manager', 'admin_navigator'],
@@ -68,7 +69,7 @@ final class ArrayGridQueryTest extends TestCase
     #[Test]
     public function itBreaksTiesWithTheNextSortOrder(): void
     {
-        $result = $this->query->apply(
+        $result = $this->applyQuery(
             self::ROWS,
             $this->criteria([], [$this->sort('category', 'ASC'), $this->sort('name', 'DESC')])
         );
@@ -82,7 +83,7 @@ final class ArrayGridQueryTest extends TestCase
     #[Test]
     public function itFiltersATextColumnCaseInsensitively(): void
     {
-        $result = $this->query->apply(self::ROWS, $this->criteria([[$this->filter('description', '%MAGENTO%', 'like')]]));
+        $result = $this->applyQuery(self::ROWS, $this->criteria([[$this->filter('description', '%MAGENTO%', 'like')]]));
 
         self::assertSame(['cache_manager'], array_column($result['items'], 'name'));
     }
@@ -92,7 +93,7 @@ final class ArrayGridQueryTest extends TestCase
     {
         $rows = [['name' => 'cache_manager'], ['name' => 'cachexmanager']];
 
-        $result = $this->query->apply($rows, $this->criteria([[$this->filter('name', '%cache\_manager%', 'like')]]));
+        $result = $this->applyQuery($rows, $this->criteria([[$this->filter('name', '%cache\_manager%', 'like')]]));
 
         self::assertSame(['cache_manager'], array_column($result['items'], 'name'));
     }
@@ -100,7 +101,7 @@ final class ArrayGridQueryTest extends TestCase
     #[Test]
     public function itFiltersASelectColumnOnExactValue(): void
     {
-        $result = $this->query->apply(self::ROWS, $this->criteria([[$this->filter('type', 'write', 'eq')]]));
+        $result = $this->applyQuery(self::ROWS, $this->criteria([[$this->filter('type', 'write', 'eq')]]));
 
         self::assertSame(['cache_manager'], array_column($result['items'], 'name'));
     }
@@ -108,7 +109,7 @@ final class ArrayGridQueryTest extends TestCase
     #[Test]
     public function itFiltersOnAnyOfSeveralValues(): void
     {
-        $result = $this->query->apply(self::ROWS, $this->criteria([[$this->filter('category', ['Sales', 'Catalog'], 'in')]]));
+        $result = $this->applyQuery(self::ROWS, $this->criteria([[$this->filter('category', ['Sales', 'Catalog'], 'in')]]));
 
         self::assertSame(['sales_data', 'product_data'], array_column($result['items'], 'name'));
     }
@@ -116,7 +117,7 @@ final class ArrayGridQueryTest extends TestCase
     #[Test]
     public function itCombinesFilterGroupsWithAnd(): void
     {
-        $result = $this->query->apply(self::ROWS, $this->criteria([
+        $result = $this->applyQuery(self::ROWS, $this->criteria([
             [$this->filter('category', 'Configuration', 'eq')],
             [$this->filter('type', 'read', 'eq')],
         ]));
@@ -125,11 +126,27 @@ final class ArrayGridQueryTest extends TestCase
     }
 
     #[Test]
-    public function itMatchesAKeywordSearchAgainstEveryColumn(): void
+    public function itMatchesAKeywordSearchAgainstTheKeywordColumns(): void
     {
-        $result = $this->query->apply(self::ROWS, $this->criteria([[$this->filter('fulltext', 'catalog', 'fulltext')]]));
+        $result = $this->applyQuery(self::ROWS, $this->criteria([[$this->filter('fulltext', 'catalog', 'fulltext')]]));
 
         self::assertSame(['product_data'], array_column($result['items'], 'name'));
+    }
+
+    #[Test]
+    public function itIgnoresColumnsOutsideTheKeywordColumnsInAKeywordSearch(): void
+    {
+        $result = $this->applyQuery(self::ROWS, $this->criteria([[$this->filter('fulltext', 'write', 'fulltext')]]));
+
+        self::assertSame([], $result['items']);
+    }
+
+    #[Test]
+    public function itKeepsTheOriginalOrderForTheSortOrderWithoutAFieldThatCoreSends(): void
+    {
+        $result = $this->applyQuery(self::ROWS, $this->criteria([], [new SortOrder()]));
+
+        self::assertSame(self::ROWS, $result['items']);
     }
 
     #[Test]
@@ -137,7 +154,7 @@ final class ArrayGridQueryTest extends TestCase
     {
         $criteria = $this->criteria([], [$this->sort('name', 'ASC')])->setPageSize(2)->setCurrentPage(2);
 
-        $result = $this->query->apply(self::ROWS, $criteria);
+        $result = $this->applyQuery(self::ROWS, $criteria);
 
         self::assertSame(5, $result['totalRecords']);
         self::assertSame(['config_reader', 'product_data'], array_column($result['items'], 'name'));
@@ -148,7 +165,16 @@ final class ArrayGridQueryTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        $this->query->apply(self::ROWS, $this->criteria([[$this->filter('name', 'a', 'gteq')]]));
+        $this->applyQuery(self::ROWS, $this->criteria([[$this->filter('name', 'a', 'gteq')]]));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return array{totalRecords: int, items: list<array<string, mixed>>}
+     */
+    private function applyQuery(array $rows, SearchCriteria $criteria): array
+    {
+        return $this->query->apply($rows, $criteria, self::KEYWORD_FIELDS);
     }
 
     /**

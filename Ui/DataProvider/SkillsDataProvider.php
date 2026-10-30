@@ -23,6 +23,11 @@ use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 
 class SkillsDataProvider extends DataProvider
 {
+    /**
+     * The keyword search looks at what describes a skill, not at its type or who it is assigned to
+     */
+    private const KEYWORD_FIELDS = ['name', 'description', 'category'];
+
     /** @var list<array<string, mixed>>|null */
     private ?array $skillsData = null;
 
@@ -149,6 +154,6 @@ class SkillsDataProvider extends DataProvider
      */
     private function getGridResult(): array
     {
-        return $this->gridQuery->apply($this->getSkillsData(), $this->getSearchCriteria());
+        return $this->gridQuery->apply($this->getSkillsData(), $this->getSearchCriteria(), self::KEYWORD_FIELDS);
     }
 }
