@@ -477,8 +477,7 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
             var part = el('div', 'mago-composition-seg');
             part.style.width = pctOf(s.value, total).toFixed(2) + '%';
             part.style.background = safeColor(s.color, rampColor(i, segs.length));
-            part.title = s.label + ' ' + formatNumber(s.value);
-            return part;
+            return tip(part, s.label + ' · ' + (s.valueText || formatNumber(s.value)), edgeOf(i, segs.length));
         }));
         return card('mago-composition', [
             caption(opts.label),
@@ -492,6 +491,88 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
     /* ------------------------------------------------------------------ */
     /* W07–W12 Charts                                                       */
     /* ------------------------------------------------------------------ */
+
+    // Answer widgets lose their listeners on the way in (#249), so a value shows through CSS on
+    // hover and keyboard focus, not through a native title nobody waits for (#269).
+    function tip(node, text, edge) {
+        node.classList.add('has-tip');
+        node.setAttribute('role', 'img');
+        node.setAttribute('aria-label', text);
+        var bubble = el('span', 'mago-tip' + (edge ? ' ' + edge : ''), text);
+        bubble.setAttribute('aria-hidden', 'true');
+        node.appendChild(bubble);
+        return node;
+    }
+
+    function focusable(node) {
+        node.setAttribute('tabindex', '0');
+        return node;
+    }
+
+    // The outermost tips align to their own edge, so they stay inside the panel.
+    function edgeOf(index, count) {
+        if (count < 3) {
+            return '';
+        }
+        return index === 0 ? 'is-start' : index === count - 1 ? 'is-end' : '';
+    }
+
+    // Enough decimals to tell the ticks apart: the distance between them decides, not their size,
+    // so 120.5 to 121.4 reads 121.4 / 120.95 / 120.5 and not 121 three times.
+    function tickDigits(interval) {
+        if (!(interval > 0)) {
+            return 2;
+        }
+        if (interval >= 10) {
+            return 0;
+        }
+        return interval >= 1 ? 1 : Math.min(4, Math.ceil(-Math.log10(interval)) + 1);
+    }
+
+    // Compact ("1.3M") only when the ticks span most of the scale, so it fits the gutter without
+    // rounding neighbouring ticks to the same label; the tooltip keeps the full value.
+    function tickText(value, interval, biggest, currency) {
+        var money = currency ? {style: 'currency', currency: currency, minimumFractionDigits: 0} : {};
+        if (biggest >= 10000 && interval * 2 >= biggest / 2) {
+            return formatNumber(value, Object.assign({notation: 'compact', maximumFractionDigits: 1}, money));
+        }
+        return formatNumber(value, Object.assign({maximumFractionDigits: tickDigits(interval)}, money));
+    }
+
+    // An ISO code from the answer, or nothing: Intl then writes the sign where the admin locale puts it.
+    function currencyOf(code) {
+        return typeof code === 'string' && /^[A-Z]{3}$/.test(code) ? code : null;
+    }
+
+    function formatValue(value, currency) {
+        return currency ? formatNumber(value, {style: 'currency', currency: currency}) : formatNumber(value);
+    }
+
+    // Top, middle and bottom of the plot: the peak sits at the top, so the geometry stays as is.
+    function yAxis(top, bottom, currency) {
+        var interval = Math.abs(top - bottom) / 2;
+        var biggest = Math.max(Math.abs(top), Math.abs(bottom));
+        return el('div', 'mago-y-axis', [top, (top + bottom) / 2, bottom].map(function (v) {
+            return el('span', 'mago-y-tick', tickText(v, interval, biggest, currency));
+        }));
+    }
+
+    // Past seven points the labels do not fit side by side, so every second or third one shows,
+    // counted from the anchor (the peak) so it keeps its label; the tooltip still names each point.
+    var LABELS_SIDE_BY_SIDE = 7;
+
+    function isLabelShown(index, count, anchor) {
+        return (index - (anchor || 0)) % Math.ceil(count / LABELS_SIDE_BY_SIDE) === 0;
+    }
+
+    // A thinned axis has room beside each label, so it stays on one line instead of wrapping.
+    function axisClass(count) {
+        return 'mago-axis' + (count > LABELS_SIDE_BY_SIDE ? ' is-thinned' : '');
+    }
+
+    function gridlines() {
+        return el('span', 'mago-y-grid', [el('span'), el('span'), el('span')]);
+    }
 
     // W07 Ranked bars: the default for "which / how many".
     // {label, items: [{label, value, valueText}]}
@@ -515,42 +596,55 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
     }
 
     // W08 Columns over time: ≤ 14 points, the peak in accent.
-    // {label, points: [{label, value, highlight}]}
+    // {label, currency, points: [{label, value, valueText, highlight}]}
     function columns(opts) {
         var points = opts.points || [];
         var max = maxOf(points.map(function (p) { return p.value; }));
         var hasExplicit = points.some(function (p) { return p.highlight; });
+        var currency = currencyOf(opts.currency);
+        function isPeak(p) {
+            return hasExplicit ? !!p.highlight : (p.value === max && max > 0);
+        }
+        var peakIndex = Math.max(points.findIndex(isPeak), 0);
         return card('mago-columns', [
             caption(opts.label),
-            el('div', 'mago-columns-plot', points.map(function (p) {
-                var isPeak = hasExplicit ? !!p.highlight : (p.value === max && max > 0);
-                var col = el('div', 'mago-column' + (isPeak ? ' is-peak' : ''));
-                col.style.height = pctOf(p.value, max).toFixed(1) + '%';
-                col.title = p.label + ' ' + (p.valueText || formatNumber(p.value));
-                return col;
-            })),
-            el('div', 'mago-axis', points.map(function (p) {
-                var isPeak = hasExplicit ? !!p.highlight : (p.value === max && max > 0);
-                return el('div', 'mago-axis-label' + (isPeak ? ' is-peak' : ''), p.label);
-            }))
+            el('div', 'mago-plot', [
+                yAxis(max, 0, currency),
+                el('div', 'mago-columns-plot', [gridlines()].concat(points.map(function (p, i) {
+                    var col = el('div', 'mago-column' + (isPeak(p) ? ' is-peak' : ''));
+                    col.style.height = pctOf(p.value, max).toFixed(1) + '%';
+                    return focusable(tip(col, p.label + ' · ' + (p.valueText || formatValue(p.value, currency)), edgeOf(i, points.length)));
+                }))),
+                el('div', axisClass(points.length), points.map(function (p, i) {
+                    var label = isLabelShown(i, points.length, peakIndex) ? p.label : '';
+                    return el('div', 'mago-axis-label' + (isPeak(p) ? ' is-peak' : ''), label);
+                }))
+            ])
         ]);
     }
 
     // W09 Two-series lines: this period vs the previous one.
-    // {label, series: [{label, points, style: 'solid'|'dashed'}], xLabels: [...]}
+    // {label, currency, series: [{label, points, style: 'solid'|'dashed'}], xLabels: [...]}
     function lines(opts) {
-        var w = 360, h = 118, pad = 4;
+        var w = 360, h = 118, pad = 4, inset = 8;
         var series = opts.series || [];
         var all = [];
         series.forEach(function (s) { all = all.concat(s.points || []); });
         var max = maxOf(all);
         var min = Math.min.apply(null, all.length ? all : [0]);
         var range = max - min || 1;
+        var count = maxOf(series.map(function (s) { return (s.points || []).length; }));
+        var xLabels = opts.xLabels || [];
+        var currency = currencyOf(opts.currency);
+        // Each series spreads over the full width with its own spacing.
+        function stepFor(length) {
+            return length > 1 ? (w - pad * 2) / (length - 1) : 0;
+        }
         function path(points) {
-            var step = points.length > 1 ? (w - pad * 2) / (points.length - 1) : 0;
+            var step = stepFor(points.length);
             return points.map(function (p, i) {
                 var x = pad + i * step;
-                var y = 8 + (1 - (p - min) / range) * (h - 8 - 8);
+                var y = inset + (1 - (p - min) / range) * (h - inset * 2);
                 return (i === 0 ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1);
             }).join(' ');
         }
@@ -559,14 +653,15 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         svg.setAttribute('preserveAspectRatio', 'none');
         svg.setAttribute('class', 'mago-lines-svg');
         svg.setAttribute('aria-hidden', 'true');
-        var markup = '<line x1="0" y1="8" x2="360" y2="8" class="mago-grid"/>'
-            + '<line x1="0" y1="46" x2="360" y2="46" class="mago-grid"/>'
-            + '<line x1="0" y1="84" x2="360" y2="84" class="mago-grid"/>';
+        // Gridlines at the max, mid and min ticks: the top, middle and bottom of the drawn range.
+        var markup = [inset, h / 2, h - inset].map(function (y) {
+            return '<line x1="0" y1="' + y + '" x2="' + w + '" y2="' + y + '" class="mago-grid"/>';
+        }).join('');
         // Paint order: the primary fill first, then the comparison lines, then
         // the primary line on top, so a lower "previous period" stays visible.
         var primary = series[0] && series[0].points && series[0].points.length > 1 ? path(series[0].points) : null;
         if (primary) {
-            markup += '<path d="' + primary + ' L' + (w - pad) + ' ' + (h - 8) + ' L' + pad + ' ' + (h - 8) + ' Z" class="mago-line-fill"/>';
+            markup += '<path d="' + primary + ' L' + (w - pad) + ' ' + (h - inset) + ' L' + pad + ' ' + (h - inset) + ' Z" class="mago-line-fill"/>';
         }
         series.slice(1).forEach(function (s) {
             markup += '<path d="' + path(s.points || []) + '" class="mago-line is-secondary' + (s.style === 'solid' ? '' : ' is-dashed') + '"/>';
@@ -575,6 +670,27 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
             markup += '<path d="' + primary + '" class="mago-line is-primary"/>';
         }
         svg.innerHTML = markup;
+        // One hit area per point of the longest series, listing the point each series draws nearest
+        // to it, since a shorter series is stretched over the same width. Clamped to the plot.
+        var step = stepFor(count);
+        var half = Math.max(step, 8) / 2;
+        var hits = el('div', 'mago-lines-points', Array.apply(null, Array(count)).map(function (_, i) {
+            var x = pad + i * step;
+            var values = series.map(function (s) {
+                var points = s.points || [];
+                var nearest = points[count > 1 ? Math.round(i * (points.length - 1) / (count - 1)) : 0];
+                return typeof nearest === 'number' ? (s.label ? s.label + ' ' : '') + formatValue(nearest, currency) : null;
+            }).filter(function (text) { return text !== null; });
+            var label = xLabels.length === count ? [xLabels[i]] : [];
+            var start = Math.max(0, x - half);
+            var width = Math.min(w, x + half) - start;
+            var hit = el('div', 'mago-line-point');
+            hit.style.left = (start / w * 100).toFixed(2) + '%';
+            hit.style.width = (width / w * 100).toFixed(2) + '%';
+            // A clamped edge area is not centred on its point, so the hover guide gets the offset.
+            hit.style.setProperty('--mago-guide', ((x - start) / width * 100).toFixed(2) + '%');
+            return focusable(tip(hit, label.concat(values).join(' · '), edgeOf(i, count)));
+        }));
         return card('mago-lines', [
             el('div', 'mago-widget-head', [
                 caption(opts.label, 'is-grow'),
@@ -582,40 +698,49 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
                     return {label: s.label, line: true, color: i === 0 ? 'var(--mago-ramp-1)' : 'var(--mago-line-secondary)'};
                 }), 'is-inline') : null
             ]),
-            svg,
-            opts.xLabels ? el('div', 'mago-axis is-spread', opts.xLabels.map(function (l) { return el('span', 'mago-axis-label', l); })) : null
+            el('div', 'mago-plot', [
+                yAxis(max, min, currency),
+                el('div', 'mago-lines-area', [svg, count ? hits : null]),
+                opts.xLabels ? el('div', 'mago-axis is-spread', opts.xLabels.map(function (l) { return el('span', 'mago-axis-label', l); })) : null
+            ])
         ]);
     }
 
     // W10 Stacked columns: total and composition per step.
-    // {label, series: [{label, color}], points: [{label, values: [...]}]}
+    // {label, currency, series: [{label, color}], points: [{label, values: [...]}]}
     function stackedColumns(opts) {
         var series = opts.series || [];
         var points = opts.points || [];
         var totals = points.map(function (p) { return (p.values || []).reduce(function (s, v) { return s + v; }, 0); });
         var max = maxOf(totals);
         var colors = series.map(function (s, i) { return safeColor(s.color, i === 0 ? 'var(--mago-ramp-1)' : 'var(--mago-ramp-3)'); });
+        var currency = currencyOf(opts.currency);
         return card('mago-stacked', [
             el('div', 'mago-widget-head', [
                 caption(opts.label, 'is-grow'),
                 legendRow(series.map(function (s, i) { return {label: s.label, color: colors[i]}; }), 'is-inline')
             ]),
-            el('div', 'mago-columns-plot is-stacked', points.map(function (p, pi) {
-                var total = totals[pi] || 0;
-                var col = el('div', 'mago-stack');
-                col.style.height = pctOf(total, max).toFixed(1) + '%';
-                // Top of the stack is the last series, so draw in reverse.
-                (p.values || []).slice().reverse().forEach(function (v, ri) {
-                    var si = p.values.length - 1 - ri;
-                    var seg = el('div', 'mago-stack-seg');
-                    seg.style.height = pctOf(v, total).toFixed(1) + '%';
-                    seg.style.background = colors[si];
-                    seg.title = (series[si] ? series[si].label + ' ' : '') + formatNumber(v);
-                    col.appendChild(seg);
-                });
-                return col;
-            })),
-            el('div', 'mago-axis', points.map(function (p) { return el('div', 'mago-axis-label', p.label); }))
+            el('div', 'mago-plot', [
+                yAxis(max, 0, currency),
+                el('div', 'mago-columns-plot is-stacked', [gridlines()].concat(points.map(function (p, pi) {
+                    var total = totals[pi] || 0;
+                    var col = el('div', 'mago-stack');
+                    col.style.height = pctOf(total, max).toFixed(1) + '%';
+                    // Top of the stack is the last series, so draw in reverse.
+                    (p.values || []).slice().reverse().forEach(function (v, ri) {
+                        var si = p.values.length - 1 - ri;
+                        var seg = el('div', 'mago-stack-seg');
+                        seg.style.height = pctOf(v, total).toFixed(1) + '%';
+                        seg.style.background = colors[si];
+                        var text = p.label + ' · ' + (series[si] ? series[si].label + ' ' : '') + formatValue(v, currency);
+                        col.appendChild(focusable(tip(seg, text, edgeOf(pi, points.length))));
+                    });
+                    return col;
+                }))),
+                el('div', axisClass(points.length), points.map(function (p, i) {
+                    return el('div', 'mago-axis-label', isLabelShown(i, points.length) ? p.label : '');
+                }))
+            ])
         ]);
     }
 
@@ -630,8 +755,8 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         var cols = values.length ? maxOf(values.map(function (r) { return r.length; })) : 0;
         var grid = el('div', 'mago-heat-grid');
         grid.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
-        values.forEach(function (r) {
-            r.forEach(function (v) {
+        values.forEach(function (r, ri) {
+            r.forEach(function (v, ci) {
                 var cell = el('div', 'mago-heat-cell');
                 var level = max > 0 ? v / max : 0;
                 cell.style.background = level <= 0 ? 'var(--mago-surface)'
@@ -640,8 +765,8 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
                     : level < 0.6 ? 'var(--mago-ramp-3)'
                     : level < 0.8 ? 'var(--mago-ramp-2)'
                     : 'var(--mago-ramp-1)';
-                cell.title = formatNumber(v);
-                grid.appendChild(cell);
+                // Hover only: a cell per hour of the week would be over a hundred tab stops.
+                grid.appendChild(tip(cell, (rows[ri] ? rows[ri] + ' · ' : '') + formatNumber(v), edgeOf(ci, cols)));
             });
         });
         return card('mago-heatmap', [
