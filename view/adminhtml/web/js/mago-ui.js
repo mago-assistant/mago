@@ -629,7 +629,9 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         var w = 360, h = 118, pad = 4, inset = 8;
         var series = opts.series || [];
         var all = [];
-        series.forEach(function (s) { all = all.concat(s.points || []); });
+        series.forEach(function (s) {
+            all = all.concat((s.points || []).filter(function (p) { return typeof p === 'number' && isFinite(p); }));
+        });
         var max = maxOf(all);
         var min = Math.min.apply(null, all.length ? all : [0]);
         var range = max - min || 1;
@@ -699,7 +701,7 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
                 }), 'is-inline') : null
             ]),
             el('div', 'mago-plot', [
-                yAxis(max, min, currency),
+                yAxis(min + range, min, currency),
                 el('div', 'mago-lines-area', [svg, count ? hits : null]),
                 opts.xLabels ? el('div', 'mago-axis is-spread', opts.xLabels.map(function (l) { return el('span', 'mago-axis-label', l); })) : null
             ])
