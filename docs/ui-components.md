@@ -130,6 +130,7 @@ changes in place, it does not move.
 | S03 / S05 | `skillLine` | Collapsed result line: `title`, `action`, `duration`, `state: done\|failed\|skipped`, `request`, `response`, `expanded`. Expands on click when a payload is given. |
 | S04 | `skillFailed` | `title`, `code`, `text`, `details`, `onRetry`, `onDetails` |
 | S06 | `readLine` | `text`, `tool`, `action`, `state: done\|active` — one quiet line per read-only call |
+| S06b | `downloadRow` | `title`, `links: [{label, href, title, ariaLabel}]` — the full result of a lookup as a file, one row under the answer |
 | S07 | `skillIrreversible` | `title`, `tool`, `text`, `impacts: [...]`, `ackLabel`, `confirmLabel`, `onConfirm`, `onCancel`. The confirm button stays disabled until the acknowledgement is ticked. |
 | S08 | `skillBulk` | `title`, `items: [{id, label, meta, params, checked, disabled, needsAck}]`, `ackLabel`, `confirmLabel(n)`, `onConfirm(ids, items, event, acknowledged)`, `onLater`. Items start unticked unless `checked: true`. `params` (rows as for S01) fold out under the row with every argument in full. An item with `needsAck` adds an acknowledgement; while such an item is ticked the button stays disabled until it is ticked too. |
 | S09 | `skillPlan` | `title`, `current`, `total`, `steps: [{title, meta, state: done\|active\|ask\|pending}]`, `onAllowAll`, `onPause` |
@@ -159,7 +160,18 @@ changes in place, it does not move.
 - a ticked acknowledgement (S07 or S08) is sent as `acknowledged: true`, and the
   server refuses an irreversible or cautioned write without it;
 - `tool_status` events for read-only tools render as S06 lines above the answer,
-  a failed read shows the error in the line's tooltip;
+  a failed read shows the error in the line's tooltip. A finished line reads in
+  the past tense ("Checked low stock") from the event's `done_message`;
+- a read the server marks `exportable` gets an S06b download row with "CSV ·
+  Excel" links to `mago/chat/export`. With one such read and a list in the answer
+  (a table, a product list or a markdown table), the row sits right under that
+  list and says how many rows the file holds ("All 50 rows"); a product list's
+  "N more not shown" note becomes the row. Otherwise each read gets a row with
+  its `export_title` between the answer and its thumbs. The tooltips give the
+  `export_row_count`. The rows appear once the answer is
+  stored (not on a turn that ends waiting for a confirmation) and again after a
+  reload. A click fetches the file in the background, so the admin stays on the
+  page; a refusal shows as a danger callout under the row;
 - `error` events render as a danger callout (W18);
 - the slash menu is the S14 skill menu, coloured green for read-only skills and
   orange for skills that write;

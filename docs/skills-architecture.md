@@ -434,7 +434,7 @@ The module ships with 10 tools grouped into 4 skill areas:
 |------|-------|-----------|-------------|
 | `stock_level` | `Service\Skills\Inventory\StockLevel` | Yes | Stock of one SKU from the catalog stock item: quantity, in-stock status, manage stock, backorders. Stores without MSI only. |
 | `stock_level_msi` | `Service\Skills\Inventory\StockLevelMsi` | Yes | Quantity and status per inventory source, salable quantity per stock. Stores with MSI only; MSI services are resolved at run time so disabling or removing the Inventory modules does not break the registry. |
-| `dead_stock` | `Service\Skills\Inventory\DeadStock` | Yes | Obsolete inventory (in stock, no net sales in N months) and slow-moving inventory (stock lasts at least N days at the current sales rate). Returns totals, the products with the highest stock value and an `export_url` to the admin route `mago/deadstock/export`, which downloads the full list as CSV. Requires `Magento_Reports::report_products`. |
+| `dead_stock` | `Service\Skills\Inventory\DeadStock` | Yes | Obsolete inventory (in stock, no net sales in N months) and slow-moving inventory (stock lasts at least N days at the current sales rate). Returns totals and the products with the highest stock value; the full list downloads as CSV or Excel from the row under the answer (`mago/chat/export`). Requires `Magento_Reports::report_products`. |
 
 ### Store Configuration
 

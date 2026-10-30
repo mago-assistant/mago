@@ -82,6 +82,16 @@
         </arguments>
     </type>
 
+    <!-- Downloads of a tool call's full result (#298), one writer per format -->
+    <type name="MagoAssistant\Mago\Service\Export\ToolCallExport">
+        <arguments>
+            <argument name="writers" xsi:type="array">
+                <item name="csv" xsi:type="object">MagoAssistant\Mago\Service\Export\CsvWriter</item>
+                <item name="xlsx" xsi:type="object">MagoAssistant\Mago\Service\Export\XlsxWriter</item>
+            </argument>
+        </arguments>
+    </type>
+
     <!-- Tool Registry: inject all tools -->
     <type name="MagoAssistant\Mago\Service\Tool\ToolRegistry">
         <arguments>

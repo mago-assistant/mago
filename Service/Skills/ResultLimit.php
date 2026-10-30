@@ -20,6 +20,17 @@ class ResultLimit
     public const MAX = 50;
 
     /**
+     * The most rows a download of a tool call holds (#298). The chat answer stays at MAX; the file
+     * may be larger, but one link should not pull a whole catalog through the admin.
+     */
+    public const EXPORT_MAX = 10000;
+
+    /**
+     * How many rows an export reads per query
+     */
+    public const EXPORT_PAGE_SIZE = 1000;
+
+    /**
      * @param array<array-key, mixed> $params
      */
     public static function fromParams(array $params, int $default, int $max = self::MAX): int

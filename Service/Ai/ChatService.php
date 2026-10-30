@@ -12,16 +12,17 @@ use MagoAssistant\Mago\Api\ChatServiceInterface;
 use MagoAssistant\Mago\Api\Tool\HighImpactToolInterface;
 use MagoAssistant\Mago\Api\Tool\IrreversibleToolInterface;
 use MagoAssistant\Mago\Api\Tool\PresentableToolInterface;
+use MagoAssistant\Mago\Api\Tool\ExportableToolInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
 use MagoAssistant\Mago\Api\Tool\UpfrontGuidanceToolInterface;
 use MagoAssistant\Mago\Api\Config\RepositoryInterface as ConfigRepository;
 use MagoAssistant\Mago\Logger\DebugLogger;
 use MagoAssistant\Mago\Logger\ErrorLogger;
-use MagoAssistant\Mago\Service\Acl\ToolAccess;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 use MagoAssistant\Mago\Service\Privacy\PrivacyService;
+use MagoAssistant\Mago\Service\Tool\ToolCallGate;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Service\Usage\UsageLogger;
 
@@ -63,7 +64,7 @@ class ChatService implements ChatServiceInterface
         private readonly AnswerWidgets $answerWidgets,
         private readonly PageContextHolder $pageContextHolder,
         private readonly PrivacyService $privacyService,
-        private readonly ToolAccess $toolAccess,
+        private readonly ToolCallGate $toolCallGate,
         private readonly ErrorLogger $errorLogger
     ) {
     }
@@ -76,6 +77,19 @@ class ChatService implements ChatServiceInterface
      * @var list<array{label: string, url: string}>
      */
     private array $pendingEntityLinks = [];
+
+    /**
+     * Past tense for what the stream showed while the call ran: the line stays on screen after
+     * the call ended, and "Checking low stock..." reads as if it is still busy.
+     */
+    private const FINISHED_VERBS = [
+        'Adding' => 'Added', 'Calculating' => 'Calculated', 'Cancelling' => 'Cancelled',
+        'Checking' => 'Checked', 'Cleaning' => 'Cleaned', 'Creating' => 'Created',
+        'Fetching' => 'Fetched', 'Finding' => 'Found', 'Flushing' => 'Flushed', 'Holding' => 'Held',
+        'Listing' => 'Listed', 'Looking' => 'Looked', 'Opening' => 'Opened', 'Reading' => 'Read',
+        'Reindexing' => 'Reindexed', 'Removing' => 'Removed', 'Running' => 'Ran',
+        'Searching' => 'Searched', 'Sending' => 'Sent', 'Staging' => 'Staged', 'Updating' => 'Updated',
+    ];
 
     /**
      * Some models (gpt-4o in particular) answer a tool result with an empty completion, or announce
@@ -339,6 +353,7 @@ class ChatService implements ChatServiceInterface
                 if ($reportStatus) {
                     $onChunk('tool_status', [
                         'name' => $toolCall['name'],
+                        'tool_call_id' => $toolCall['id'],
                         'status' => 'running',
                         'message' => $runningMessage,
                     ]);
@@ -348,7 +363,14 @@ class ChatService implements ChatServiceInterface
                 $result = $refusals[$toolCall['id']] ?? $this->executeTool($toolCall, $adminUserId);
                 $elapsedMs = (int)round((microtime(true) - $startedAt) * 1000);
                 $this->emitClientDirective($result, $onChunk);
-                $status = $this->statusAfter($toolCall['name'], $result, $elapsedMs);
+                $status = $this->withExportability(
+                    $toolCall,
+                    $this->withFinishedMessage(
+                        ['tool_call_id' => $toolCall['id']] + $this->statusAfter($toolCall['name'], $result, $elapsedMs),
+                        $runningMessage
+                    ),
+                    $adminUserId
+                );
 
                 if ($reportStatus) {
                     $onChunk('tool_status', $status);
@@ -371,7 +393,12 @@ class ChatService implements ChatServiceInterface
             }
         }
 
-        return ['content' => 'Maximum tool iterations reached.', 'tool_calls' => []];
+        // Kept like a finished answer's, so the reads that did run are stored with their lines
+        return [
+            'content' => 'Maximum tool iterations reached.',
+            'tool_calls' => [],
+            'executed_tool_calls' => $allToolCalls,
+        ];
     }
 
     /**
@@ -559,7 +586,7 @@ class ChatService implements ChatServiceInterface
      *
      * @param array<string, mixed> $toolCall
      * @param string $runningMessage
-     * @param array<string, string> $status
+     * @param array<string, mixed> $status
      * @param int $elapsedMs
      * @return array<string, mixed>
      */
@@ -571,8 +598,68 @@ class ChatService implements ChatServiceInterface
         if (isset($status['message'])) {
             $toolCall['status_error'] = $status['message'];
         }
+        foreach (['done_message' => 'status_done_message', 'exportable' => 'exportable', 'export_title' => 'export_title', 'export_row_count' => 'export_row_count'] as $from => $to) {
+            if (isset($status[$from])) {
+                $toolCall[$to] = $status[$from];
+            }
+        }
 
         return $toolCall;
+    }
+
+    /**
+     * @param array<string, mixed> $status
+     * @return array<string, mixed>
+     */
+    private function withFinishedMessage(array $status, string $runningMessage): array
+    {
+        if ($status['status'] !== 'done') {
+            return $status;
+        }
+
+        $message = (string)preg_replace('/\s*(\.\.\.|…)\s*$/u', '', $runningMessage);
+        [$verb, $rest] = array_pad(explode(' ', $message, 2), 2, '');
+        if (isset(self::FINISHED_VERBS[$verb])) {
+            $message = trim(self::FINISHED_VERBS[$verb] . ' ' . $rest);
+        }
+
+        return $status + ['done_message' => $message];
+    }
+
+    /**
+     * Marks a successful call whose full result the admin can download (#298), with what the download
+     * is called and how many rows it holds, so the panel offers it under the answer, live and after a
+     * reload. Decided on the arguments the call
+     * ran with; the export checks the call again before it runs.
+     *
+     * @param array<string, mixed> $toolCall
+     * @param array<string, mixed> $status
+     * @return array<string, mixed>
+     */
+    private function withExportability(array $toolCall, array $status, ?int $adminUserId): array
+    {
+        if ($status['status'] !== 'done') {
+            return $status;
+        }
+
+        $tool = $this->toolRegistry->getTool((string)$toolCall['name'], $adminUserId);
+        $input = $tool ? $this->inputForAction($tool, $toolCall['input'] ?? []) : [];
+        if (!$tool instanceof ExportableToolInterface || !$tool->isReadOnlyAction($input) || !$tool->isExportableAction($input)) {
+            return $status;
+        }
+
+        $input = $this->privacyService->rehydrateArguments($input);
+        $input['_admin_user_id'] = $adminUserId;
+        $status['exportable'] = true;
+        $status['export_title'] = $tool->getExportTitle($input);
+        try {
+            $status['export_row_count'] = $tool->countExportRows($input);
+        } catch (\Throwable $e) {
+            // The download works without the count; only its tooltip is vaguer
+            $this->errorReporter->log('Tool Export Count ' . $tool->getName(), $e);
+        }
+
+        return $status;
     }
 
     /**
@@ -1029,9 +1116,8 @@ class ChatService implements ChatServiceInterface
     }
 
     /**
-     * Why the admin user may not perform this invocation, or null when allowed.
-     * Checks the assistant skill permission first, then the tool's native Magento ACL.
-     * Decided on the input executeTool() runs, so no undeclared key can sway it.
+     * Why the admin user may not perform this invocation, or null when allowed. ToolCallGate
+     * decides, the same way it does for an export of the call.
      *
      * @param ToolInterface $tool
      * @param array<string, mixed> $input
@@ -1040,15 +1126,7 @@ class ChatService implements ChatServiceInterface
      */
     private function getDenialReason(ToolInterface $tool, array $input, ?int $adminUserId): ?string
     {
-        $input = $this->inputForAction($tool, $input);
-        if (!$this->toolRegistry->isCallAllowed($tool, $input, $adminUserId)) {
-            return sprintf(
-                'Access denied: your skill permissions do not allow this action with the %s tool',
-                $tool->getName()
-            );
-        }
-
-        return $this->toolAccess->denialReason($tool, $input, $adminUserId);
+        return $this->toolCallGate->denialReason($tool, $input, $adminUserId);
     }
 
     /**
@@ -1469,10 +1547,7 @@ class ChatService implements ChatServiceInterface
     }
 
     /**
-     * The parameters the chosen action actually takes. A skill offers one flat schema for all its
-     * actions, and the model fills in every key it is shown, so a status change arrives carrying
-     * capture, carrier_code and the credit memo adjustments. On the confirmation card that is worse
-     * than noise: the admin is asked to approve a status change while reading "capture: true".
+     * The parameters the chosen action actually takes (see ToolCallGate::inputForAction()).
      * executeTool() runs the same cut, so the card and the save never see different arguments.
      *
      * @param array<array-key,mixed> $input
@@ -1480,21 +1555,6 @@ class ChatService implements ChatServiceInterface
      */
     private function inputForAction(object $tool, array $input): array
     {
-        $action = (string)($input['action'] ?? '');
-        if ($action === '' || !method_exists($tool, 'getParameterSchemaForActions')) {
-            return $input;
-        }
-
-        $schema = $tool->getParameterSchemaForActions([$action]);
-        $known = array_keys($schema['properties'] ?? []);
-        if ($known === []) {
-            return $input;
-        }
-
-        return array_filter(
-            $input,
-            static fn (mixed $value, string|int $key): bool => in_array((string)$key, $known, true),
-            ARRAY_FILTER_USE_BOTH
-        );
+        return $this->toolCallGate->inputForAction($tool, $input);
     }
 }

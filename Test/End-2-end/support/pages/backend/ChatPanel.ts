@@ -436,6 +436,15 @@ export default class ChatPanel {
     return flagId;
   }
 
+  /* The download rows (#298) under the last answer */
+  exportRows(page: Page): Locator {
+    return this.lastAssistantMessage(page).locator('.mago-download-row');
+  }
+
+  exportLinks(page: Page): Locator {
+    return this.exportRows(page).locator('.mago-download-link');
+  }
+
   toolTags(page: Page): Locator {
     return page.locator('#mago-messages .mago-tool-tag');
   }

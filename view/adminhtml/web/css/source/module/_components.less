@@ -1236,6 +1236,80 @@
     font-size: @mago-font-size__13-5;
 }
 
+.mago-download-rows {
+    margin-top: @mago-size__10;
+    border-top: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+}
+
+.mago-download-row {
+    display: flex;
+    align-items: center;
+    gap: @mago-size__10;
+    padding: @mago-size__8 0 0;
+    font-size: @mago-font-size__13;
+    color: var(--mago-ink-soft, #6B645F);
+}
+
+.mago-download-row.is-attached {
+    padding: @mago-size__6 @mago-size__4 0;
+    color: var(--mago-ink-muted, #736B65);
+}
+
+.mago-download-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mago-download-links {
+    display: inline-flex;
+    align-items: center;
+    gap: @mago-size__1;
+    flex: none;
+    color: var(--mago-ink-muted, #736B65);
+}
+
+.mago-download-icon {
+    display: inline-flex;
+    margin-right: @mago-size__3;
+}
+
+.mago-download-sep {
+    color: var(--mago-ink-muted, #736B65);
+}
+
+// Two classes, so a row under a list inside the answer outranks the answer's own link style
+.mago-download-row .mago-download-link {
+    color: var(--mago-ink-soft, #6B645F);
+    font-weight: 500;
+    text-decoration: none;
+    padding: @mago-size__2 @mago-size__5;
+    border-radius: @mago-size__6;
+    transition: background .12s ease, color .12s ease;
+
+    &:hover {
+        background: var(--mago-surface, #F7F5F3);
+        color: var(--mago-accent-ink, #B84000);
+        text-decoration: none;
+    }
+
+    &:focus-visible {
+        outline: @mago-size__2 solid var(--mago-accent, #FF7A33);
+        outline-offset: @mago-size__1;
+    }
+
+    &[aria-busy="true"] {
+        opacity: .5;
+        pointer-events: none;
+    }
+
+    &::before {
+        content: none;
+    }
+}
+
 .mago-callout {
     display: flex;
     gap: @mago-size__12;
