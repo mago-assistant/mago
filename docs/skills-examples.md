@@ -79,6 +79,14 @@ Show products under 10 stock
 Find all disabled products
 ```
 
+### category_data (read-only)
+Enabled categories that show no products on the storefront, per store view.
+
+```
+Do I have any live categories with 0 live products in?
+Which categories are empty in the nl store view?
+```
+
 ### stock_level / stock_level_msi (read-only)
 Stock of one product by SKU. Only one of the two is offered: `stock_level` reads the catalog stock item on stores without Multi-Source Inventory, `stock_level_msi` shows quantity per source and salable quantity per stock when MSI is enabled.
 
