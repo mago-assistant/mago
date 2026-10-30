@@ -15,12 +15,16 @@ use MagoAssistant\Mago\Api\Tool\ToolInterface;
  */
 final class AdminDescription
 {
-    private const ACTION_LIST_MARKER = ' Actions: ';
+    /**
+     * The action list AbstractSkill appends, also when an add-on starts it on a new line
+     */
+    private const ACTION_LIST_MARKER = '/\s+Actions:\s/';
 
     /**
-     * A sentence ends at . ! or ? followed by whitespace, unless the dot closes "e.g." or "i.e."
+     * A sentence ends at . ! or ? followed by whitespace. The dot of "e.g." and "i.e." never ends
+     * one, in any case; the dot of "etc." only does when the next word starts with a capital.
      */
-    private const SENTENCE_END = '/(?<!\be\.g)(?<!\bi\.e)[.!?](?=\s)/';
+    private const SENTENCE_END = '/(?<!\b(?i:e\.g|i\.e|etc))[.!?](?=\s)|(?<=\b(?i:etc))\.(?=\s+[A-Z])/';
 
     public function of(ToolInterface $tool): string
     {
@@ -31,7 +35,7 @@ final class AdminDescription
 
     private function firstSentence(string $description): string
     {
-        $withoutActions = explode(self::ACTION_LIST_MARKER, $description, 2)[0];
+        $withoutActions = (preg_split(self::ACTION_LIST_MARKER, $description, 2) ?: [$description])[0];
         if (preg_match(self::SENTENCE_END, $withoutActions, $match, PREG_OFFSET_CAPTURE) !== 1) {
             return trim($withoutActions);
         }

@@ -97,6 +97,50 @@ final class AdminDescriptionTest extends TestCase
     }
 
     #[Test]
+    public function itCutsAnActionListThatStartsOnANewLine(): void
+    {
+        $tool = (new FakeTool('rumvision', [], []))
+            ->withDescription("Query RUMvision\nActions: \"get_vitals\" (Core Web Vitals).");
+
+        $description = $this->adminDescription->of($tool);
+
+        self::assertSame('Query RUMvision', $description);
+    }
+
+    #[Test]
+    public function itKeepsACapitalisedAbbreviationInsideTheFirstSentence(): void
+    {
+        $tool = (new FakeTool('config_reader', [], []))
+            ->withDescription('E.g. a path or I.e. a value. Second sentence.');
+
+        $description = $this->adminDescription->of($tool);
+
+        self::assertSame('E.g. a path or I.e. a value.', $description);
+    }
+
+    #[Test]
+    public function itKeepsEtcInsideTheFirstSentenceWhenTheSentenceGoesOn(): void
+    {
+        $tool = (new FakeTool('store_data', [], []))
+            ->withDescription('Lists stores, websites, etc. for every scope. Use it first.');
+
+        $description = $this->adminDescription->of($tool);
+
+        self::assertSame('Lists stores, websites, etc. for every scope.', $description);
+    }
+
+    #[Test]
+    public function itEndsTheFirstSentenceAtEtcWhenANewSentenceFollows(): void
+    {
+        $tool = (new FakeTool('store_data', [], []))
+            ->withDescription('Lists stores, websites, Etc. Use it first.');
+
+        $description = $this->adminDescription->of($tool);
+
+        self::assertSame('Lists stores, websites, Etc.', $description);
+    }
+
+    #[Test]
     public function itDoesNotNeedAnUppercaseStartForTheSecondSentence(): void
     {
         $tool = (new FakeTool('dead_stock', [], []))
