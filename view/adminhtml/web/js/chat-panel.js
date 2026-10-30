@@ -1199,10 +1199,149 @@ define([
         msgs.scrollTop = msgs.scrollHeight;
     }
 
+    // The full result of a list the assistant read, as a file (#298). The server marks the calls
+    // that can be downloaded, with a title and a row count; the export runs the call again with the
+    // admin's own permissions. The rows only appear once the answer is stored, because the export
+    // finds the call there.
+    var EXPORT_FORMATS = [
+        {
+            format: 'csv', label: 'CSV', ariaLabel: 'Download %1 as CSV',
+            some: 'Every row as CSV, not only the ones shown', all: 'All %1 rows as CSV',
+            one: 'The 1 row as CSV', first: 'The first %1 of %2 rows as CSV'
+        },
+        {
+            format: 'xlsx', label: 'Excel', ariaLabel: 'Download %1 as an Excel file',
+            some: 'Every row as an Excel file, not only the ones shown', all: 'All %1 rows as an Excel file',
+            one: 'The 1 row as an Excel file', first: 'The first %1 of %2 rows as an Excel file'
+        }
+    ];
+
+    function exportCall(source) {
+        var call = {
+            id: source.tool_call_id || source.id,
+            title: source.export_title || t('Full result'),
+            rowCount: typeof source.export_row_count === 'number' ? source.export_row_count : null
+        };
+        return call.id && call.rowCount !== 0 ? call : null;
+    }
+
+    function exportTooltip(format, rowCount) {
+        var max = config.exportMaxRows || 0;
+        if (rowCount === null) return t(format.some);
+        if (rowCount === 1) return t(format.one);
+        if (max && rowCount > max) return t(format.first, UI.formatNumber(max), UI.formatNumber(rowCount));
+        return t(format.all, UI.formatNumber(rowCount));
+    }
+
+    function exportLinks(call) {
+        var base = config.exportUrl + (config.exportUrl.indexOf('?') === -1 ? '?' : '&')
+            + 'conversation_id=' + encodeURIComponent(conversationId)
+            + '&tool_call_id=' + encodeURIComponent(call.id);
+        return EXPORT_FORMATS.map(function(f) {
+            return {
+                label: f.label,
+                href: base + '&format=' + f.format,
+                title: exportTooltip(f, call.rowCount),
+                ariaLabel: t(f.ariaLabel, call.title)
+            };
+        });
+    }
+
+    function rowCountLabel(call) {
+        var max = config.exportMaxRows || 0;
+        if (call.rowCount === null) return call.title;
+        if (call.rowCount === 1) return t('The 1 row');
+        if (max && call.rowCount > max) return t('The first %1 of %2 rows', UI.formatNumber(max), UI.formatNumber(call.rowCount));
+        return t('All %1 rows', UI.formatNumber(call.rowCount));
+    }
+
+    function exportRow(call, label) {
+        return UI.downloadRow({title: label, links: exportLinks(call), labels: {download: t('Download')}});
+    }
+
+    // A list the answer drew: a table, a product list, or a markdown table
+    var ANSWER_LIST = '.mago-table, .mago-entities, .mago-table-wrap';
+
+    // With one downloadable lookup and a list in the answer, the download sits right under that
+    // list, where the admin sees that more exists; a product list's "N more not shown" note becomes
+    // the row. Otherwise there is no telling which list belongs to which lookup, so each gets a row
+    // between the answer and its thumbs.
+    function addExportRows(msgEl, calls) {
+        if (!msgEl || !conversationId || !config.exportUrl || msgEl.querySelector('.mago-download-row')) return;
+        var exportable = calls.map(exportCall).filter(Boolean);
+        if (!exportable.length) return;
+        var content = msgEl.querySelector('.mago-message-content');
+        var list = exportable.length === 1 ? content.querySelector(ANSWER_LIST) : null;
+        if (list) {
+            attachToList(list, exportable[0]);
+            return;
+        }
+        var box = document.createElement('div');
+        box.className = 'mago-download-rows';
+        exportable.forEach(function(call) { box.appendChild(exportRow(call, call.title)); });
+        content.after(box);
+    }
+
+    function attachToList(list, call) {
+        var note = list.querySelector(':scope > .mago-entity-more.is-note');
+        var row = exportRow(call, note ? note.textContent : rowCountLabel(call));
+        row.classList.add('is-attached');
+        if (note) {
+            note.replaceWith(row);
+            return;
+        }
+        list.after(row);
+    }
+
+    // The file comes in the background, so the admin stays on the page they were on (an unsaved
+    // form included) and a refusal shows here instead of on another page. A link opened in a new
+    // tab or window still goes straight to the file.
+    function downloadExport(link) {
+        var row = link.closest('.mago-download-row');
+        var previous = row.parentNode.querySelector('.mago-download-error');
+        if (previous) previous.remove();
+        link.setAttribute('aria-busy', 'true');
+        fetch(link.href, {credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(function(r) {
+                var disposition = r.headers.get('Content-Disposition') || '';
+                if (r.ok && disposition.indexOf('attachment') !== -1) {
+                    var name = (disposition.match(/filename="([^"]+)"/) || [])[1] || 'export';
+                    return r.blob().then(function(blob) { saveFile(blob, name); });
+                }
+                return r.json().catch(function() { return {}; }).then(function(d) {
+                    throw new Error(d.error || t('Could not download the file.'));
+                });
+            })
+            .catch(function(e) {
+                var error = UI.callout({tone: 'danger', text: e.message || t('Could not download the file.')});
+                error.classList.add('mago-download-error');
+                row.after(error);
+            })
+            .then(function() { link.removeAttribute('aria-busy'); });
+    }
+
+    function saveFile(blob, name) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function() { URL.revokeObjectURL(url); }, 0);
+    }
+
+    msgs.addEventListener('click', function(e) {
+        var link = e.target.closest('.mago-download-link');
+        if (!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        if (link.getAttribute('aria-busy') !== 'true') downloadExport(link);
+    });
+
     // S06: a read-only call is one quiet line above the answer — spinner while
     // it runs, a check when it is done. The lines stay for as long as the answer
     // is on screen, so it is always clear what Mago looked up.
-    function updateToolStatus(msgEl, toolName, status, message) {
+    function updateToolStatus(msgEl, toolName, status, message, doneMessage) {
         if (status === 'running') {
             var el = UI.readLine({text: message || ('Running ' + toolName + '…'), tool: toolName, state: 'active'});
             el.classList.add('mago-tool-status');
@@ -1217,13 +1356,15 @@ define([
         } else if (status === 'done' || status === 'failed') {
             var statusEl = msgEl.querySelector('.mago-tool-status[data-tool="' + toolName + '"]:not(.is-done)');
             if (statusEl) {
-                statusEl.magoSetState(status);
+                statusEl.magoSetState(status, status === 'done' ? doneMessage : null);
                 statusEl.classList.add('mago-tool-status', 'mago-readline', 'is-done');
                 if (status === 'failed' && message) {
                     statusEl.title = message;
                 }
             }
+            return statusEl;
         }
+        return null;
     }
 
     // Answer widgets arrive as static HTML from the markdown renderer, so their
@@ -1325,8 +1466,11 @@ define([
             if (cardTools && cardTools.indexOf(t) !== -1) return;
             if (t.status !== 'done' && t.status !== 'failed') return;
             updateToolStatus(msgEl, t.name, 'running', t.status_message);
-            updateToolStatus(msgEl, t.name, t.status, t.status_error);
+            updateToolStatus(msgEl, t.name, t.status, t.status_error, t.status_done_message);
         });
+        addExportRows(msgEl, tools.filter(function(t) {
+            return t.exportable && t.status === 'done' && !(cardTools && cardTools.indexOf(t) !== -1);
+        }));
     }
 
     // Stored tool calls come back as a JSON string from the database and as an array from the
@@ -1556,6 +1700,7 @@ define([
             var buf = '', evt = '';
             var gotDone = false;
             var writeToolDetected = false;
+            var exportableCalls = [];
             var applyResult = null;
             var applyPending = false;
             var doneReached = false;
@@ -1598,7 +1743,8 @@ define([
                     }
                     else if (evt==='tool_status') {
                         if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
-                        updateToolStatus(msg, d.name, d.status, d.message);
+                        updateToolStatus(msg, d.name, d.status, d.message, d.done_message);
+                        if (d.status === 'done' && d.exportable) exportableCalls.push(d);
                     }
                     else if (evt==='form_apply') { applyPending = true; applyFormDirective(d, handleApplyOutcome); }
                     else if (evt==='confirm') {
@@ -1614,7 +1760,9 @@ define([
                         saveState(); releaseInput();
                         if (d.message_id && msg && !d.pending_confirmation) {
                             attachFeedback(msg, d.message_id, null);
+                            addExportRows(msg, exportableCalls);
                         }
+                        exportableCalls = [];
                         if (d.pending_confirmation && msg && !writeToolDetected) {
                             showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, []);
                         }
@@ -1905,6 +2053,7 @@ define([
             var applyResult = null;
             var applyPending = false;
             var chainedTools = null;
+            var exportableCalls = [];
             var doneReached = false;
 
             // See send()'s own copy of this same helper: apply() waits on a real signal (its form's
@@ -1959,7 +2108,8 @@ define([
                             if (d.duration_ms) { run.durationMs = (run.durationMs || 0) + d.duration_ms; }
                         } else {
                             if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
-                            updateToolStatus(msg, d.name, d.status, d.message);
+                            updateToolStatus(msg, d.name, d.status, d.message, d.done_message);
+                            if (d.status === 'done' && d.exportable) exportableCalls.push(d);
                         }
                     }
                     else if (evt==='form_apply') { applyPending = true; applyFormDirective(d, handleApplyOutcome); }
@@ -1982,7 +2132,9 @@ define([
                         }
                         if (d.message_id && msg && !d.pending_confirmation) {
                             attachFeedback(msg, d.message_id, null);
+                            addExportRows(msg, exportableCalls);
                         }
+                        exportableCalls = [];
                         if (d.pending_confirmation && msg) {
                             showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, chainedTools || []);
                         }

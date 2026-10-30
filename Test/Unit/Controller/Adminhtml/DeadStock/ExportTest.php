@@ -17,6 +17,7 @@ use MagoAssistant\Mago\Controller\Adminhtml\DeadStock\Export;
 use MagoAssistant\Mago\Service\Skills\Inventory\DeadStock;
 use MagoAssistant\Mago\Service\Skills\Inventory\DeadStockCsv;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeDeadStockReport;
+use MagoAssistant\Mago\Service\Export\CsvWriter;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -117,6 +118,6 @@ final class ExportTest extends TestCase
         $context->method('getResultRedirectFactory')->willReturn($redirectFactory);
         $context->method('getResultFactory')->willReturn($resultFactory);
 
-        return new Export($context, $this->report, new DeadStockCsv());
+        return new Export($context, $this->report, new DeadStockCsv(new CsvWriter()));
     }
 }

@@ -12,19 +12,23 @@ use MagoAssistant\Mago\Api\Tool\ValidatingToolInterface;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
 use MagoAssistant\Mago\Api\Skill\ConditionallyIrreversibleActionInterface;
+use MagoAssistant\Mago\Api\Skill\ExportableActionInterface;
 use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
 use MagoAssistant\Mago\Api\Acl;
 use MagoAssistant\Mago\Api\Tool\ActionAclAwareToolInterface;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
+use MagoAssistant\Mago\Api\Tool\ExportableToolInterface;
 use MagoAssistant\Mago\Api\Tool\HighImpactToolInterface;
 use MagoAssistant\Mago\Api\Tool\IrreversibleToolInterface;
+use MagoAssistant\Mago\Service\Export\ExportRefusedException;
 
 abstract class AbstractSkill implements
     ActionScopedToolInterface,
     IrreversibleToolInterface,
     HighImpactToolInterface,
     ValidatingToolInterface,
-    ActionAclAwareToolInterface
+    ActionAclAwareToolInterface,
+    ExportableToolInterface
 {
     /** @var ActionInterface[] */
     private readonly array $actions;
@@ -139,17 +143,80 @@ abstract class AbstractSkill implements
             return ['error' => 'Unknown action: ' . $actionName];
         }
 
-        // ToolAccess decides this before a call gets here through the chat; this is the same rule
-        // for callers that reach execute() directly (mago:tool:verify): the skill's resource and
-        // the action's must both allow it, an empty declaration allows nobody, and the per-user
-        // sentinel is not Magento's to answer.
-        foreach ([$this->getMagentoAcl($params), $action->getAclResource()] as $acl) {
-            if ($acl === '' || ($acl !== null && $acl !== Acl::MAGO_PER_USER && !$this->authorization->isAllowed($acl))) {
-                return ['error' => 'You do not have permission to access this data'];
-            }
+        if (!$this->isAllowed($params, $action)) {
+            return ['error' => 'You do not have permission to access this data'];
         }
 
         return $action->execute($params, (int)($params['_admin_user_id'] ?? 0));
+    }
+
+    public function isExportableAction(array $input): bool
+    {
+        $action = $this->actions[$input['action'] ?? ''] ?? null;
+
+        return $action instanceof ExportableActionInterface && $action->isReadOnly();
+    }
+
+    public function getExportTitle(array $input): string
+    {
+        return $this->exportableAction($input)->getExportTitle($input);
+    }
+
+    public function countExportRows(array $input): int
+    {
+        $action = $this->exportableAction($input);
+        if (!$this->isAllowed($input, $action)) {
+            throw new ExportRefusedException('You do not have permission to access this data');
+        }
+
+        return $action->countExportRows($input, (int)($input['_admin_user_id'] ?? 0));
+    }
+
+    public function getExportColumns(array $input): array
+    {
+        return $this->exportableAction($input)->getExportColumns();
+    }
+
+    public function exportRows(array $input, int $maxRows): iterable
+    {
+        $action = $this->exportableAction($input);
+        if (!$this->isAllowed($input, $action)) {
+            throw new ExportRefusedException('You do not have permission to access this data');
+        }
+
+        return $action->exportRows($input, (int)($input['_admin_user_id'] ?? 0), $maxRows);
+    }
+
+    /**
+     * ToolAccess decides this before a call gets here through the chat or the export; this is the
+     * same rule for callers that reach the action directly (mago:tool:verify): the skill's resource
+     * and the action's must both allow it, an empty declaration allows nobody, and the per-user
+     * sentinel is not Magento's to answer.
+     *
+     * @param array<array-key, mixed> $params
+     */
+    private function isAllowed(array $params, ActionInterface $action): bool
+    {
+        foreach ([$this->getMagentoAcl($params), $action->getAclResource()] as $acl) {
+            if ($acl === '' || ($acl !== null && $acl !== Acl::MAGO_PER_USER && !$this->authorization->isAllowed($acl))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<array-key, mixed> $input
+     */
+    private function exportableAction(array $input): ExportableActionInterface
+    {
+        $action = $this->actions[$input['action'] ?? ''] ?? null;
+        if (!$action instanceof ExportableActionInterface || !$this->isExportableAction($input)) {
+            throw new ExportRefusedException('This result cannot be downloaded.');
+        }
+
+        return $action;
     }
 
     public function getActionAcl(array $input): ?string

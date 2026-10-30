@@ -51,6 +51,7 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         chevronRight: '<path d="M9 6l6 6-6 6"/>',
         copy: '<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5H6a2 2 0 0 0-2 2v9"/>',
         flag: '<path d="M5 21V4.5h13l-2.5 4 2.5 4H5"/>',
+        download: '<path d="M12 4v11M7 10.5l5 5 5-5"/><path d="M5 19.5h14"/>',
         thumbsUp: '<path d="M7 11v9H4v-9h3Zm0 0 4-7a2.5 2.5 0 0 1 2.5 3.2L13 11h5.5a2 2 0 0 1 2 2.4l-1.2 5.2a2 2 0 0 1-2 1.4H7"/>',
         thumbsDown: '<path d="M17 13V4h3v9h-3Zm0 0-4 7a2.5 2.5 0 0 1-2.5-3.2L11 13H5.5a2 2 0 0 1-2-2.4l1.2-5.2A2 2 0 0 1 6.7 4H17"/>',
         search: '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/>',
@@ -87,6 +88,7 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         allowPlan: 'Allow whole plan',
         pause: 'Pause',
         export: 'Export',
+        download: 'Download',
         session: 'This session',
         skills: 'Skills',
         menuHint: '↑↓ choose · ⏎ insert',
@@ -1279,6 +1281,39 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         return step;
     }
 
+    // S06b Download row: the full result of a lookup as a file, under the answer.
+    // {title, links: [{label, href, title, ariaLabel}], labels: {download}}
+    // The links are plain downloads; the panel decides how a click is handled.
+    function downloadRow(opts) {
+        var L = labels(opts);
+        var links = (opts.links || []).map(function (link) {
+            var a = el('a', 'mago-download-link', link.label);
+            if (!setHref(a, link.href)) {
+                return null;
+            }
+            if (link.title) {
+                a.title = link.title;
+            }
+            if (link.ariaLabel) {
+                a.setAttribute('aria-label', link.ariaLabel);
+            }
+            return a;
+        }).filter(Boolean);
+        var group = el('span', 'mago-download-links', [el('span', 'mago-download-icon', icon('download', 14, 2.2))]);
+        group.firstChild.setAttribute('aria-hidden', 'true');
+        links.forEach(function (a, index) {
+            if (index > 0) {
+                var sep = el('span', 'mago-download-sep', '·');
+                sep.setAttribute('aria-hidden', 'true');
+                group.appendChild(sep);
+            }
+            group.appendChild(a);
+        });
+        group.setAttribute('role', 'group');
+        group.setAttribute('aria-label', (opts.title ? opts.title + ': ' : '') + L.download);
+        return el('div', 'mago-download-row', [el('span', 'mago-download-title', opts.title), group]);
+    }
+
     // S07 Irreversible: impact list and a ticked acknowledgement before the button arms.
     // {title, tool, text, params, impacts: [...], ackLabel, confirmLabel, onConfirm, onCancel, classes: {actions, confirm, cancel}}
     function skillIrreversible(opts) {
@@ -1645,7 +1680,8 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         paramPrompt: paramPrompt,
         undoCallout: undoCallout,
         sessionLog: sessionLog,
-        skillMenu: skillMenu
+        skillMenu: skillMenu,
+        downloadRow: downloadRow
     };
 
     // What an answer may draw: data, never controls. The model writes the spec, and text it read

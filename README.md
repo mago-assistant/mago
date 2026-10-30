@@ -149,13 +149,19 @@ only appears in browsers with built-in speech recognition, such as Chrome, Edge 
 | Skill area | Tools | Access |
 |------------|-------|--------|
 | Store Analytics | `sales_data`, `product_data`, `customer_data` | Read |
-| Inventory | `dead_stock` (obsolete and slow-moving inventory, CSV export) | Read |
+| Inventory | `dead_stock` (obsolete and slow-moving inventory) | Read |
 | Store Configuration | `config_reader`, `config_writer`, `cache_manager`, `indexer_manager` | Read / Write |
 | Content Management | `cms_data`, `content_generator` | Read / Write |
 | Navigation | `admin_navigator` | Read |
 | Inventory | `stock_level` (without MSI), `stock_level_msi` (with MSI) | Read |
 | Documentation | `docs_search` | Read |
 | Form Access | `page_form` | Read / Stage (never saves) |
+
+Lists that can run longer than the answer shows (low stock, product search, top products, top
+refunded and dead stock) get a download row with **CSV** and **Excel** links, right under the
+list in the answer.
+The download holds the full result, up to 10,000 rows, and runs with the administrator's own
+permissions.
 
 See [docs/skills-examples.md](docs/skills-examples.md) for example prompts per skill and [docs/skills-roadmap.md](docs/skills-roadmap.md) for the full roadmap of planned skills.
 

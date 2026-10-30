@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Inventory;
 
 use MagoAssistant\Mago\Service\Skills\Inventory\DeadStockCsv;
+use MagoAssistant\Mago\Service\Export\CsvWriter;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -15,7 +16,7 @@ class DeadStockCsvTest extends TestCase
     #[Test]
     public function itStartsWithAByteOrderMarkAndAHeaderLine(): void
     {
-        $lines = explode("\n", (new DeadStockCsv())->build([]));
+        $lines = explode("\n", (new DeadStockCsv(new CsvWriter()))->build([]));
 
         self::assertSame(
             "\xEF\xBB\xBFSKU,Product name,Quantity,Units sold in period,Last sold,Created,Days of cover,"
@@ -28,7 +29,7 @@ class DeadStockCsvTest extends TestCase
     #[Test]
     public function itWritesOneLinePerRowInColumnOrder(): void
     {
-        $csv = (new DeadStockCsv())->build([[[
+        $csv = (new DeadStockCsv(new CsvWriter()))->build([[[
             'stock_value' => 1300.0,
             'sku' => 'JACKET-1',
             'product_name' => 'Winter jacket, blue',
@@ -50,7 +51,7 @@ class DeadStockCsvTest extends TestCase
     #[Test]
     public function itNeutralisesTextThatASpreadsheetWouldRunAsAFormula(): void
     {
-        $csv = (new DeadStockCsv())->build([[
+        $csv = (new DeadStockCsv(new CsvWriter()))->build([[
             ['sku' => '=HYPERLINK("x")', 'product_name' => '@SUM(A1)', 'qty' => -1.0],
         ]]);
 
@@ -65,7 +66,7 @@ class DeadStockCsvTest extends TestCase
             yield [['sku' => 'C']];
         })();
 
-        $lines = explode("\n", (new DeadStockCsv())->build($chunks));
+        $lines = explode("\n", (new DeadStockCsv(new CsvWriter()))->build($chunks));
 
         self::assertCount(5, $lines);
         self::assertSame(['A', 'B', 'C', ''], array_map(

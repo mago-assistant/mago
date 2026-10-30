@@ -27,10 +27,12 @@ use MagoAssistant\Mago\Service\Privacy\PrivacyFilter;
 use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 use MagoAssistant\Mago\Service\Skills\PermissionChecker;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
+use MagoAssistant\Mago\Service\Tool\ToolCallGate;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Service\Usage\UsageLogger;
 use MagoAssistant\Mago\Test\Unit\Fakes\BuildsStoreLayouts;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAction;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeExportableAction;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeCautionedAction;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeConfigRepository;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeHighImpactTool;
@@ -147,10 +149,11 @@ final class ChatServiceTest extends TestCase
             ->withAnswerWidgets($answerWidgets)->withDebugEnabled($isDebugEnabled);
         $this->debugLog = new FakeLogger();
         $this->errorLog = new FakeLogger();
+        $toolRegistry = new ToolRegistry($checker, array_merge([$cmsData], $extraSkills));
         return new ChatService(
             $config,
             $client,
-            new ToolRegistry($checker, array_merge([$cmsData], $extraSkills)),
+            $toolRegistry,
             new DebugLogger($this->debugLog, $json, $config),
             new ErrorReporter(new ErrorLogger(new FakeLogger(), $json), new PiiHeuristic()),
             $this->usageLogger,
@@ -158,7 +161,7 @@ final class ChatServiceTest extends TestCase
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
             new PageContextHolder(),
             $privacy ?? $this->privacyService(),
-            new ToolAccess($authorization, $checker),
+            new ToolCallGate($toolRegistry, new ToolAccess($authorization, $checker)),
             new ErrorLogger($this->errorLog, $json)
         );
     }
@@ -1062,10 +1065,12 @@ final class ChatServiceTest extends TestCase
             return ['content' => 'ok', 'tool_calls' => []];
         });
 
+        $toolRegistry = new ToolRegistry(null, []);
+
         return new ChatService(
             $configRepository,
             $client,
-            new ToolRegistry(null, []),
+            $toolRegistry,
             $this->createMock(DebugLogger::class),
             new ErrorReporter($errorLogger ?? $this->createMock(ErrorLogger::class), new PiiHeuristic()),
             $this->createMock(UsageLogger::class),
@@ -1073,7 +1078,7 @@ final class ChatServiceTest extends TestCase
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
             new PageContextHolder(),
             $this->privacyService(),
-            new ToolAccess(new FakeAuthorization(), new FakePermissionChecker()),
+            new ToolCallGate($toolRegistry, new ToolAccess(new FakeAuthorization(), new FakePermissionChecker())),
             new ErrorLogger(new FakeLogger(), new Json())
         );
     }
@@ -1397,10 +1402,11 @@ final class ChatServiceTest extends TestCase
 
     private function serviceWithAnyTool(ToolInterface $tool, ?PrivacyService $privacy = null): ChatService
     {
+        $toolRegistry = new ToolRegistry(null, [$tool]);
         return new ChatService(
             (new FakeConfigRepository())->withMaxResponseTokens(self::MAX_RESPONSE_TOKENS),
             $this->createMock(Client::class),
-            new ToolRegistry(null, [$tool]),
+            $toolRegistry,
             $this->createMock(DebugLogger::class),
             new ErrorReporter($this->createMock(ErrorLogger::class), new PiiHeuristic()),
             $this->createMock(UsageLogger::class),
@@ -1408,7 +1414,7 @@ final class ChatServiceTest extends TestCase
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
             new PageContextHolder(),
             $privacy ?? $this->privacyService(),
-            new ToolAccess(new FakeAuthorization(), new FakePermissionChecker()),
+            new ToolCallGate($toolRegistry, new ToolAccess(new FakeAuthorization(), new FakePermissionChecker())),
             new ErrorLogger(new FakeLogger(), new Json())
         );
     }
@@ -1898,6 +1904,140 @@ final class ChatServiceTest extends TestCase
         self::assertSame('There are two pages: Home and About.', $result['content']);
         self::assertSame(['call_1'], array_column($result['executed_tool_calls'], 'id'));
         self::assertCount(3, $this->requests);
+    }
+
+    #[Test]
+    public function itMarksAnExportableReadAsExportableOnItsStatusEventsAndStoredCall(): void
+    {
+        $this->chatService = $this->exportingChatService();
+        $this->responses = [$this->productDataCall('low_stock'), ['content' => 'Five products are low.', 'tool_calls' => []]];
+        $events = [];
+
+        $result = $this->chatService->processMessageStreaming([$this->userMessage()], static function (string $type, array $data) use (&$events): void {
+            if ($type === 'tool_status') {
+                $events[] = $data;
+            }
+        }, null, self::ADMIN_ID);
+
+        self::assertSame(['call_1', 'call_1'], array_column($events, 'tool_call_id'));
+        self::assertArrayNotHasKey('exportable', $events[0]);
+        self::assertTrue($events[1]['exportable']);
+        self::assertSame('Full low_stock list', $events[1]['export_title']);
+        self::assertSame(1, $events[1]['export_row_count']);
+        $stored = $result['executed_tool_calls'][0];
+        self::assertTrue($stored['exportable']);
+        self::assertSame('Full low_stock list', $stored['export_title']);
+        self::assertSame(1, $stored['export_row_count']);
+    }
+
+    #[Test]
+    public function itStillOffersTheDownloadWhenTheRowCountFails(): void
+    {
+        $this->chatService = $this->exportingChatService((new FakeExportableAction('low_stock', [['sku' => 'MH01']]))->givenCountFails());
+        $this->responses = [$this->productDataCall('low_stock'), ['content' => 'Five products are low.', 'tool_calls' => []]];
+
+        $result = $this->chatService->processMessageStreaming([$this->userMessage()], static function (): void {
+        }, null, self::ADMIN_ID);
+
+        self::assertTrue($result['executed_tool_calls'][0]['exportable']);
+        self::assertArrayNotHasKey('export_row_count', $result['executed_tool_calls'][0]);
+    }
+
+    #[Test]
+    public function itTellsAFinishedReadInThePastTense(): void
+    {
+        $this->chatService = $this->exportingChatService();
+        $this->responses = [$this->productDataCall('low_stock'), ['content' => 'Five products are low.', 'tool_calls' => []]];
+        $done = [];
+
+        $result = $this->chatService->processMessageStreaming([$this->userMessage()], static function (string $type, array $data) use (&$done): void {
+            if ($type === 'tool_status' && $data['status'] === 'done') {
+                $done[] = $data;
+            }
+        }, null, self::ADMIN_ID);
+
+        self::assertSame('Checked low stock', $done[0]['done_message']);
+        self::assertSame('Checking low stock...', $result['executed_tool_calls'][0]['status_message']);
+        self::assertSame('Checked low stock', $result['executed_tool_calls'][0]['status_done_message']);
+    }
+
+    #[Test]
+    public function itOnlyDropsTheEllipsisWhenItDoesNotKnowTheVerb(): void
+    {
+        $this->chatService = $this->exportingChatService();
+        $this->responses = [$this->productDataCall('get'), ['content' => 'Found it.', 'tool_calls' => []]];
+
+        $result = $this->chatService->processMessageStreaming([$this->userMessage()], static function (): void {
+        }, null, self::ADMIN_ID);
+
+        self::assertSame('Running product_data...', $result['executed_tool_calls'][0]['status_message']);
+        self::assertSame('Ran product_data', $result['executed_tool_calls'][0]['status_done_message']);
+    }
+
+    #[Test]
+    public function itDoesNotMarkAReadWhoseActionCannotBeExported(): void
+    {
+        $this->chatService = $this->exportingChatService();
+        $this->responses = [$this->productDataCall('get'), ['content' => 'Found it.', 'tool_calls' => []]];
+        $done = [];
+
+        $result = $this->chatService->processMessageStreaming([$this->userMessage()], static function (string $type, array $data) use (&$done): void {
+            if ($type === 'tool_status' && $data['status'] === 'done') {
+                $done[] = $data;
+            }
+        }, null, self::ADMIN_ID);
+
+        self::assertArrayNotHasKey('exportable', $done[0]);
+        self::assertArrayNotHasKey('exportable', $result['executed_tool_calls'][0]);
+    }
+
+    #[Test]
+    public function itDoesNotMarkAFailedRead(): void
+    {
+        $this->chatService = $this->exportingChatService();
+        $this->responses = [$this->productDataCall('broken'), ['content' => 'That did not work.', 'tool_calls' => []]];
+
+        $result = $this->chatService->processMessageStreaming([$this->userMessage()], static function (): void {
+        }, null, self::ADMIN_ID);
+
+        self::assertSame('failed', $result['executed_tool_calls'][0]['status']);
+        self::assertArrayNotHasKey('exportable', $result['executed_tool_calls'][0]);
+    }
+
+    #[Test]
+    public function itKeepsTheReadsThatRanWhenTheToolIterationsRunOut(): void
+    {
+        $this->chatService = $this->exportingChatService();
+        $this->responses = array_fill(0, 5, $this->productDataCall('low_stock'));
+
+        $result = $this->chatService->processMessageStreaming([$this->userMessage()], static function (): void {
+        }, null, self::ADMIN_ID);
+
+        self::assertSame('Maximum tool iterations reached.', $result['content']);
+        self::assertCount(5, $result['executed_tool_calls']);
+        self::assertTrue($result['executed_tool_calls'][0]['exportable']);
+    }
+
+    /**
+     * A product_data skill with an exportable list (#298), an action that is not, and a list that fails
+     */
+    private function exportingChatService(?FakeExportableAction $lowStock = null): ChatService
+    {
+        $this->grants = ['product_data' => 'read'];
+
+        return $this->buildChatService([new FakeSkill('product_data', new FakeAuthorization(), [
+            'low_stock' => $lowStock ?? new FakeExportableAction('low_stock', [['sku' => 'MH01', 'qty' => 0]]),
+            'get' => new FakeAction('get', true),
+            'broken' => new FakeAction('broken', true, [], '', ['error' => 'The stock table is locked']),
+        ])]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function productDataCall(string $action): array
+    {
+        return ['content' => '', 'tool_calls' => [['id' => 'call_1', 'name' => 'product_data', 'input' => ['action' => $action]]]];
     }
 
     #[Test]

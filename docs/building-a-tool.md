@@ -121,6 +121,26 @@ How the privacy filter applies the map:
 
 See [privacy-mode/README.md](privacy-mode/README.md) for the canonical output shapes.
 
+### Optional: let the admin download the full list
+
+A list tool answers with a page of rows sized for the model (`ResultLimit::MAX`, 50). To let the
+admin download every row as CSV or Excel, implement `Api\Tool\ExportableToolInterface` on a flat
+tool, or `Api\Skill\ExportableActionInterface` on a skill action (`AbstractSkill` delegates to it):
+
+- `getExportTitle()` names the download under the answer, such as "Full low stock list";
+- `countExportRows()` counts the matching rows with one cheap query; it runs when the call runs in
+  the chat, and the panel shows the count in the link's tooltip;
+- `getExportColumns()` lists the file's columns as `Api\Data\ExportColumn` (row key, label, and
+  whether the cells are numbers, so Excel stores them as numbers);
+- `exportRows()` yields every matching row, keyed by column key, up to `$maxRows`. Read in pages of
+  `ResultLimit::EXPORT_PAGE_SIZE` with a stable order, so pages neither repeat nor skip a row.
+
+The chat panel then shows a row with "CSV" and "Excel" links under the answer. The export (`mago/chat/export`)
+runs the stored call again with its rehydrated arguments, through the same skill permission and ACL
+checks as the chat, and stops at `ResultLimit::EXPORT_MAX` (10,000) rows. The file goes to the admin
+only, never to the provider, so the rows carry real values: export only what the admin may already
+see in the grid for that data.
+
 ## 5. Install and verify
 
 `mago:tool:create` prints these commands with your names filled in:
