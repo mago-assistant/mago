@@ -7,8 +7,12 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Integration\Model\ResourceModel\Conversation;
 
 use Magento\Framework\Api\FilterBuilder;
+use Magento\Framework\App\RequestInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider;
+use Magento\Framework\View\Element\UiComponentFactory;
+use Magento\Framework\View\Element\UiComponentInterface;
+use Magento\Ui\Component\Listing\Columns\Column;
 use MagoAssistant\Mago\Test\Integration\MagentoObjectManager;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -20,10 +24,13 @@ use PHPUnit\Framework\TestCase;
 final class GridTest extends TestCase
 {
     private const ADMIN_USER_ID = 555201;
+    private const ADMIN_USERNAME = 'mago-grid-test-555201';
+    private const LISTING = 'mago_conversations_listing';
 
     private ResourceConnection $resourceConnection;
     private DataProvider $dataProvider;
     private FilterBuilder $filterBuilder;
+    private ConversationFixture $fixture;
 
     /** @var array<string, int> conversation id by title */
     private array $conversations = [];
@@ -38,19 +45,22 @@ final class GridTest extends TestCase
             'primaryFieldName' => 'entity_id',
             'requestFieldName' => 'id',
         ]);
-        $this->deleteConversationsOfTestAdmin();
+        $this->fixture = new ConversationFixture($this->resourceConnection, self::ADMIN_USER_ID, self::ADMIN_USERNAME);
+        $this->fixture->removeEverything();
+        $this->fixture->createAdmin();
 
         $this->conversations = [
-            'Orders on hold last week' => $this->createConversation('Orders on hold last week', 1, 100),
-            'Flush the full page cache' => $this->createConversation('Flush the full page cache', 5, 3000),
-            'Bestselling products in March' => $this->createConversation('Bestselling products in March', 3, 900),
+            'Orders on hold last week' => $this->fixture->createConversation('Orders on hold last week', 1, 100),
+            'Flush the full page cache' => $this->fixture->createConversation('Flush the full page cache', 5, 3000),
+            'Bestselling products in March' => $this->fixture->createConversation('Bestselling products in March', 3, 900),
         ];
         $this->addFilter('admin_user_id', (string)self::ADMIN_USER_ID, 'eq');
     }
 
     protected function tearDown(): void
     {
-        $this->deleteConversationsOfTestAdmin();
+        $this->fixture->removeEverything();
+        MagentoObjectManager::get()->get(RequestInterface::class)->setParams(['sorting' => null]);
     }
 
     #[Test]
@@ -126,6 +136,16 @@ final class GridTest extends TestCase
     #[Test]
     public function itFiltersOnTheJoinedAdminName(): void
     {
+        $this->addFilter('admin_username', '%grid-test-555201%', 'like');
+
+        $titles = $this->titles();
+
+        self::assertEqualsCanonicalizing(array_keys($this->conversations), $titles);
+    }
+
+    #[Test]
+    public function itFindsNothingForAnAdminNameThatDoesNotMatch(): void
+    {
         $this->addFilter('admin_username', '%nobody-by-this-name%', 'like');
 
         $titles = $this->titles();
@@ -136,16 +156,18 @@ final class GridTest extends TestCase
     #[Test]
     public function itListsTheMostRecentlyUpdatedConversationFirstByDefault(): void
     {
-        $this->resourceConnection->getConnection()->update(
-            $this->resourceConnection->getTableName('mago_conversation'),
-            ['updated_at' => '2020-01-01 00:00:00'],
-            ['entity_id IN (?)' => [$this->conversations['Flush the full page cache'], $this->conversations['Bestselling products in March']]]
-        );
-        $this->dataProvider->addOrder('updated_at', 'DESC');
+        $this->setUpdatedAt('Orders on hold last week', '2021-01-01 00:00:00');
+        $this->setUpdatedAt('Bestselling products in March', '2020-01-01 00:00:00');
+        $this->sortTheWayTheGridDoesBeforeTheAdminPicksAColumn();
+        $this->dataProvider = $this->preparedListing()->getContext()->getDataProvider();
+        $this->addFilter('admin_user_id', (string)self::ADMIN_USER_ID, 'eq');
 
         $titles = $this->titles();
 
-        self::assertSame('Orders on hold last week', $titles[0]);
+        self::assertSame(
+            ['Flush the full page cache', 'Orders on hold last week', 'Bestselling products in March'],
+            $titles
+        );
     }
 
     /**
@@ -163,46 +185,60 @@ final class GridTest extends TestCase
         );
     }
 
-    private function createConversation(string $title, int $messageCount, int $totalTokens): int
+    private function setUpdatedAt(string $title, string $updatedAt): void
     {
-        $connection = $this->resourceConnection->getConnection();
-        $conversationTable = $this->resourceConnection->getTableName('mago_conversation');
-        $connection->insert($conversationTable, ['admin_user_id' => self::ADMIN_USER_ID, 'title' => $title]);
-        $conversationId = (int)$connection->lastInsertId($conversationTable);
-
-        foreach (range(1, $messageCount) as $index) {
-            $connection->insert($this->resourceConnection->getTableName('mago_message'), [
-                'conversation_id' => $conversationId,
-                'role' => $index % 2 === 1 ? 'user' : 'assistant',
-                'content' => 'Message ' . $index,
-            ]);
-        }
-        $connection->insert($this->resourceConnection->getTableName('mago_usage_log'), [
-            'admin_user_id' => self::ADMIN_USER_ID,
-            'conversation_id' => $conversationId,
-            'provider' => 'anthropic',
-            'model' => 'claude-test',
-            'input_tokens' => (int)($totalTokens * 0.9),
-            'output_tokens' => (int)($totalTokens * 0.1),
-            'total_tokens' => $totalTokens,
-            'skill_names' => 'cache_manager',
-        ]);
-
-        return $conversationId;
+        $this->resourceConnection->getConnection()->update(
+            $this->resourceConnection->getTableName('mago_conversation'),
+            ['updated_at' => $updatedAt],
+            ['entity_id = ?' => $this->conversations[$title]]
+        );
     }
 
-    private function deleteConversationsOfTestAdmin(): void
+    /**
+     * The grid's JavaScript sends the sorting of the one column the listing XML gives a default
+     * direction, as the request's "sorting" parameter
+     */
+    private function sortTheWayTheGridDoesBeforeTheAdminPicksAColumn(): void
     {
-        $connection = $this->resourceConnection->getConnection();
-        $conversationTable = $this->resourceConnection->getTableName('mago_conversation');
-        $ids = $connection->fetchCol(
-            $connection->select()->from($conversationTable, 'entity_id')->where('admin_user_id = ?', self::ADMIN_USER_ID)
+        $sortedColumns = array_values(array_filter(
+            $this->columnsOf($this->preparedListing()),
+            static fn (Column $column): bool => (string)$column->getData('config/sorting') !== ''
+        ));
+        self::assertCount(1, $sortedColumns, 'The listing should declare a default sort order on exactly one column.');
+
+        MagentoObjectManager::get()->get(RequestInterface::class)->setParams(['sorting' => [
+            'field' => $sortedColumns[0]->getName(),
+            'direction' => $sortedColumns[0]->getData('config/sorting'),
+        ]]);
+    }
+
+    /**
+     * @return Column[]
+     */
+    private function columnsOf(UiComponentInterface $component): array
+    {
+        return array_merge(
+            $component instanceof Column ? [$component] : [],
+            ...array_map($this->columnsOf(...), array_values($component->getChildComponents()))
         );
-        if ($ids === []) {
-            return;
+    }
+
+    /**
+     * The listing as the grid builds it, so its columns apply the request's sort order
+     */
+    private function preparedListing(): UiComponentInterface
+    {
+        $listing = MagentoObjectManager::get()->get(UiComponentFactory::class)->create(self::LISTING);
+        $this->prepare($listing);
+
+        return $listing;
+    }
+
+    private function prepare(UiComponentInterface $component): void
+    {
+        foreach ($component->getChildComponents() as $child) {
+            $this->prepare($child);
         }
-        $connection->delete($this->resourceConnection->getTableName('mago_usage_log'), ['conversation_id IN (?)' => $ids]);
-        $connection->delete($this->resourceConnection->getTableName('mago_message'), ['conversation_id IN (?)' => $ids]);
-        $connection->delete($conversationTable, ['entity_id IN (?)' => $ids]);
+        $component->prepare();
     }
 }
