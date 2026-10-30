@@ -459,12 +459,19 @@
         </arguments>
     </type>
 
-    <!-- Conversations Grid DataProvider -->
-    <type name="MagoAssistant\Mago\Ui\DataProvider\ConversationsDataProvider">
+    <!--
+        Conversations grid. Same setup as the flags grid below: the standard DataProvider over a
+        SearchResult collection, so filters, sorting and paging run in SQL (#310).
+    -->
+    <virtualType name="MagoConversationGridCollection" type="MagoAssistant\Mago\Model\ResourceModel\Conversation\Grid">
         <arguments>
-            <argument name="name" xsi:type="string">mago_conversations_listing_data_source</argument>
-            <argument name="primaryFieldName" xsi:type="string">entity_id</argument>
-            <argument name="requestFieldName" xsi:type="string">id</argument>
+            <argument name="mainTable" xsi:type="string">mago_conversation</argument>
+            <argument name="resourceModel" xsi:type="string">MagoAssistant\Mago\Model\ResourceModel\Conversation</argument>
+        </arguments>
+    </virtualType>
+    <type name="MagoAssistant\Mago\Controller\Adminhtml\Conversations\MassDelete">
+        <arguments>
+            <argument name="gridCollection" xsi:type="object" shared="false">MagoConversationGridCollection</argument>
         </arguments>
     </type>
 
@@ -481,6 +488,7 @@
     <type name="Magento\Framework\View\Element\UiComponent\DataProvider\CollectionFactory">
         <arguments>
             <argument name="collections" xsi:type="array">
+                <item name="mago_conversations_listing_data_source" xsi:type="string">MagoConversationGridCollection</item>
                 <item name="mago_flags_listing_data_source" xsi:type="string">MagoFlagGridCollection</item>
             </argument>
         </arguments>

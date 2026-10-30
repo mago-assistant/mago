@@ -13,6 +13,10 @@
         <index referenceId="MAGO_CONVERSATION_ADMIN_USER_ID" indexType="btree">
             <column name="admin_user_id"/>
         </index>
+        <!-- The grid offers a keyword box, and Magento's fulltext filter needs an index to use -->
+        <index referenceId="MAGO_CONVERSATION_FULLTEXT" indexType="fulltext">
+            <column name="title"/>
+        </index>
     </table>
 
     <table name="mago_message" resource="default" engine="innodb" comment="Admin Assistant Messages">
@@ -125,6 +129,10 @@
         </index>
         <index referenceId="MAGO_USAGE_LOG_PROVIDER" indexType="btree">
             <column name="provider"/>
+        </index>
+        <!-- The conversations grid sums usage per conversation for every row it shows -->
+        <index referenceId="MAGO_USAGE_LOG_CONVERSATION_ID" indexType="btree">
+            <column name="conversation_id"/>
         </index>
         <constraint xsi:type="foreign" referenceId="MAGO_USAGE_LOG_CONV_ID" table="mago_usage_log" column="conversation_id" referenceTable="mago_conversation" referenceColumn="entity_id" onDelete="SET NULL"/>
     </table>
