@@ -18,10 +18,17 @@ use Magento\Framework\Api\Search\ReportingInterface;
 use Magento\Framework\Api\Search\SearchCriteriaBuilder;
 use Magento\Framework\Api\FilterBuilder;
 use MagoAssistant\Mago\Service\Tool\AdminDescription;
+use MagoAssistant\Mago\Service\Tool\ToolCategory;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 
 class SkillsDataProvider extends DataProvider
 {
+    /**
+     * The keyword search looks at what describes a skill, not at its type or who it is assigned to
+     */
+    private const KEYWORD_FIELDS = ['name', 'description', 'category'];
+
+    /** @var list<array<string, mixed>>|null */
     private ?array $skillsData = null;
 
     public function __construct(
@@ -38,6 +45,8 @@ class SkillsDataProvider extends DataProvider
         private readonly DocumentFactory $documentFactory,
         private readonly AttributeValueFactory $attributeValueFactory,
         private readonly AdminDescription $adminDescription,
+        private readonly ToolCategory $toolCategory,
+        private readonly ArrayGridQuery $gridQuery,
         array $meta = [],
         array $data = []
     ) {
@@ -54,6 +63,9 @@ class SkillsDataProvider extends DataProvider
         );
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
     private function getSkillsData(): array
     {
         if ($this->skillsData !== null) {
@@ -65,14 +77,11 @@ class SkillsDataProvider extends DataProvider
 
         foreach ($this->toolRegistry->getAllTools() as $tool) {
             $name = $tool->getName();
-            $className = get_class($tool);
-            $parts = explode('\\', $className);
-            $category = $parts[4] ?? 'General';
 
             $this->skillsData[] = [
                 'name' => $name,
                 'description' => $this->adminDescription->of($tool),
-                'category' => $category,
+                'category' => $this->toolCategory->of($tool),
                 'type' => $tool->isReadOnly() ? 'read' : 'write',
                 'assigned_users' => $assignedUsers[$name] ?? '',
             ];
@@ -109,9 +118,9 @@ class SkillsDataProvider extends DataProvider
 
     public function getSearchResult(): SearchResultInterface
     {
-        $items = $this->getSkillsData();
+        $result = $this->getGridResult();
         $documents = [];
-        foreach ($items as $item) {
+        foreach ($result['items'] as $item) {
             $doc = $this->documentFactory->create();
             $doc->setId($item['name']);
             $attributes = [];
@@ -127,7 +136,7 @@ class SkillsDataProvider extends DataProvider
 
         $searchResult = $this->searchResultFactory->create();
         $searchResult->setItems($documents);
-        $searchResult->setTotalCount(count($documents));
+        $searchResult->setTotalCount($result['totalRecords']);
         $searchResult->setSearchCriteria($this->getSearchCriteria());
 
         return $searchResult;
@@ -135,10 +144,16 @@ class SkillsDataProvider extends DataProvider
 
     public function getData(): array
     {
-        $items = $this->getSkillsData();
-        return [
-            'totalRecords' => count($items),
-            'items' => $items,
-        ];
+        return $this->getGridResult();
+    }
+
+    /**
+     * The skills after the grid's filters, sort order and page (#307)
+     *
+     * @return array{totalRecords: int, items: list<array<string, mixed>>}
+     */
+    private function getGridResult(): array
+    {
+        return $this->gridQuery->apply($this->getSkillsData(), $this->getSearchCriteria(), self::KEYWORD_FIELDS);
     }
 }
