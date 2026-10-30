@@ -326,12 +326,18 @@ define([
         function followEnd() {
             if (isAtEnd && !isOpenedByAdmin) msgs.scrollTop = msgs.scrollHeight;
         }
-        msgs.addEventListener('scroll', function() {
+        function readIsAtEnd() {
             isAtEnd = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight <= END_OF_CONVERSATION_MARGIN;
-        });
+        }
+        msgs.addEventListener('scroll', readIsAtEnd);
+        // What the admin opened grows the conversation without a scroll event, so the end is
+        // measured again once it has: a later change then does not jump past what they opened.
         msgs.addEventListener('click', function() {
             isOpenedByAdmin = true;
-            setTimeout(function() { isOpenedByAdmin = false; }, 0);
+            setTimeout(function() {
+                isOpenedByAdmin = false;
+                readIsAtEnd();
+            }, 0);
         }, true);
         msgs.addEventListener('load', followEnd, true);
         new MutationObserver(followEnd).observe(msgs, {
