@@ -205,6 +205,17 @@ tool from another module implements this interface instead. The display name rea
 through the skills list (`MAGO_CONFIG.skills[].title`). To add an answer widget alongside a tool,
 see [widgets.md](widgets.md).
 
+#### `AdminDescribedToolInterface`
+
+The Skills & Permissions page describes each tool to the administrator. `getDescription()` is
+written for the model, so by default the page shows only its first sentence, cut before any
+`Actions:` list. A tool chooses its own text by implementing
+`MagoAssistant\Mago\Api\Tool\AdminDescribedToolInterface`:
+
+- `getAdminDescription(): string` is one short, plain sentence, e.g. "Look up and manage orders,
+  invoices, shipments and credit memos." Return an empty string to keep the first-sentence
+  default. The text never reaches the model, so it can be translated with `__()`.
+
 #### `ActionScopedToolInterface`
 
 ```

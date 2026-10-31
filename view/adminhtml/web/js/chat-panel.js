@@ -100,6 +100,8 @@ define([
        which never settles still sends promptly rather than appearing to hang. */
     var FORM_SETTLE_TIMEOUT_MS = 3000;
     var NAVIGATE_STATUS_CLASS = 'mago-navigate-status';
+    /* How close to the bottom, in pixels, still counts as reading the end of the conversation. */
+    var END_OF_CONVERSATION_MARGIN = 40;
 
     // send() is synchronous and cannot await a module load, so the bridge is requested once at
     // startup and held here; a reference that is still null when send() runs means "no form",
@@ -309,6 +311,39 @@ define([
     // toggle, so bail out before anything binds to a missing element.
     if (!toggle || !chat) {
         return;
+    }
+
+    keepLatestInView();
+
+    // Whatever lands at the end of the conversation (the thinking indicator, tool tags, the
+    // thumbs, a product image that finishes loading) stays in view while the admin is reading the
+    // end, without each of those places having to scroll. Something the admin opens themselves,
+    // such as "Show 15 more" or a trace line, is not followed, or what they opened would slide
+    // out of view. A sent question and a streaming answer still scroll on their own.
+    function keepLatestInView() {
+        var isAtEnd = true;
+        var isOpenedByAdmin = false;
+        function followEnd() {
+            if (isAtEnd && !isOpenedByAdmin) msgs.scrollTop = msgs.scrollHeight;
+        }
+        function readIsAtEnd() {
+            isAtEnd = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight <= END_OF_CONVERSATION_MARGIN;
+        }
+        msgs.addEventListener('scroll', readIsAtEnd);
+        // What the admin opened grows the conversation without a scroll event, so the end is
+        // measured again once it has: a later change then does not jump past what they opened.
+        msgs.addEventListener('click', function() {
+            isOpenedByAdmin = true;
+            setTimeout(function() {
+                isOpenedByAdmin = false;
+                readIsAtEnd();
+            }, 0);
+        }, true);
+        msgs.addEventListener('load', followEnd, true);
+        new MutationObserver(followEnd).observe(msgs, {
+            childList: true, subtree: true, characterData: true,
+            attributes: true, attributeFilter: ['style', 'class', 'open']
+        });
     }
 
     function clearMsgs() {

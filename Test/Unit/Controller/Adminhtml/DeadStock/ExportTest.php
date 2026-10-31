@@ -49,7 +49,7 @@ final class ExportTest extends TestCase
     {
         $this->controller(['type' => 'overstock'])->execute();
 
-        self::assertSame('admin/dashboard', $this->redirectPath);
+        self::assertSame('adminhtml/dashboard', $this->redirectPath);
         self::assertSame(['Unknown dead stock report type.'], $this->errors);
         self::assertSame([], $this->report->calls);
         self::assertNull($this->contents);

@@ -50,11 +50,11 @@ class AnswerWidgets
         'rankedBars' => '{"type":"rankedBars","label":"Orders per category","items":[{"label":"Accessories",'
             . '"value":61},{"label":"Lighting","value":38}]} — the default for "which / how many"; '
             . 'highest first, at most 6 items.',
-        'columns' => '{"type":"columns","label":"Revenue per day","points":[{"label":"Mon","value":44},'
-            . '{"label":"Tue","value":58}]} — values over time, at most 14 points.',
-        'lines' => '{"type":"lines","label":"Revenue, 30 days","series":[{"label":"now","points":[30,48,70]},'
-            . '{"label":"previous","points":[22,34,56]}],"xLabels":["1 Aug","30 Aug"]} — this period against '
-            . 'the previous one.',
+        'columns' => '{"type":"columns","label":"Revenue per day","currency":"EUR","points":[{"label":"Mon",'
+            . '"value":44},{"label":"Tue","value":58}]} — values over time, at most 14 points.',
+        'lines' => '{"type":"lines","label":"Revenue, 30 days","currency":"EUR","series":[{"label":"now",'
+            . '"points":[30,48,70]},{"label":"previous","points":[22,34,56]}],"xLabels":["1 Aug","30 Aug"]} — '
+            . 'this period against the previous one.',
         'stackedColumns' => '{"type":"stackedColumns","label":"Orders per channel","series":[{"label":"web"},'
             . '{"label":"POS"}],"points":[{"label":"wk 31","values":[41,21]}]} — total and composition per step.',
         'heatmap' => '{"type":"heatmap","label":"Orders per hour","rows":["Mon","Tue"],"values":[[1,2,3],[2,3,4]],'
@@ -195,7 +195,9 @@ class AnswerWidgets
             . 'the readings as a "choices" widget after your question, never as a markdown or text list.';
         $lines[] = 'Rules: only use data that a tool returned, never invent or extrapolate values; format numbers '
             . 'and currency as display strings, written the way the language rule says ("€38,410", "12.4%"), except where a shape asks '
-            . 'for plain numbers (value, max, points, values); keep labels short and never put HTML in any field. '
+            . 'for plain numbers (value, max, points, values); when the plain numbers of a "columns", "lines" or '
+            . '"stackedColumns" chart are money, set "currency" to the ISO code the tool returned and leave the '
+            . 'currency out of the label; keep labels short and never put HTML in any field. '
             . 'Set "href" only to the admin_url a tool returned for that record (a token like mago://url_1 or a full '
             . 'url), copied exactly; never write or assemble an admin path yourself, it lacks the secret key and '
             . 'opens nothing, so leave "href" out when the tool returned none. Emit the JSON on its own lines, complete and valid, and never emit '
