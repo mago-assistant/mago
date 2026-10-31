@@ -46,9 +46,18 @@ jobs:
           docker exec mage-os-community-edition ./retry "composer require --no-update mage-os/module-ai-base:'^1.0'"
           docker exec mage-os-community-edition ./retry "composer require --no-update symfony/ai-lm-studio-platform:'*'"
 
+      # Mage-OS 4.0.0 and up ship Mago and pin it to an exact version. The uploaded copy is a
+      # canonical path repository, so it has to carry that version or nothing satisfies the pin.
       - name: Upload the module into the Mage-OS container
         run: |
           sed -i '/version/d' ./composer.json
+          PINNED_VERSION=$(docker exec mage-os-community-edition composer show --format=json mage-os/product-community-edition 2>/dev/null \
+            | jq -r '.requires["mago-assistant/magento2-mago"] // empty' || true)
+          if [ -n "$PINNED_VERSION" ]; then
+            echo "Mage-OS pins mago-assistant/magento2-mago to $PINNED_VERSION"
+            jq --arg version "$PINNED_VERSION" '.version = $version' composer.json > /tmp/composer.json
+            mv /tmp/composer.json composer.json
+          fi
           docker cp $(pwd) mage-os-community-edition:/data/extensions/
           docker exec mage-os-community-edition ./install-composer-package mago-assistant/magento2-mago:@dev
 
