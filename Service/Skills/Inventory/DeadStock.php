@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Inventory;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
+use MagoAssistant\Mago\Api\Data\ExportColumn;
 use MagoAssistant\Mago\Api\Tool\ExportableToolInterface;
 use MagoAssistant\Mago\Service\Export\ExportRefusedException;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
@@ -19,9 +20,11 @@ class DeadStock implements ExportableToolInterface
     private const DEFAULT_LIMIT = 20;
     private const MAX_LIMIT = 50;
 
+    /** @var array<string, array{product_count: int, total_qty: float, total_stock_value: float}> */
+    private array $summaries = [];
+
     public function __construct(
         private readonly DeadStockReport $report,
-        private readonly DeadStockCsv $csv,
         private readonly ScopeConfigInterface $scopeConfig
     ) {
     }
@@ -135,7 +138,7 @@ class DeadStock implements ExportableToolInterface
         $minDaysOfCover = $this->minDaysOfCover($params);
         $limit = max(1, min(self::MAX_LIMIT, (int)($params['limit'] ?? self::DEFAULT_LIMIT)));
 
-        $summary = $this->report->summary($action, $months, $minDaysOfCover);
+        $summary = $this->summary($action, $months, $minDaysOfCover);
         $shown = $this->report->build($action, $months, $minDaysOfCover, $limit);
 
         $result = [
@@ -178,7 +181,7 @@ class DeadStock implements ExportableToolInterface
             throw new ExportRefusedException('dead_stock needs action "obsolete" or "slow_moving"');
         }
 
-        return (int)$this->report->summary(
+        return $this->summary(
             (string)$input['action'],
             $this->months($input),
             $this->minDaysOfCover($input)
@@ -187,7 +190,18 @@ class DeadStock implements ExportableToolInterface
 
     public function getExportColumns(array $input): array
     {
-        return $this->csv->columns();
+        return [
+            new ExportColumn('sku', (string)__('SKU')),
+            new ExportColumn('product_name', (string)__('Product name')),
+            new ExportColumn('qty', (string)__('Quantity'), true),
+            new ExportColumn('units_sold', (string)__('Units sold in period'), true),
+            new ExportColumn('last_sold_at', (string)__('Last sold')),
+            new ExportColumn('created_at', (string)__('Created')),
+            new ExportColumn('days_of_cover', (string)__('Days of cover'), true),
+            new ExportColumn('unit_value', (string)__('Unit value'), true),
+            new ExportColumn('value_basis', (string)__('Value basis')),
+            new ExportColumn('stock_value', (string)__('Stock value'), true),
+        ];
     }
 
     public function exportRows(array $input, int $maxRows): iterable
@@ -206,6 +220,19 @@ class DeadStock implements ExportableToolInterface
                 }
             }
         }
+    }
+
+    /**
+     * The totals over every matching product. The chat answer and the row count of its download
+     * ask for the same totals in one request, and the query behind them is heavy, so it runs once.
+     *
+     * @return array{product_count: int, total_qty: float, total_stock_value: float}
+     */
+    private function summary(string $action, int $months, int $minDaysOfCover): array
+    {
+        $key = $action . '|' . $months . '|' . $minDaysOfCover;
+
+        return $this->summaries[$key] ??= $this->report->summary($action, $months, $minDaysOfCover);
     }
 
     /**

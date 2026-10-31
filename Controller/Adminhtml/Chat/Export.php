@@ -14,6 +14,7 @@ use Magento\Framework\Controller\Result\Json;
 use Magento\Framework\Controller\Result\Raw;
 use Magento\Framework\Controller\ResultFactory;
 use Magento\Framework\Controller\ResultInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Export\ExportRefusedException;
 use MagoAssistant\Mago\Service\Export\ToolCallExport;
 
@@ -27,9 +28,12 @@ class Export extends Action implements HttpGetActionInterface
 
     private const HTTP_FORBIDDEN = 403;
 
+    private const HTTP_SERVER_ERROR = 500;
+
     public function __construct(
         Context $context,
-        private readonly ToolCallExport $toolCallExport
+        private readonly ToolCallExport $toolCallExport,
+        private readonly ErrorReporter $errorReporter
     ) {
         parent::__construct($context);
     }
@@ -45,7 +49,9 @@ class Export extends Action implements HttpGetActionInterface
                 $user ? (int)$user->getId() : 0
             );
         } catch (ExportRefusedException $e) {
-            return $this->refusal($e->getMessage());
+            return $this->refusal($e->getMessage(), self::HTTP_FORBIDDEN);
+        } catch (\Throwable $e) {
+            return $this->refusal($this->errorReporter->report('Export Controller', $e), self::HTTP_SERVER_ERROR);
         }
 
         /** @var Raw $result */
@@ -61,14 +67,16 @@ class Export extends Action implements HttpGetActionInterface
     /**
      * The panel downloads in the background and shows the reason in the chat, so the admin stays on
      * the page they were on. A link opened on its own goes back there with the reason as a message.
+     * A failure the export did not foresee (a database error, a stored period that no longer
+     * parses) is logged, and the admin gets a reference to it instead of an error page.
      */
-    private function refusal(string $reason): ResultInterface
+    private function refusal(string $reason, int $httpCode): ResultInterface
     {
         $request = $this->getRequest();
         if ($request instanceof Http && $request->isAjax()) {
             /** @var Json $json */
             $json = $this->resultFactory->create(ResultFactory::TYPE_JSON);
-            return $json->setHttpResponseCode(self::HTTP_FORBIDDEN)->setData(['error' => $reason]);
+            return $json->setHttpResponseCode($httpCode)->setData(['error' => $reason]);
         }
 
         $this->messageManager->addErrorMessage($reason);

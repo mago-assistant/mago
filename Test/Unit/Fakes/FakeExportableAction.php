@@ -21,6 +21,8 @@ final class FakeExportableAction implements ExportableActionInterface
 
     private bool $isCountBroken = false;
 
+    private bool $isExportBroken = false;
+
     /**
      * @param list<array<string, scalar|null>> $rows
      * @param array<string, mixed> $parameterSchema
@@ -37,6 +39,13 @@ final class FakeExportableAction implements ExportableActionInterface
     public function givenCountFails(): self
     {
         $this->isCountBroken = true;
+
+        return $this;
+    }
+
+    public function givenExportFails(): self
+    {
+        $this->isExportBroken = true;
 
         return $this;
     }
@@ -103,6 +112,9 @@ final class FakeExportableAction implements ExportableActionInterface
     public function exportRows(array $params, int $adminUserId, int $maxRows): iterable
     {
         $this->exports[] = ['params' => $params, 'admin_user_id' => $adminUserId, 'max_rows' => $maxRows];
+        if ($this->isExportBroken) {
+            throw new \RuntimeException("SQLSTATE[HY000]: General error in SELECT ... WHERE email = 'jane@example.com'");
+        }
 
         yield from array_slice($this->rows, 0, $maxRows);
     }

@@ -8,10 +8,8 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Inventory;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use MagoAssistant\Mago\Api\Data\ExportColumn;
-use MagoAssistant\Mago\Service\Export\CsvWriter;
 use MagoAssistant\Mago\Service\Export\ExportRefusedException;
 use MagoAssistant\Mago\Service\Skills\Inventory\DeadStock;
-use MagoAssistant\Mago\Service\Skills\Inventory\DeadStockCsv;
 use MagoAssistant\Mago\Service\Skills\Inventory\DeadStockReport;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeDeadStockReport;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -183,6 +181,29 @@ class DeadStockTest extends TestCase
     }
 
     #[Test]
+    public function itCountsTheDownloadOfAnAnswerWithoutRunningTheSummaryAgain(): void
+    {
+        $tool = $this->toolWith([$this->row('A', 4, 40.0), $this->row('B', 2, 20.0)]);
+        $tool->execute(['action' => 'obsolete']);
+
+        $count = $tool->countExportRows(['action' => 'obsolete']);
+
+        self::assertSame(2, $count);
+        self::assertCount(1, array_filter($this->report->calls, static fn(array $call): bool => $call['method'] === 'summary'));
+    }
+
+    #[Test]
+    public function itRunsTheSummaryAgainForADifferentPeriod(): void
+    {
+        $tool = $this->toolWith([]);
+        $tool->execute(['action' => 'obsolete', 'months' => 6]);
+
+        $tool->countExportRows(['action' => 'obsolete', 'months' => 12]);
+
+        self::assertCount(2, array_filter($this->report->calls, static fn(array $call): bool => $call['method'] === 'summary'));
+    }
+
+    #[Test]
     public function itRefusesToExportAnUnknownAction(): void
     {
         $this->expectException(ExportRefusedException::class);
@@ -191,13 +212,17 @@ class DeadStockTest extends TestCase
     }
 
     #[Test]
-    public function itExportsTheSameColumnsAsTheDeadStockCsv(): void
+    public function itExportsEveryReportColumnInOrderUnderItsLabel(): void
     {
         $columns = $this->toolWith([])->getExportColumns(['action' => 'obsolete']);
 
         self::assertSame(
             ['sku', 'product_name', 'qty', 'units_sold', 'last_sold_at', 'created_at', 'days_of_cover', 'unit_value', 'value_basis', 'stock_value'],
             array_map(static fn (ExportColumn $column): string => $column->key, $columns)
+        );
+        self::assertSame(
+            ['SKU', 'Product name', 'Quantity', 'Units sold in period', 'Last sold', 'Created', 'Days of cover', 'Unit value', 'Value basis', 'Stock value'],
+            array_map(static fn (ExportColumn $column): string => $column->label, $columns)
         );
     }
 
@@ -211,7 +236,7 @@ class DeadStockTest extends TestCase
         $config = $this->createStub(ScopeConfigInterface::class);
         $config->method('getValue')->willReturn('EUR');
 
-        return new DeadStock($this->report, new DeadStockCsv(new CsvWriter()), $config);
+        return new DeadStock($this->report, $config);
     }
 
     /**

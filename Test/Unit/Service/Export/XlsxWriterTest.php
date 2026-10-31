@@ -65,6 +65,23 @@ final class XlsxWriterTest extends TestCase
     }
 
     #[Test]
+    public function itEscapesMarkupInLabelsAndCellsSoTheSheetStaysValidXml(): void
+    {
+        $contents = (new XlsxWriter())->write(
+            [new ExportColumn('name', 'Name <b>& "quoted"</b>')],
+            [['name' => 'Tom & Jerry <script>alert("x")</script>']]
+        );
+
+        $sheet = $this->parts($contents)['xl/worksheets/sheet1.xml'];
+        self::assertStringContainsString('Tom &amp; Jerry &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;', $sheet);
+        self::assertStringNotContainsString('<script>', $sheet);
+        self::assertSame(
+            ['Name <b>& "quoted"</b>', 'Tom & Jerry <script>alert("x")</script>'],
+            array_column($this->cells($contents), 3)
+        );
+    }
+
+    #[Test]
     public function itStripsCharactersXmlCannotHoldAndCutsCellsAtTheExcelLimit(): void
     {
         $cells = $this->cells((new XlsxWriter())->write($this->columns(), [

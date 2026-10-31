@@ -15,9 +15,12 @@ use Magento\Framework\Controller\Result\Json;
 use Magento\Framework\Controller\Result\Raw;
 use Magento\Framework\Controller\ResultFactory;
 use Magento\Framework\Message\ManagerInterface;
+use Magento\Framework\Serialize\Serializer\Json as JsonSerializer;
 use Magento\User\Model\User;
 use MagoAssistant\Mago\Controller\Adminhtml\Chat\Export;
+use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Service\Acl\ToolAccess;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Export\CsvWriter;
 use MagoAssistant\Mago\Service\Export\ToolCallExport;
 use MagoAssistant\Mago\Service\Privacy\ConversationVault;
@@ -29,6 +32,7 @@ use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeConversationRepository;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeExportableAction;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeLogger;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakePermissionChecker;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeSkill;
 use PHPUnit\Framework\Attributes\Test;
@@ -58,6 +62,16 @@ final class ExportTest extends TestCase
 
     /** @var array<string,string> */
     private array $headers = [];
+
+    private FakeExportableAction $lowStock;
+
+    private FakeLogger $logger;
+
+    protected function setUp(): void
+    {
+        $this->lowStock = new FakeExportableAction('low_stock', [['sku' => 'MH01', 'qty' => 0]]);
+        $this->logger = new FakeLogger();
+    }
 
     #[Test]
     public function itAsksForTheAssistantReadResource(): void
@@ -100,6 +114,34 @@ final class ExportTest extends TestCase
         self::assertTrue($this->isRedirectedBack);
         self::assertSame(['This result was not found in the conversation.'], $this->errors);
         self::assertNull($this->jsonData);
+        self::assertNull($this->contents);
+    }
+
+    #[Test]
+    public function itLogsAnUnforeseenFailureAndGivesThePanelAReferenceInsteadOfTheRawError(): void
+    {
+        $this->lowStock->givenExportFails();
+
+        $this->controller(['conversation_id' => '1', 'tool_call_id' => 'call_1', 'format' => 'csv'], self::ADMIN_USER_ID, true)->execute();
+
+        self::assertSame(500, $this->jsonCode);
+        self::assertStringNotContainsString('SQLSTATE', (string)($this->jsonData['error'] ?? ''));
+        self::assertStringNotContainsString('jane@example.com', (string)($this->jsonData['error'] ?? ''));
+        self::assertCount(1, $this->logger->getMessages());
+        self::assertStringContainsString('SQLSTATE', $this->logger->getMessages()[0]);
+        self::assertNull($this->contents);
+    }
+
+    #[Test]
+    public function itSendsALinkOpenedOnItsOwnBackWhenTheExportFailsUnforeseen(): void
+    {
+        $this->lowStock->givenExportFails();
+
+        $this->controller(['conversation_id' => '1', 'tool_call_id' => 'call_1', 'format' => 'csv'], self::ADMIN_USER_ID)->execute();
+
+        self::assertTrue($this->isRedirectedBack);
+        self::assertCount(1, $this->errors);
+        self::assertStringNotContainsString('SQLSTATE', $this->errors[0]);
         self::assertNull($this->contents);
     }
 
@@ -175,14 +217,18 @@ final class ExportTest extends TestCase
         $context->method('getResultFactory')->willReturn($resultFactory);
         $context->method('getAuth')->willReturn($auth);
 
-        return new Export($context, $this->toolCallExport());
+        return new Export(
+            $context,
+            $this->toolCallExport(),
+            new ErrorReporter(new ErrorLogger($this->logger, new JsonSerializer()), new PiiHeuristic())
+        );
     }
 
     private function toolCallExport(): ToolCallExport
     {
         $permissions = (new FakePermissionChecker())->withDecision('product_data', 'read', true);
         $registry = new ToolRegistry($permissions, [new FakeSkill('product_data', new FakeAuthorization(), [
-            'low_stock' => new FakeExportableAction('low_stock', [['sku' => 'MH01', 'qty' => 0]]),
+            'low_stock' => $this->lowStock,
         ])]);
         $vault = new ConversationVault();
         $repository = new FakeConversationRepository(
