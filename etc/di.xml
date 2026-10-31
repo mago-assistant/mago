@@ -93,6 +93,7 @@
                 <item name="indexer_manager" xsi:type="object">MagoAssistant\Mago\Service\Skills\Configuration\IndexerManager</item>
                 <item name="sales_data" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\SalesData</item>
                 <item name="product_data" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\ProductData</item>
+                <item name="category_data" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\CategoryData</item>
                 <item name="customer_data" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\CustomerData</item>
                 <item name="content_generator" xsi:type="object">MagoAssistant\Mago\Service\Skills\Content\ContentGenerator</item>
                 <item name="cms_data" xsi:type="object">MagoAssistant\Mago\Service\Skills\Content\CmsData</item>
@@ -205,6 +206,15 @@
                 <item name="search" xsi:type="object">MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager\SearchAction</item>
                 <item name="create" xsi:type="object">MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager\CreateAction</item>
                 <item name="delete" xsi:type="object">MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager\DeleteAction</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!-- Skill Actions: CategoryData -->
+    <type name="MagoAssistant\Mago\Service\Skills\Catalog\CategoryData">
+        <arguments>
+            <argument name="actions" xsi:type="array">
+                <item name="empty_categories" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\EmptyCategoriesAction</item>
             </argument>
         </arguments>
     </type>
