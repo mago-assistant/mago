@@ -62,6 +62,22 @@ jobs:
           # mirror.mage-os.org, the action's default, carries magento/* but no mage-os/* at all.
           magento_repository: ${{ startsWith(matrix.magento, 'mage-os/') && 'https://repo.mage-os.org/' || 'https://mirror.mage-os.org/' }}
 
+      # Mage-OS 4.0.0 and up ship Mago and pin it to an exact version. The path repository is
+      # canonical, so the checkout has to carry that version or nothing satisfies the pin.
+      - name: Match the version Mage-OS pins
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: |
+          PRODUCT_VERSION=$(jq -r '.require["mage-os/product-community-edition"] // empty' composer.json)
+          if [ -n "$PRODUCT_VERSION" ]; then
+            PINNED_VERSION=$(composer show --available --format=json mage-os/product-community-edition "$PRODUCT_VERSION" \
+              | jq -r '.requires["mago-assistant/magento2-mago"] // empty')
+          fi
+          if [ -n "$PINNED_VERSION" ]; then
+            echo "Mage-OS pins mago-assistant/magento2-mago to $PINNED_VERSION"
+            jq --arg version "$PINNED_VERSION" '.version = $version' "$GITHUB_WORKSPACE/mago/composer.json" > /tmp/composer.json
+            mv /tmp/composer.json "$GITHUB_WORKSPACE/mago/composer.json"
+          fi
+
       - name: Add the extension
         working-directory: ${{ steps.setup-magento.outputs.path }}
         run: |

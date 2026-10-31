@@ -12,6 +12,7 @@ use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Phrase;
 use MagoAssistant\Mago\Api\Acl;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Service\Tool\AdminDescription;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 
 class SkillEdit extends Template
@@ -20,6 +21,7 @@ class SkillEdit extends Template
         Context $context,
         private readonly ToolRegistry $toolRegistry,
         private readonly ResourceConnection $resourceConnection,
+        private readonly AdminDescription $adminDescription,
         array $data = []
     ) {
         parent::__construct($context, $data);
@@ -37,6 +39,13 @@ class SkillEdit extends Template
     {
         $skillName = $this->getRequest()->getParam('skill_name');
         return $skillName ? $this->toolRegistry->getToolByName($skillName) : null;
+    }
+
+    public function getSkillDescription(): string
+    {
+        $skill = $this->getSkill();
+
+        return $skill ? $this->adminDescription->of($skill) : '';
     }
 
     public function getAdminUsers(): array

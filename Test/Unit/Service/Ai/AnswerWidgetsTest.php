@@ -152,6 +152,18 @@ final class AnswerWidgetsTest extends TestCase
     }
 
     /**
+     * Chart values are plain numbers, so the sign on the axis and in the tooltips comes from the currency code.
+     */
+    #[Test]
+    public function itTeachesTheCurrencyCodeForMoneyCharts(): void
+    {
+        $section = $this->answerWidgets()->toPromptSection();
+
+        self::assertStringContainsString('"type":"columns","label":"Revenue per day","currency":"EUR"', $section);
+        self::assertStringContainsString('set "currency" to the ISO code the tool returned', $section);
+    }
+
+    /**
      * Admin urls reach the model as tokens (mago://url_1) and only work with their secret key, so
      * the guide must never show or ask for a hand-written admin path.
      */

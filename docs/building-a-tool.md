@@ -57,6 +57,8 @@ The methods, and what goes wrong with each:
 - `getName()`: must equal the `di.xml` item name.
 - `getDescription()`: the model picks tools by this text. Say what the tool does and what it does
   not. Never promise more than `execute()` returns. Keep it short; it is sent on every request.
+  The Skills & Permissions page shows its first sentence to the administrator, so open with a
+  plain summary, or implement `AdminDescribedToolInterface` to write that text yourself.
 - `getParameterSchema()`: JSON Schema with `type: object`. The model fills in every parameter it is
   shown, so only offer parameters that are always safe to receive. Removing a parameter works
   better than a description asking the model not to use it. For a skill action (and any tool

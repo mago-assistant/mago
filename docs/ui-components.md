@@ -92,9 +92,9 @@ module.
 | W05 | `ring` | `label`, `percent`, `valueText`, `legend: [{label, value, color}]` |
 | W06 | `composition` | `label`, `segments: [{label, value, valueText, color}]` |
 | W07 | `rankedBars` | `label`, `items: [{label, value, valueText, color, onClick}]` |
-| W08 | `columns` | `label`, `points: [{label, value, valueText, highlight}]` |
-| W09 | `lines` | `label`, `series: [{label, points, style: solid\|dashed}]`, `xLabels` |
-| W10 | `stackedColumns` | `label`, `series: [{label, color}]`, `points: [{label, values}]` |
+| W08 | `columns` | `label`, `currency`, `points: [{label, value, valueText, highlight}]` |
+| W09 | `lines` | `label`, `currency`, `series: [{label, points, style: solid\|dashed}]`, `xLabels` |
+| W10 | `stackedColumns` | `label`, `currency`, `series: [{label, color}]`, `points: [{label, values}]` |
 | W11 | `heatmap` | `label`, `rows: [label]`, `values: [[n, ...]]`, `scale: [low, high]` |
 | W12 | `funnel` | `label`, `steps: [{label, value, valueText}]` |
 | W13 | `entityList` | `items: [{title, meta, thumb, href, onClick, action: {label, href, onClick}}]` (five shown, the rest in a `<details>` behind "Show N more", labels `showMore` / `showLess`), `more: {count, label, href, onClick}` (a bare `count`, or any `more` from an answer, renders as a note) |
@@ -117,6 +117,17 @@ Chart colours follow the ramp: the first (highest) item is the accent, the next
 ones peach, and from four items on the last one is grey ("the remainder").
 Numbers are rendered with tabular figures; pass preformatted strings when the
 locale formatting matters, or use `MagoUI.formatNumber(n)`.
+
+`columns`, `lines` and `stackedColumns` show a y-axis with three ticks (top,
+middle, bottom of the plot: the peak, half of it and zero; for `lines` the
+highest, middle and lowest value, as the line is drawn between those) and the
+exact value of a point in a tooltip on hover and keyboard focus. `composition`
+segments and `heatmap` cells show the same tooltip on hover. The tooltip is
+plain CSS, so it survives the scrub every answer widget goes through. With
+`currency` (an ISO code such as `"EUR"`) the ticks and tooltips of these three
+charts are formatted as money in the admin locale: "€7,409" in English,
+"€ 7.409" in Dutch. Past seven points `columns` and `stackedColumns` label
+every second (or third) point, counted from the peak; the tooltip names each one.
 
 ## Skill actions (S01–S14)
 

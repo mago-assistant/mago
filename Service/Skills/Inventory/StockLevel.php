@@ -10,6 +10,7 @@ use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\CatalogInventory\Api\StockRegistryInterface;
 use Magento\CatalogInventory\Model\Stock;
 use Magento\Framework\Exception\NoSuchEntityException;
+use MagoAssistant\Mago\Api\Tool\AdminDescribedToolInterface;
 use MagoAssistant\Mago\Api\Tool\AvailabilityAwareToolInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
@@ -17,7 +18,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
  * Stock of one product from the legacy catalog stock item. Only offered without MSI, where that
  * item is the single source of truth; with MSI it holds the default source only.
  */
-class StockLevel implements AvailabilityAwareToolInterface
+class StockLevel implements AvailabilityAwareToolInterface, AdminDescribedToolInterface
 {
     private const BACKORDERS = [
         Stock::BACKORDERS_NO => 'no',
@@ -40,6 +41,11 @@ class StockLevel implements AvailabilityAwareToolInterface
     public function getName(): string
     {
         return 'stock_level';
+    }
+
+    public function getAdminDescription(): string
+    {
+        return (string)__('Show the stock of a product.');
     }
 
     public function getDescription(): string
