@@ -215,6 +215,7 @@
         <arguments>
             <argument name="actions" xsi:type="array">
                 <item name="empty_categories" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\EmptyCategoriesAction</item>
+                <item name="uncategorized_products" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\UncategorizedProductsAction</item>
             </argument>
         </arguments>
     </type>

@@ -80,11 +80,13 @@ Find all disabled products
 ```
 
 ### category_data (read-only)
-Enabled categories that show no products on the storefront, per store view.
+Enabled categories that show no products on the storefront, and products that no enabled category leads to, per store view.
 
 ```
 Do I have any live categories with 0 live products in?
 Which categories are empty in the nl store view?
+How many products have no categories assigned?
+Which products are only in disabled categories?
 ```
 
 ### stock_level / stock_level_msi (read-only)

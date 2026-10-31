@@ -1204,6 +1204,7 @@ class ChatService implements ChatServiceInterface
             'product_data.low_stock' => 'Checking low stock...',
             'product_data.get_by_sku' => 'Fetching product...',
             'category_data.empty_categories' => 'Finding empty categories...',
+            'category_data.uncategorized_products' => 'Finding products without a category...',
             'stock_level' => 'Checking stock...',
             'stock_level_msi' => 'Checking stock per source...',
             'dead_stock.obsolete' => 'Finding obsolete inventory...',
