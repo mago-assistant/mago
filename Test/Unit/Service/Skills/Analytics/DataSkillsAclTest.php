@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Analytics;
 
 use MagoAssistant\Mago\Service\Skills\Analytics\CustomerData;
 use MagoAssistant\Mago\Service\Skills\Analytics\ProductData;
+use MagoAssistant\Mago\Service\Skills\Catalog\CategoryData;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData;
 use MagoAssistant\Mago\Service\Url\AdminRouteAcl;
 use MagoAssistant\Mago\Service\Url\EntityRouteMap;
@@ -28,6 +29,7 @@ final class DataSkillsAclTest extends TestCase
     private const GRID = [
         'customer/index/index' => 'Magento_Customer::manage',
         'catalog/product/index' => 'Magento_Catalog::products',
+        'catalog/category/index' => 'Magento_Catalog::categories',
         'cms/page/index' => 'Magento_Cms::page',
         'cms/block/index' => 'Magento_Cms::block',
     ];
@@ -65,6 +67,14 @@ final class DataSkillsAclTest extends TestCase
         foreach (['count', 'get_by_sku', 'search'] as $action) {
             self::assertSame('Magento_Catalog::products', $skill->getMagentoAcl(['action' => $action]), $action);
         }
+    }
+
+    #[Test]
+    public function theCategoryTreeIsGatedByTheCategoriesScreen(): void
+    {
+        $skill = new CategoryData(new FakeAuthorization(), $this->routeMap());
+
+        self::assertSame('Magento_Catalog::categories', $skill->getMagentoAcl(['action' => 'empty_categories']));
     }
 
     /**
