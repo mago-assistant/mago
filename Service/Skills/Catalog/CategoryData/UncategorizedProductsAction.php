@@ -59,7 +59,7 @@ class UncategorizedProductsAction implements ActionInterface
 
     public function getAclResource(): ?string
     {
-        return null;
+        return 'Magento_Catalog::products';
     }
 
     public function isReadOnly(): bool
@@ -75,6 +75,7 @@ class UncategorizedProductsAction implements ActionInterface
             'store_name' => [PiiClass::PUBLIC],
             'product_count' => [PiiClass::PUBLIC],
             'shown' => [PiiClass::PUBLIC],
+            'is_partial' => [PiiClass::PUBLIC],
             'sku' => [PiiClass::PUBLIC],
             'name' => [PiiClass::PUBLIC],
             'type' => [PiiClass::PUBLIC],
@@ -94,8 +95,7 @@ class UncategorizedProductsAction implements ActionInterface
             . 'of another store root; "disabled_categories_only" means only categories that are disabled in that '
             . 'store view. A product is listed once per reason, so it appears twice when its store views differ. '
             . 'product_count is the highest per-store count; the per-store counts are exact. Say whether '
-            . 'only_live was on. When product_count exceeds shown, '
-            . 'say the table shows part of the products.';
+            . 'only_live was on. When is_partial is true, say the table shows part of the products.';
     }
 
     public function execute(array $params, int $adminUserId): array
@@ -135,6 +135,7 @@ class UncategorizedProductsAction implements ActionInterface
                 $rows[] = ['product_id' => $productId, 'reason' => $reason, 'stores' => $storeCodes];
             }
         }
+        $isCut = count($rows) > $limit || $this->hasUnlistedProducts($storeTotals, $byProduct);
         $rows = array_slice($rows, 0, $limit);
 
         // Names and status as the first checked store view shows them.
@@ -161,7 +162,27 @@ class UncategorizedProductsAction implements ActionInterface
             // Each store view is counted, not every product id loaded: the store view with the most.
             'product_count' => max([0, ...array_column($storeTotals, 'product_count')]),
             'shown' => count($shown),
+            'is_partial' => $isCut || count($shown) < count($rows),
             'products' => $shown,
         ];
+    }
+
+    /**
+     * Whether a store view counted more products than made it into the per-store scan results.
+     *
+     * @param list<array{store_code:string,store_name:string,product_count:int}> $storeTotals
+     * @param array<int,array<string,list<string>>> $byProduct
+     */
+    private function hasUnlistedProducts(array $storeTotals, array $byProduct): bool
+    {
+        $listedPerStore = array_count_values(array_merge(...array_map(
+            static fn (array $reasons): array => array_values(array_unique(array_merge(...array_values($reasons)))),
+            array_values($byProduct)
+        )));
+
+        return array_filter(
+            $storeTotals,
+            static fn (array $total): bool => $total['product_count'] > ($listedPerStore[$total['store_code']] ?? 0)
+        ) !== [];
     }
 }

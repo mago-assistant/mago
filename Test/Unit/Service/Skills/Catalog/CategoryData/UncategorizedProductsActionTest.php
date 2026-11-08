@@ -38,6 +38,7 @@ final class UncategorizedProductsActionTest extends TestCase
         self::assertSame('SKU-7', $result['products'][0]['sku']);
         self::assertSame('catalog/product/edit/id/7', $result['products'][0]['admin_url']);
         self::assertSame([1, 1], array_column($result['stores'], 'product_count'));
+        self::assertFalse($result['is_partial']);
     }
 
     #[Test]
@@ -124,8 +125,45 @@ final class UncategorizedProductsActionTest extends TestCase
 
         self::assertSame(3, $result['product_count']);
         self::assertSame(2, $result['shown']);
+        self::assertTrue($result['is_partial']);
         self::assertSame(2, $this->calls[0][4]);
         self::assertSame([[[7, 8], 1]], $this->detailCalls);
+    }
+
+    #[Test]
+    public function aListCutAcrossStoreViewsIsPartialEvenWhenShownMatchesTheCount(): void
+    {
+        $result = $this->action([
+            1 => [
+                7 => UncategorizedProductsReport::REASON_NO_CATEGORY,
+                8 => UncategorizedProductsReport::REASON_NO_CATEGORY,
+            ],
+            2 => [9 => UncategorizedProductsReport::REASON_NO_CATEGORY],
+        ])->execute(['action' => 'uncategorized_products', 'limit' => 2], 1);
+
+        self::assertSame(2, $result['product_count']);
+        self::assertSame(2, $result['shown']);
+        self::assertSame(['SKU-7', 'SKU-8'], array_column($result['products'], 'sku'));
+        self::assertTrue($result['is_partial']);
+    }
+
+    #[Test]
+    public function aProductWhoseReasonsFillTheLimitMakesTheListPartial(): void
+    {
+        $result = $this->action([
+            1 => [7 => UncategorizedProductsReport::REASON_DISABLED_ONLY],
+            2 => [7 => UncategorizedProductsReport::REASON_NO_CATEGORY],
+        ])->execute(['action' => 'uncategorized_products', 'limit' => 1], 1);
+
+        self::assertSame(1, $result['product_count']);
+        self::assertSame(1, $result['shown']);
+        self::assertTrue($result['is_partial']);
+    }
+
+    #[Test]
+    public function listingProductsNeedsTheProductsAcl(): void
+    {
+        self::assertSame('Magento_Catalog::products', $this->action([])->getAclResource());
     }
 
     #[Test]
