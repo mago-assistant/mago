@@ -76,7 +76,6 @@ See [docs/skills-examples.md](docs/skills-examples.md) for more example prompts 
 - **ACL-based permissions** — read/write access controlled per admin role
 - **Write confirmation** — every write asks first; irreversible actions (cancel, refund, delete) show their impact and need an explicit acknowledgement, several writes in one turn become a tick list
 - **Answer widgets** — stat cards, charts, tables and record lists in the answer where the data allows it (see [docs/ui-components.md](docs/ui-components.md))
-- **Write confirmation** — destructive actions always require explicit user approval
 - **Form access** — reads and stages field changes on the admin form open in the browser
   (including unsaved edits), but never saves: changes are only staged into the form's own fields,
   same as typing them in, and the administrator's own Save click is what persists anything
