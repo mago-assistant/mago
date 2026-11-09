@@ -24,7 +24,7 @@ Overview of all Magento admin areas, current skill coverage, and planned additio
 |-------|---------|
 | `sales_data` | revenue_summary, top_products, top_refunded, recent_orders, order_count, lookup_order, search_orders, customer_orders |
 | `product_data` | search, get_by_sku, count, low_stock |
-| `category_data` | empty_categories |
+| `category_data` | empty_categories, uncategorized_products |
 | `dead_stock` | obsolete, slow_moving, with CSV export |
 | `customer_data` | count, recent_signups, top_spenders, lookup_customer |
 | `config_reader` | Read config by path/scope |
@@ -117,7 +117,7 @@ Product CRUD operations.
 - **Use cases:** "Set price of SKU-123 to 29.99", "Disable all products with zero stock", "Move product X to category Y"
 
 #### `category_data`
-Category tree navigation and management. `empty_categories` ships (#318).
+Category tree navigation and management. `empty_categories` (#318) and `uncategorized_products` (#320) ship.
 
 - `list` — list category tree
 - `get` — get category details with products
