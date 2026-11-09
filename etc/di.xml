@@ -364,6 +364,11 @@
 
     <!-- Every bin/magento run builds the command list, so the tool commands must not build the
          registry (and every tool in it) until they actually run -->
+    <type name="MagoAssistant\Mago\Service\Tool\Verify\ToolVerifier">
+        <arguments>
+            <argument name="manifestChecker" xsi:type="object">MagoAssistant\Mago\Service\Manifest\ManifestChecker</argument>
+        </arguments>
+    </type>
     <type name="MagoAssistant\Mago\Console\Command\VerifyTool">
         <arguments>
             <argument name="toolRegistry" xsi:type="object">MagoAssistant\Mago\Service\Tool\ToolRegistry\Proxy</argument>
