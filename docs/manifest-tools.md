@@ -117,7 +117,7 @@ with `method` and `path`; a composite action lists `<step>` elements instead.
 | --- | --- |
 | `name`, `type` | Parameter name and JSON type: `string`, `integer`, `number`, `boolean`, `array` (`items` names the element type). |
 | `description`, `required`, `default`, `enum` | As in JSON Schema; `enum` is comma-separated. A default is filled in when the model leaves the parameter out. |
-| `in` | Where it goes: `body` (default; path parameters are in the body too, as Magento wants the id in the entity), `path`, `query` (as is), `criteria` (a `searchCriteria` filter), `page_size`, `store` (the store code the call runs in, as `/rest/<code>/V1/` would), `none`. |
+| `in` | Where it goes: `body` (default; path parameters are in the body too, as Magento wants the id in the entity), `path`, `query` (as is), `criteria` (a `searchCriteria` filter), `page_size`, `store` (the store code the call runs in, as `/rest/<code>/V1/` would; without one the call runs in the default store view, so a module whose texts live in the default scope gives this parameter `default="all"`), `none`. |
 | `criteria`, `condition`, `wrap` | For `in="criteria"`: the field to filter, the condition type (`eq`, `like`, `in`, ...) and a wrap around the value (`%` for `like`). A list value is joined with commas, for `in`. |
 
 A `GET` with any `criteria` or `page_size` parameter sends a `searchCriteria` query; without one it
