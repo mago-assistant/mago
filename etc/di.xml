@@ -82,10 +82,13 @@
         </arguments>
     </type>
 
-    <!-- Tool Registry: inject all tools -->
+    <!-- Tool Registry: inject all tools; providers add tools other modules declare in etc/mago_tools.xml -->
     <type name="MagoAssistant\Mago\Service\Tool\ToolRegistry">
         <arguments>
             <argument name="permissionChecker" xsi:type="object">MagoAssistant\Mago\Service\Skills\PermissionChecker</argument>
+            <argument name="providers" xsi:type="array">
+                <item name="manifest" xsi:type="object">MagoAssistant\Mago\Service\Manifest\ManifestToolProvider</item>
+            </argument>
             <argument name="tools" xsi:type="array">
                 <item name="config_reader" xsi:type="object">MagoAssistant\Mago\Service\Skills\Configuration\ConfigReader</item>
                 <item name="config_writer" xsi:type="object">MagoAssistant\Mago\Service\Skills\Configuration\ConfigWriter</item>
@@ -114,6 +117,22 @@
                 <item name="stock_level_msi" xsi:type="object">MagoAssistant\Mago\Service\Skills\Inventory\StockLevelMsi</item>
                 <item name="dead_stock" xsi:type="object">MagoAssistant\Mago\Service\Skills\Inventory\DeadStock</item>
             </argument>
+        </arguments>
+    </type>
+
+    <!-- Tool manifests: every module's etc/mago_tools.xml, merged and cached with the configuration -->
+    <type name="MagoAssistant\Mago\Model\Manifest\Config\Reader">
+        <arguments>
+            <argument name="converter" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\Converter</argument>
+            <argument name="schemaLocator" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\SchemaLocator</argument>
+            <argument name="fileName" xsi:type="string">mago_tools.xml</argument>
+        </arguments>
+    </type>
+    <type name="MagoAssistant\Mago\Model\Manifest\Config">
+        <arguments>
+            <argument name="reader" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\Reader</argument>
+            <argument name="cache" xsi:type="object">Magento\Framework\App\Cache\Type\Config</argument>
+            <argument name="cacheId" xsi:type="const">MagoAssistant\Mago\Model\Manifest\Config::CACHE_ID</argument>
         </arguments>
     </type>
 

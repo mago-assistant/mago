@@ -10,6 +10,7 @@ use MagoAssistant\Mago\Api\Acl;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
 use MagoAssistant\Mago\Api\Tool\AvailabilityAwareToolInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Api\Tool\ToolProviderInterface;
 use MagoAssistant\Mago\Service\Skills\PermissionChecker;
 
 class ToolRegistry
@@ -24,18 +25,35 @@ class ToolRegistry
     private array $readActionsCache = [];
 
     /**
+     * Tools listed in di.xml come first; a provider's tool with a name that is already taken is
+     * left out, so a module cannot shadow a built-in tool through a manifest.
+     *
      * @param PermissionChecker|null $permissionChecker
      * @param ToolInterface[] $tools
+     * @param ToolProviderInterface[] $providers
      */
     public function __construct(
         private readonly ?PermissionChecker $permissionChecker = null,
-        array $tools = []
+        array $tools = [],
+        array $providers = []
     ) {
-        $this->tools = array_filter(
-            $tools,
+        $registered = [];
+        foreach ($tools as $tool) {
+            $registered[$tool->getName()] = $tool;
+        }
+        foreach ($providers as $provider) {
+            foreach ($provider->getTools() as $tool) {
+                if (!isset($registered[$tool->getName()])) {
+                    $registered[$tool->getName()] = $tool;
+                }
+            }
+        }
+
+        $this->tools = array_values(array_filter(
+            $registered,
             static fn (ToolInterface $tool): bool => !$tool instanceof AvailabilityAwareToolInterface
                 || $tool->isAvailable()
-        );
+        ));
     }
 
     /**

@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+ * Copyright © Mago Assistant
+ *
+ * A module declares the tools it offers the admin chat in etc/mago_tools.xml. Every action is one or
+ * more calls to the module's own REST routes, run through Mago's internal API client as the admin
+ * user; nothing in the declaring module depends on Mago.
+ */
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+    <xs:element name="config">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="tool" type="toolType" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+        </xs:complexType>
+        <xs:unique name="uniqueToolName">
+            <xs:selector xpath="tool"/>
+            <xs:field xpath="@name"/>
+        </xs:unique>
+    </xs:element>
+
+    <xs:complexType name="toolType">
+        <xs:sequence>
+            <xs:element name="instructions" type="xs:string" minOccurs="0"/>
+            <xs:element name="action" type="actionType" minOccurs="1" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="name" type="toolName" use="required"/>
+        <xs:attribute name="acl" type="xs:string" use="required"/>
+        <xs:attribute name="module" type="moduleName" use="required"/>
+        <xs:attribute name="description" type="xs:string" use="required"/>
+        <xs:attribute name="title" type="xs:string"/>
+    </xs:complexType>
+
+    <xs:complexType name="actionType">
+        <xs:sequence>
+            <xs:element name="instructions" type="xs:string" minOccurs="0"/>
+            <xs:element name="param" type="paramType" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="step" type="stepType" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="field" type="fieldType" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="fields" type="fieldsType" minOccurs="0"/>
+            <xs:element name="pick" type="pickType" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="link" type="linkType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="name" type="actionName" use="required"/>
+        <xs:attribute name="description" type="xs:string" use="required"/>
+        <xs:attribute name="method" type="httpMethod"/>
+        <xs:attribute name="path" type="xs:string"/>
+        <xs:attribute name="body" type="xs:string"/>
+        <xs:attribute name="readonly" type="xs:boolean" default="false"/>
+        <xs:attribute name="irreversible" type="xs:boolean" default="false"/>
+        <xs:attribute name="impact" type="xs:string"/>
+        <xs:attribute name="status" type="xs:string"/>
+        <xs:attribute name="acl" type="xs:string"/>
+        <xs:attribute name="sort" type="xs:string"/>
+        <xs:attribute name="result" type="xs:string"/>
+    </xs:complexType>
+
+    <xs:complexType name="paramType">
+        <xs:attribute name="name" type="paramName" use="required"/>
+        <xs:attribute name="type" type="paramDataType" use="required"/>
+        <xs:attribute name="description" type="xs:string"/>
+        <xs:attribute name="required" type="xs:boolean" default="false"/>
+        <xs:attribute name="in" type="paramLocation" default="body"/>
+        <xs:attribute name="criteria" type="xs:string"/>
+        <xs:attribute name="condition" type="xs:string"/>
+        <xs:attribute name="wrap" type="xs:string"/>
+        <xs:attribute name="items" type="paramItemType"/>
+        <xs:attribute name="enum" type="xs:string"/>
+        <xs:attribute name="default" type="xs:string"/>
+    </xs:complexType>
+
+    <xs:complexType name="stepType">
+        <xs:sequence>
+            <xs:element name="field" type="stepFieldType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="name" type="paramName" use="required"/>
+        <xs:attribute name="method" type="httpMethod" use="required"/>
+        <xs:attribute name="path" type="xs:string" use="required"/>
+        <xs:attribute name="body" type="xs:string"/>
+        <xs:attribute name="when" type="xs:string"/>
+        <xs:attribute name="sort" type="xs:string"/>
+    </xs:complexType>
+
+    <xs:complexType name="stepFieldType">
+        <xs:attribute name="name" type="xs:string" use="required"/>
+        <xs:attribute name="value" type="xs:string" use="required"/>
+        <xs:attribute name="as" type="castType" default="raw"/>
+    </xs:complexType>
+
+    <xs:complexType name="fieldType">
+        <xs:attribute name="name" type="xs:string" use="required"/>
+        <xs:attribute name="class" type="privacyClass" use="required"/>
+        <xs:attribute name="token" type="xs:string"/>
+    </xs:complexType>
+
+    <xs:complexType name="fieldsType">
+        <xs:attribute name="class" type="privacyClass" use="required"/>
+        <xs:attribute name="token" type="xs:string"/>
+    </xs:complexType>
+
+    <xs:complexType name="pickType">
+        <xs:attribute name="field" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="linkType">
+        <xs:attribute name="label" type="xs:string" use="required"/>
+        <xs:attribute name="route" type="xs:string" use="required"/>
+        <xs:attribute name="param" type="xs:string" use="required"/>
+        <xs:attribute name="from" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <xs:simpleType name="toolName">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-z][a-z0-9_]{0,63}"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="actionName">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-z][a-z0-9_]{0,63}"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="paramName">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-z][a-z0-9_]{0,63}"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="moduleName">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9]*"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="httpMethod">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="GET"/>
+            <xs:enumeration value="POST"/>
+            <xs:enumeration value="PUT"/>
+            <xs:enumeration value="DELETE"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="paramDataType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="string"/>
+            <xs:enumeration value="integer"/>
+            <xs:enumeration value="number"/>
+            <xs:enumeration value="boolean"/>
+            <xs:enumeration value="array"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="paramItemType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="string"/>
+            <xs:enumeration value="integer"/>
+            <xs:enumeration value="number"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="paramLocation">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="body"/>
+            <xs:enumeration value="path"/>
+            <xs:enumeration value="query"/>
+            <xs:enumeration value="criteria"/>
+            <xs:enumeration value="page_size"/>
+            <xs:enumeration value="store"/>
+            <xs:enumeration value="none"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="castType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="raw"/>
+            <xs:enumeration value="string"/>
+            <xs:enumeration value="int"/>
+            <xs:enumeration value="list"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="privacyClass">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="public"/>
+            <xs:enumeration value="tokenise"/>
+            <xs:enumeration value="strip"/>
+        </xs:restriction>
+    </xs:simpleType>
+</xs:schema>

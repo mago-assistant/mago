@@ -16,6 +16,7 @@ use MagoAssistant\Mago\Test\Unit\Fakes\FakePermissionChecker;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeSkill;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeTool;
 use MagoAssistant\Mago\Api\Acl;
+use MagoAssistant\Mago\Api\Tool\ToolProviderInterface;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -334,6 +335,59 @@ final class ToolRegistryTest extends TestCase
         self::assertSame(['stock_level_msi' => $available], $registry->getEnabledTools(self::ADMIN_USER_ID));
         self::assertNull($registry->getToolByName('stock_level'));
         self::assertNull($registry->getTool('stock_level', self::ADMIN_USER_ID));
+    }
+
+    #[Test]
+    public function providersAddTheirToolsAfterTheOnesListedInDi(): void
+    {
+        $provided = new FakeTool('rma_manager', ['list'], ['list']);
+        $registry = new ToolRegistry(null, [$this->cacheManager], [$this->provider($provided)]);
+
+        self::assertSame(['cache_manager', 'rma_manager'], array_keys($registry->getEnabledTools(self::ADMIN_USER_ID)));
+        self::assertSame($provided, $registry->getToolByName('rma_manager'));
+    }
+
+    /**
+     * A manifest cannot take over a built-in tool by reusing its name, nor can a later provider take
+     * over an earlier one's tool.
+     */
+    #[Test]
+    public function aProvidedToolWithATakenNameIsLeftOut(): void
+    {
+        $shadow = new FakeTool('cache_manager', ['flush_everything'], []);
+        $first = new FakeTool('rma_manager', ['list'], ['list']);
+        $second = new FakeTool('rma_manager', ['delete'], []);
+        $providers = [$this->provider($shadow, $first), $this->provider($second)];
+        $registry = new ToolRegistry(null, [$this->cacheManager], $providers);
+
+        self::assertSame($this->cacheManager, $registry->getToolByName('cache_manager'));
+        self::assertSame($first, $registry->getToolByName('rma_manager'));
+        self::assertCount(2, $registry->getAllTools());
+    }
+
+    #[Test]
+    public function aProvidedToolThatIsNotAvailableIsDroppedLikeAnyOther(): void
+    {
+        $unavailable = new FakeAvailabilityAwareTool('rma_manager', false);
+        $registry = new ToolRegistry(null, [$this->cacheManager], [$this->provider($unavailable)]);
+
+        self::assertNull($registry->getToolByName('rma_manager'));
+        self::assertSame([$this->cacheManager], array_values($registry->getAllTools()));
+    }
+
+    private function provider(\MagoAssistant\Mago\Api\Tool\ToolInterface ...$tools): ToolProviderInterface
+    {
+        return new class ($tools) implements ToolProviderInterface {
+            /** @param \MagoAssistant\Mago\Api\Tool\ToolInterface[] $tools */
+            public function __construct(private readonly array $tools)
+            {
+            }
+
+            public function getTools(): array
+            {
+                return $this->tools;
+            }
+        };
     }
 
     /**
