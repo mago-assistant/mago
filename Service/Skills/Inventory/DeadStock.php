@@ -7,11 +7,12 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Inventory;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
-use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Api\Data\ExportColumn;
+use MagoAssistant\Mago\Api\Tool\ExportableToolInterface;
+use MagoAssistant\Mago\Service\Export\ExportRefusedException;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
-use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class DeadStock implements ToolInterface
+class DeadStock implements ExportableToolInterface
 {
     public const ACL = 'Magento_Reports::report_products';
 
@@ -19,9 +20,11 @@ class DeadStock implements ToolInterface
     private const DEFAULT_LIMIT = 20;
     private const MAX_LIMIT = 50;
 
+    /** @var array<string, array{product_count: int, total_qty: float, total_stock_value: float}> */
+    private array $summaries = [];
+
     public function __construct(
         private readonly DeadStockReport $report,
-        private readonly SecureAdminUrl $secureAdminUrl,
         private readonly ScopeConfigInterface $scopeConfig
     ) {
     }
@@ -38,7 +41,7 @@ class DeadStock implements ToolInterface
             . 'the last N months, but the stock on hand lasts at least min_days_of_cover days at that '
             . 'sales rate (slow-moving inventory). Only products created before the period count, '
             . 'because Magento keeps no receipt date. Returns totals, the products with the highest '
-            . 'stock value and a link to download the full list as CSV. Does not change stock or '
+            . 'stock value; the admin can download the full list from the chat. Does not change stock or '
             . 'prices. With Multi-Source Inventory the quantity is the sum over all sources.';
     }
 
@@ -68,7 +71,7 @@ class DeadStock implements ToolInterface
                     'type' => 'integer',
                     'minimum' => 1,
                     'maximum' => self::MAX_LIMIT,
-                    'description' => 'How many products to list in the answer. Default 20. The CSV always holds all.',
+                    'description' => 'How many products to list in the answer. Default 20. The download holds all.',
                 ],
             ],
             'required' => ['action'],
@@ -112,7 +115,6 @@ class DeadStock implements ToolInterface
             'unit_value' => [PiiClass::PUBLIC],
             'value_basis' => [PiiClass::PUBLIC],
             'stock_value' => [PiiClass::PUBLIC],
-            'export_url' => [PiiClass::TOKENISE, 'url'],
         ];
     }
 
@@ -121,8 +123,8 @@ class DeadStock implements ToolInterface
         return 'Lead with product_count, total_qty and total_stock_value in the currency given, then '
             . 'a table of the listed products. stock_value uses cost when value_basis is "cost", '
             . 'otherwise the regular price; say so when both occur. last_sold_at null means never sold. '
-            . 'When product_count exceeds shown, say the table is the top by stock value. Offer the '
-            . 'CSV download by writing the export_url token exactly as it came back, as a markdown link.';
+            . 'When product_count exceeds shown, say the table is the top by stock value and that the full '
+            . 'list can be downloaded with the CSV and Excel links under the table.';
     }
 
     public function execute(array $params): array
@@ -132,16 +134,13 @@ class DeadStock implements ToolInterface
             return ['error' => 'dead_stock needs action "obsolete" or "slow_moving"'];
         }
 
-        $months = DeadStockReport::clampMonths((int)($params['months'] ?? DeadStockReport::DEFAULT_MONTHS));
-        $minDaysOfCover = DeadStockReport::clampMinDaysOfCover(
-            (int)($params['min_days_of_cover'] ?? DeadStockReport::DEFAULT_MIN_DAYS_OF_COVER)
-        );
+        $months = $this->months($params);
+        $minDaysOfCover = $this->minDaysOfCover($params);
         $limit = max(1, min(self::MAX_LIMIT, (int)($params['limit'] ?? self::DEFAULT_LIMIT)));
 
-        $summary = $this->report->summary($action, $months, $minDaysOfCover);
+        $summary = $this->summary($action, $months, $minDaysOfCover);
         $shown = $this->report->build($action, $months, $minDaysOfCover, $limit);
 
-        $urlParams = ['type' => $action, 'months' => $months];
         $result = [
             'action' => $action,
             'months' => $months,
@@ -149,7 +148,6 @@ class DeadStock implements ToolInterface
         ];
         if ($action === DeadStockReport::SLOW_MOVING) {
             $result['min_days_of_cover'] = $minDaysOfCover;
-            $urlParams['min_days_of_cover'] = $minDaysOfCover;
         }
 
         return $result + [
@@ -162,7 +160,96 @@ class DeadStock implements ToolInterface
                 unset($row['product_id']);
                 return $row;
             }, $shown),
-            'export_url' => $this->secureAdminUrl->getUrl('mago/deadstock/export', $urlParams),
         ];
+    }
+
+    public function isExportableAction(array $input): bool
+    {
+        return in_array($input['action'] ?? '', DeadStockReport::TYPES, true);
+    }
+
+    public function getExportTitle(array $input): string
+    {
+        return ($input['action'] ?? '') === DeadStockReport::SLOW_MOVING
+            ? (string)__('Full slow-moving inventory list')
+            : (string)__('Full obsolete inventory list');
+    }
+
+    public function countExportRows(array $input): int
+    {
+        if (!$this->isExportableAction($input)) {
+            throw new ExportRefusedException('dead_stock needs action "obsolete" or "slow_moving"');
+        }
+
+        return $this->summary(
+            (string)$input['action'],
+            $this->months($input),
+            $this->minDaysOfCover($input)
+        )['product_count'];
+    }
+
+    public function getExportColumns(array $input): array
+    {
+        return [
+            new ExportColumn('sku', (string)__('SKU')),
+            new ExportColumn('product_name', (string)__('Product name')),
+            new ExportColumn('qty', (string)__('Quantity'), true),
+            new ExportColumn('units_sold', (string)__('Units sold in period'), true),
+            new ExportColumn('last_sold_at', (string)__('Last sold')),
+            new ExportColumn('created_at', (string)__('Created')),
+            new ExportColumn('days_of_cover', (string)__('Days of cover'), true),
+            new ExportColumn('unit_value', (string)__('Unit value'), true),
+            new ExportColumn('value_basis', (string)__('Value basis')),
+            new ExportColumn('stock_value', (string)__('Stock value'), true),
+        ];
+    }
+
+    public function exportRows(array $input, int $maxRows): iterable
+    {
+        if (!$this->isExportableAction($input)) {
+            throw new ExportRefusedException('dead_stock needs action "obsolete" or "slow_moving"');
+        }
+
+        $rowCount = 0;
+        $chunks = $this->report->chunks((string)$input['action'], $this->months($input), $this->minDaysOfCover($input));
+        foreach ($chunks as $rows) {
+            foreach ($rows as $row) {
+                yield $row;
+                if (++$rowCount >= $maxRows) {
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * The totals over every matching product. The chat answer and the row count of its download
+     * ask for the same totals in one request, and the query behind them is heavy, so it runs once.
+     *
+     * @return array{product_count: int, total_qty: float, total_stock_value: float}
+     */
+    private function summary(string $action, int $months, int $minDaysOfCover): array
+    {
+        $key = $action . '|' . $months . '|' . $minDaysOfCover;
+
+        return $this->summaries[$key] ??= $this->report->summary($action, $months, $minDaysOfCover);
+    }
+
+    /**
+     * @param array<array-key, mixed> $params
+     */
+    private function months(array $params): int
+    {
+        return DeadStockReport::clampMonths((int)($params['months'] ?? DeadStockReport::DEFAULT_MONTHS));
+    }
+
+    /**
+     * @param array<array-key, mixed> $params
+     */
+    private function minDaysOfCover(array $params): int
+    {
+        return DeadStockReport::clampMinDaysOfCover(
+            (int)($params['min_days_of_cover'] ?? DeadStockReport::DEFAULT_MIN_DAYS_OF_COVER)
+        );
     }
 }

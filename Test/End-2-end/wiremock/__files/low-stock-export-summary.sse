@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl-e2e-export-2","object":"chat.completion.chunk","created":1754000061,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-export-2","object":"chat.completion.chunk","created":1754000061,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"These are the five products with the least stock. "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-export-2","object":"chat.completion.chunk","created":1754000061,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"The full list is on the line above."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-export-2","object":"chat.completion.chunk","created":1754000061,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1500,"completion_tokens":20,"total_tokens":1520}}
+
+data: [DONE]
+

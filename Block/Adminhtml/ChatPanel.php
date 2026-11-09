@@ -16,6 +16,7 @@ use MagoAssistant\Mago\Model\Voice\PanelConfig as VoicePanelConfig;
 use MagoAssistant\Mago\Service\Command\CommandRegistry;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Service\Url\AdminPath;
 use MagoAssistant\Mago\Service\Welcome\ExampleQuestions;
@@ -101,6 +102,8 @@ class ChatPanel extends Template
                 : '',
             'flagUrl' => $this->getUrl('mago/chat/flag'),
             'statusUrl' => $this->getUrl('mago/chat/status'),
+            'exportUrl' => $this->getUrl('mago/chat/export'),
+            'exportMaxRows' => ResultLimit::EXPORT_MAX,
             'apiBaseUrl' => $this->getUrl('rest/V1/assistant'),
             'adminPath' => $this->adminPath->get(),
             'isStreamingEnabled' => $this->configRepository->isStreamingEnabled(),
@@ -196,6 +199,22 @@ class ChatPanel extends Template
             'Microphone access was denied. Allow it in the browser to use voice input.',
             'Speech recognition stopped (%1). Press the microphone to try again.',
             'Could not start the microphone. Please try again.',
+            'Full result',
+            'Download',
+            'Download %1 as CSV',
+            'Download %1 as an Excel file',
+            'Every row as CSV, not only the ones shown',
+            'Every row as an Excel file, not only the ones shown',
+            'All %1 rows as CSV',
+            'All %1 rows as an Excel file',
+            'The 1 row as CSV',
+            'The 1 row as an Excel file',
+            'The first %1 of %2 rows as CSV',
+            'The first %1 of %2 rows as an Excel file',
+            'Could not download the file.',
+            'All %1 rows',
+            'The 1 row',
+            'The first %1 of %2 rows',
         ];
 
         return array_combine($sentences, array_map(static fn (string $sentence): string => (string)__($sentence), $sentences));
