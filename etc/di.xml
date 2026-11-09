@@ -355,6 +355,7 @@
                 <item name="mago_docs_index" xsi:type="object">MagoAssistant\Mago\Console\Command\IndexDocs</item>
                 <item name="mago_tool_verify" xsi:type="object">MagoAssistant\Mago\Console\Command\VerifyTool</item>
                 <item name="mago_tool_create" xsi:type="object">MagoAssistant\Mago\Console\Command\CreateTool</item>
+                <item name="mago_tool_manifest" xsi:type="object">MagoAssistant\Mago\Console\Command\CreateManifest</item>
             </argument>
         </arguments>
     </type>
