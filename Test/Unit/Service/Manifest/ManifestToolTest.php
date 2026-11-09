@@ -147,9 +147,12 @@ final class ManifestToolTest extends TestCase
                 PiiClass::ANY => ['strip'],
                 'items' => ['public'],
                 'total_count' => ['public'],
+                '_links' => ['public'],
+                'label' => ['public'],
+                'url' => ['tokenise', 'url'],
             ],
             $tool->getFieldClassification('search'),
-            'a catch-all of strip must not swallow the items wrapper'
+            'a catch-all of strip must not swallow the items wrapper, and the links the action adds are classified'
         );
         self::assertSame([], $tool->getFieldClassification('create'));
         self::assertSame([], $tool->getFieldClassification('nope'));

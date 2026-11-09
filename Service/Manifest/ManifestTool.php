@@ -121,7 +121,8 @@ class ManifestTool implements
      * The manifest's field rules. The privacy filter matches keys at every depth and applies the
      * catch-all to a wrapper key too, so a catch-all of strip would drop a search result's whole
      * `items` list; the list wrappers a route answers with are therefore public unless the
-     * manifest says otherwise. What is inside them still answers to the named rules.
+     * manifest says otherwise. What is inside them still answers to the named rules. An action
+     * with links also classifies the links it adds itself.
      */
     public function getFieldClassification(string $action = ''): array
     {
@@ -137,6 +138,13 @@ class ManifestTool implements
             foreach (self::LIST_WRAPPERS as $wrapper) {
                 $classification[$wrapper] ??= [PiiClass::PUBLIC];
             }
+        }
+        if ($definition['links'] !== []) {
+            // The admin links the action adds, classified as the built-in tools classify theirs: the
+            // signed url holds the admin secret key, so the model sees a token and the admin the url.
+            $classification['_links'] ??= [PiiClass::PUBLIC];
+            $classification['label'] ??= [PiiClass::PUBLIC];
+            $classification['url'] ??= [PiiClass::TOKENISE, 'url'];
         }
 
         return $classification;
