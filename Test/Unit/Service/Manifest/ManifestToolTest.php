@@ -12,6 +12,7 @@ use MagoAssistant\Mago\Model\Manifest\Config\Converter;
 use MagoAssistant\Mago\Service\Manifest\ManifestTool;
 use MagoAssistant\Mago\Service\Manifest\Placeholders;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
 use PHPUnit\Framework\Attributes\Test;
@@ -105,7 +106,11 @@ final class ManifestToolTest extends TestCase
 
         self::assertSame('MageOS_RMA::rma', $tool->getMagentoAcl());
         self::assertSame('MageOS_RMA::rma', $tool->getMagentoAcl(['action' => 'search']));
-        self::assertSame('MageOS_RMA::rma_manage', $tool->getMagentoAcl(['action' => 'create']));
+        self::assertSame(
+            'MageOS_RMA::rma',
+            $tool->getMagentoAcl(['action' => 'create']),
+            'the tool resource always applies; the action adds its own through getActionAcl()'
+        );
         self::assertNull($tool->getActionAcl(['action' => 'search']));
         self::assertSame('MageOS_RMA::rma_manage', $tool->getActionAcl(['action' => 'create']));
 
@@ -259,8 +264,12 @@ final class ManifestToolTest extends TestCase
         self::assertArrayNotHasKey('searchCriteria[filter_groups][1][filters][0][field]', $call['payload']);
     }
 
+    /**
+     * A body field is a value the model chose, also when it is 0 or false and the manifest default
+     * says otherwise; only filters treat zero as "not given".
+     */
     #[Test]
-    public function aZeroForARequiredParamIsStillSent(): void
+    public function aZeroOrFalseBodyValueIsSentAndOverridesTheDefault(): void
     {
         $tool = $this->tool(
             '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
@@ -268,14 +277,87 @@ final class ManifestToolTest extends TestCase
             . '<param name="id" type="integer" required="true"/>'
             . '<param name="active" type="integer" required="true"/>'
             . '<param name="position" type="integer"/>'
+            . '<param name="notify" type="boolean" default="true"/>'
+            . '<param name="note" type="string"/>'
             . '</action></tool></config>'
         );
 
-        $tool->execute(
-            ['action' => 'set', 'id' => 5, 'active' => 0, 'position' => 0, '_admin_user_id' => self::ADMIN_ID]
+        $tool->execute([
+            'action' => 'set',
+            'id' => 5,
+            'active' => 0,
+            'position' => 0,
+            'notify' => false,
+            'note' => '',
+            '_admin_user_id' => self::ADMIN_ID,
+        ]);
+
+        self::assertSame(
+            ['e' => ['id' => 5, 'active' => 0, 'position' => 0, 'notify' => false]],
+            $this->api->calls()[0]['payload'],
+            'false beats default="true", 0 is sent, an empty string is not given'
+        );
+    }
+
+    #[Test]
+    public function aPathParamIsRequiredAndMustHaveTheDeclaredType(): void
+    {
+        $tool = $this->tool(
+            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="get" description="d" method="GET" path="rma/{entity_id}" readonly="true">'
+            . '<param name="entity_id" type="integer" in="path"/></action>'
+            . '<action name="items" description="d" method="GET" path="rma/{rma_id}/items" readonly="true">'
+            . '<param name="rma_id" type="integer" in="path"/></action>'
+            . '</tool></config>'
         );
 
-        self::assertSame(['e' => ['id' => 5, 'active' => 0]], $this->api->calls()[0]['payload']);
+        $search = $tool->execute(['action' => 'get', 'entity_id' => 'search', '_admin_user_id' => self::ADMIN_ID]);
+        $empty = $tool->execute(['action' => 'items', 'rma_id' => '', '_admin_user_id' => self::ADMIN_ID]);
+        $missing = $tool->execute(['action' => 'items', '_admin_user_id' => self::ADMIN_ID]);
+        $tool->execute(['action' => 'get', 'entity_id' => '12', '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertSame(['error' => 'Parameter "entity_id" must be of type integer'], $search);
+        self::assertSame(['error' => 'Parameter "rma_id" is required for items'], $empty);
+        self::assertSame(['error' => 'Parameter "rma_id" is required for items'], $missing);
+        self::assertCount(1, $this->api->calls(), 'only the well-typed call reaches the route');
+        self::assertSame('rma/12', $this->api->calls()[0]['endpoint'], 'a numeric string is accepted as integer');
+    }
+
+    #[Test]
+    public function thePageSizeIsCappedAtTheResultLimit(): void
+    {
+        $this->tool()->execute(
+            ['action' => 'search', 'query' => 'x', 'limit' => 500, '_admin_user_id' => self::ADMIN_ID]
+        );
+
+        self::assertSame(ResultLimit::MAX, $this->api->calls()[0]['payload']['searchCriteria[pageSize]']);
+    }
+
+    #[Test]
+    public function aRouteAnsweringWithABareListIsTreatedAsItems(): void
+    {
+        $tool = $this->tool(
+            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="list" description="d" method="GET" path="rma/status/all" readonly="true">'
+            . '<pick field="entity_id"/><pick field="code"/>'
+            . '<link label="Open {code}" route="rma/status/edit" param="id" from="entity_id"/>'
+            . '</action></tool></config>'
+        );
+        $this->api->withResponse(FakeInternalApiClient::GET, 'rma/status/all', [
+            ['entity_id' => 1, 'code' => 'new', 'label' => 'New'],
+            ['entity_id' => 2, 'code' => 'done', 'label' => 'Done'],
+        ]);
+
+        $result = $tool->execute(['action' => 'list', '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertSame([
+            'items' => [['entity_id' => 1, 'code' => 'new'], ['entity_id' => 2, 'code' => 'done']],
+            'total_count' => 2,
+            '_links' => [
+                ['label' => 'Open new', 'url' => 'https://admin.test/rma/status/edit/id/1'],
+                ['label' => 'Open done', 'url' => 'https://admin.test/rma/status/edit/id/2'],
+            ],
+        ], $result);
     }
 
     #[Test]

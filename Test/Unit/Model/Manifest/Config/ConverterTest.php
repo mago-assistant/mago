@@ -146,6 +146,28 @@ final class ConverterTest extends TestCase
     }
 
     #[Test]
+    public function readonlyOnAWritingRouteIsTreatedAsAWriteAndRemembered(): void
+    {
+        $document = new \DOMDocument();
+        $document->loadXML(
+            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="save" description="d" method="POST" path="x" readonly="true"/>'
+            . '<action name="load" description="d" method="GET" path="x" readonly="true"/>'
+            . '<action name="chain" description="d" readonly="true"><step name="a" method="GET" path="x"/>'
+            . '<step name="b" method="PUT" path="x"/></action>'
+            . '</tool></config>'
+        );
+
+        $actions = (new Converter())->convert($document)['t']['actions'];
+
+        self::assertFalse($actions['save']['readonly']);
+        self::assertTrue($actions['save']['readonly_declared']);
+        self::assertTrue($actions['load']['readonly']);
+        self::assertFalse($actions['chain']['readonly'], 'one writing step makes the whole action a write');
+        self::assertFalse($this->tools['rma']['actions']['create']['readonly_declared']);
+    }
+
+    #[Test]
     public function anActionWithNeitherStepsNorRouteHasNoSteps(): void
     {
         $document = new \DOMDocument();

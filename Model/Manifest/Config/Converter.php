@@ -23,8 +23,9 @@ use Magento\Framework\Config\ConverterInterface;
  * }
  * @phpstan-type LinkDef array{label: string, route: string, param: string, from: string}
  * @phpstan-type ActionDef array{
- *     name: string, description: string, instructions: string, readonly: bool, irreversible: bool,
- *     impact: ?string, status: ?string, acl: ?string, result: ?string, params: array<string, ParamDef>,
+ *     name: string, description: string, instructions: string, readonly: bool, readonly_declared: bool,
+ *     irreversible: bool, impact: ?string, status: ?string, acl: ?string, result: ?string,
+ *     params: array<string, ParamDef>,
  *     steps: list<StepDef>, fields: array<string, array{0: string, 1?: string}>, pick: list<string>,
  *     links: list<LinkDef>
  * }
@@ -131,7 +132,11 @@ class Converter implements ConverterInterface
             'name' => $node->getAttribute('name'),
             'description' => $node->getAttribute('description'),
             'instructions' => $this->text($node, 'instructions'),
-            'readonly' => $this->flag($node, 'readonly'),
+            // A step that is not a GET writes, whatever the manifest says: a write marked readonly
+            // would skip the confirmation and run on a read grant. The declared value is kept so
+            // mago:tool:verify can report the mismatch.
+            'readonly' => $this->flag($node, 'readonly') && $this->onlyReads($steps),
+            'readonly_declared' => $this->flag($node, 'readonly'),
             'irreversible' => $this->flag($node, 'irreversible'),
             'impact' => $this->optional($node, 'impact'),
             'status' => $this->optional($node, 'status'),
@@ -143,6 +148,20 @@ class Converter implements ConverterInterface
             'pick' => $pick,
             'links' => $links,
         ];
+    }
+
+    /**
+     * @param list<StepDef> $steps
+     */
+    private function onlyReads(array $steps): bool
+    {
+        foreach ($steps as $step) {
+            if ($step['method'] !== 'GET') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

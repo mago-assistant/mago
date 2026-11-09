@@ -74,7 +74,7 @@ final class ManifestCheckerTest extends TestCase
         self::assertSame(CheckStatus::Warning, $save->status);
         self::assertSame(
             'Action "approve" step "save": the manifest gates it by MageOS_RMA::rma, the route /V1/rma/:entityId '
-            . 'by MageOS_RMA::rma_status; both apply, so an admin needs both',
+            . 'by MageOS_RMA::rma_status; all apply, so an admin needs each of them',
             $save->message
         );
         self::assertSame(CheckStatus::Pass, $checks[5]->status, 'a route without resources cannot disagree');
@@ -113,6 +113,24 @@ final class ManifestCheckerTest extends TestCase
         self::assertSame(CheckStatus::Failure, $checks[1]->status);
         self::assertSame(
             'Action "create": route /V1/rma is gated by MageOS_RMA::nope, which no acl.xml declares',
+            $checks[1]->message
+        );
+    }
+
+    #[Test]
+    public function anActionMarkedReadonlyOnAWritingRouteFails(): void
+    {
+        $tool = $this->tool(
+            '<config><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
+            . '<action name="save" description="d" method="POST" path="rma" readonly="true"/></tool></config>'
+        );
+
+        $checks = $this->checker()->check($tool, []);
+
+        self::assertSame(CheckStatus::Failure, $checks[1]->status);
+        self::assertSame(
+            'Action "save" is marked readonly but has a step that writes (POST, PUT or DELETE); it is treated as a '
+            . 'write, so the admin confirms it. Remove readonly="true"',
             $checks[1]->message
         );
     }

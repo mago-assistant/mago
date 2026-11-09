@@ -14,6 +14,7 @@ use MagoAssistant\Mago\Api\Tool\AvailabilityAwareToolInterface;
 use MagoAssistant\Mago\Api\Tool\IrreversibleToolInterface;
 use MagoAssistant\Mago\Api\Tool\PresentableToolInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Skills\ResultLimit;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 /**
@@ -36,6 +37,12 @@ class ManifestTool implements
 {
     private const DEFAULT_PAGE_SIZE = 20;
     private const LIST_WRAPPERS = ['items', 'total_count'];
+
+    /**
+     * Where a parameter is a filter rather than a value: a zero there is a provider filling in a
+     * schema property it has no value for, not a request to filter on zero.
+     */
+    private const FILTER_LOCATIONS = ['criteria', 'page_size', 'store', 'query'];
 
     /**
      * @param ToolDef $definition
@@ -151,12 +158,12 @@ class ManifestTool implements
     }
 
     /**
-     * The action's own resource when it names one, else the tool's. An empty or unknown input
-     * resolves to the tool's resource, which the manifest requires.
+     * The tool's resource, for every action. An action that names a resource of its own adds it
+     * through getActionAcl(); ToolAccess checks both, so an action never loosens the tool's gate.
      */
     public function getMagentoAcl(array $input = []): string
     {
-        return $this->action($input)['acl'] ?? $this->definition['acl'];
+        return $this->definition['acl'];
     }
 
     public function getActionAcl(array $input): ?string
@@ -213,8 +220,17 @@ class ManifestTool implements
 
         $values = $this->paramsOf($action, $params);
         foreach ($action['params'] as $name => $param) {
-            if ($param['required'] && !$this->placeholders->isSet('{' . $name . '}', $values, [])) {
+            // A path parameter is always required: an empty one would leave a hole in the route.
+            if (($param['required'] || $param['in'] === 'path')
+                && !$this->placeholders->isSet('{' . $name . '}', $values, [])) {
                 return ['error' => 'Parameter "' . $name . '" is required for ' . $action['name']];
+            }
+            if (array_key_exists($name, $values)) {
+                $typed = $this->typed($values[$name], $param['type']);
+                if ($typed === null) {
+                    return ['error' => 'Parameter "' . $name . '" must be of type ' . $param['type']];
+                }
+                $values[$name] = $typed;
             }
         }
 
@@ -239,6 +255,11 @@ class ManifestTool implements
         if ($action['result'] !== null) {
             $picked = $this->placeholders->value($action['result'], $values, $steps);
             $result = is_array($picked) ? $picked : ['value' => $picked];
+        }
+        // A route that answers with a bare list is a list: the same shape as a search result, so
+        // pick, links and the privacy rules apply per row.
+        if ($result !== [] && array_is_list($result)) {
+            $result = ['items' => $result, 'total_count' => count($result)];
         }
         $result = $this->pick($result, $action['pick']);
 
@@ -304,7 +325,7 @@ class ManifestTool implements
                 continue;
             }
             if ($param['in'] === 'page_size') {
-                $pageSize = max(1, (int)$value);
+                $pageSize = min(max(1, (int)$value), ResultLimit::MAX);
             } elseif ($param['in'] === 'query') {
                 $query[$name] = $value;
             } elseif ($param['criteria'] !== null) {
@@ -388,9 +409,10 @@ class ManifestTool implements
      * The call's parameters with the manifest defaults filled in; only the ones the action declares.
      *
      * Some providers make the model fill in every parameter of the schema, with 0, "" or false for
-     * the ones it has no value for. For an optional parameter that zero value therefore counts as
-     * "not given": it is left out, or replaced by the manifest default. A required parameter keeps
-     * it, so a genuine 0 can still be sent where the manifest asks for one.
+     * the ones it has no value for. Null and an empty string always count as "not given". A zero
+     * value (0, false, an empty list) counts as not given only where the parameter is a filter
+     * (FILTER_LOCATIONS): a filter on zero is never meant, while a body field set to 0 or false is a
+     * value the model chose, also against a manifest default.
      *
      * @param ActionDef $action
      * @param array<string, mixed> $input
@@ -401,7 +423,8 @@ class ManifestTool implements
         $values = [];
         foreach ($action['params'] as $name => $param) {
             $value = $input[$name] ?? null;
-            $given = $value !== null && $value !== '' && ($param['required'] || !$this->isZeroValue($value));
+            $filter = in_array($param['in'], self::FILTER_LOCATIONS, true);
+            $given = $value !== null && $value !== '' && !($filter && $this->isZeroValue($value));
             if ($given) {
                 $values[$name] = $value;
             } elseif ($param['default'] !== null) {
@@ -415,6 +438,33 @@ class ManifestTool implements
     private function isZeroValue(mixed $value): bool
     {
         return $value === 0 || $value === 0.0 || $value === false || $value === [] || $value === '0';
+    }
+
+    /**
+     * The value as the declared type, or null when it cannot be read as one: a path parameter typed
+     * integer must not carry "search" into the route, and a wrong type must not reach a service.
+     */
+    private function typed(mixed $value, string $type): mixed
+    {
+        switch ($type) {
+            case 'integer':
+                if (is_int($value)) {
+                    return $value;
+                }
+                return is_string($value) && preg_match('/^-?\d+$/', $value) === 1 ? (int)$value : null;
+            case 'number':
+                return is_int($value) || is_float($value) ? $value : (is_numeric($value) ? (float)$value : null);
+            case 'boolean':
+                if (is_bool($value)) {
+                    return $value;
+                }
+                $map = ['true' => true, 'false' => false, '1' => true, '0' => false];
+                return is_scalar($value) && array_key_exists((string)$value, $map) ? $map[(string)$value] : null;
+            case 'array':
+                return is_array($value) ? $value : null;
+            default:
+                return is_scalar($value) ? (string)$value : null;
+        }
     }
 
     /**

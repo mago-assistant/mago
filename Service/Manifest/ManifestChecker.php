@@ -47,6 +47,12 @@ class ManifestChecker
             : $definition['actions'];
 
         foreach ($actions as $action) {
+            if ($action['readonly_declared'] && !$action['readonly']) {
+                $checks[] = ToolCheck::failure(
+                    'Action "' . $action['name'] . '" is marked readonly but has a step that writes (POST, PUT or '
+                    . 'DELETE); it is treated as a write, so the admin confirms it. Remove readonly="true"'
+                );
+            }
             if ($action['steps'] === []) {
                 $checks[] = ToolCheck::failure(
                     'Action "' . $action['name'] . '" has no route: give it method and path, or <step> elements'
@@ -99,11 +105,12 @@ class ManifestChecker
             );
         }
 
-        $manifestAcl = $action['acl'] ?? $toolAcl;
-        if ($route->aclResources !== [] && !in_array($manifestAcl, $route->aclResources, true)) {
+        $manifestAcls = array_values(array_filter([$toolAcl, $action['acl'] ?? null]));
+        if ($route->aclResources !== [] && array_intersect($manifestAcls, $route->aclResources) === []) {
             return ToolCheck::warning(
-                $label . ': the manifest gates it by ' . $manifestAcl . ', the route ' . $route->routePath
-                . ' by ' . implode(', ', $route->aclResources) . '; both apply, so an admin needs both'
+                $label . ': the manifest gates it by ' . implode(' and ', $manifestAcls) . ', the route '
+                . $route->routePath . ' by ' . implode(', ', $route->aclResources) . '; all apply, so an admin '
+                . 'needs each of them'
             );
         }
 

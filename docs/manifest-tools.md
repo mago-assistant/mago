@@ -87,7 +87,7 @@ FAQ module ships one in its own `etc/mago_tools.xml`.
 | Attribute | Meaning |
 | --- | --- |
 | `name` | Tool name, snake_case, unique in the registry. A name a built-in tool already uses is left out, so a manifest cannot shadow one. |
-| `acl` | The Magento ACL resource an admin needs for the tool. The route's own resources apply on top, as they would for a REST call. |
+| `acl` | The Magento ACL resource an admin needs for every action of the tool. The route's own resources apply on top, as they would for a REST call. |
 | `module` | The declaring module. The tool exists only while that module is enabled. |
 | `description` | What the model picks the tool by. Say what it does and does not do. |
 | `title` | Name on cards and in the session log; defaults to the tool name. |
@@ -103,9 +103,9 @@ with `method` and `path`; a composite action lists `<step>` elements instead.
 | `name`, `description` | Action name (the `action` enum value) and what the model picks it by. |
 | `method`, `path` | `GET`, `POST`, `PUT` or `DELETE` and the route without `/V1/`. `{param}` is replaced by that parameter, URL-encoded. |
 | `body` | Wrapper key for the body of a `POST`/`PUT` (`body="rma"` sends `{"rma": {...}}`), as the service argument is named. |
-| `readonly` | `true` runs without confirmation; anything else is confirmed in the panel. |
+| `readonly` | `true` runs without confirmation; anything else is confirmed in the panel. Only an action whose steps are all `GET` can be readonly: a write marked readonly is treated as a write, and `mago:tool:verify` reports it. |
 | `irreversible`, `impact` | A delete or send shows `impact` (placeholders allowed) with an acknowledgement checkbox. |
-| `acl` | Resource for this action when it differs from the tool's. |
+| `acl` | A resource this action needs in addition to the tool's; the admin needs both. |
 | `sort` | `field:asc` or `field:desc` for a search. |
 | `status` | Status line while the call runs; placeholders allowed. |
 | `result` | Which step's response is the action's result, e.g. `{steps.save}`; default: the last step that ran. |
@@ -117,14 +117,16 @@ with `method` and `path`; a composite action lists `<step>` elements instead.
 | --- | --- |
 | `name`, `type` | Parameter name and JSON type: `string`, `integer`, `number`, `boolean`, `array` (`items` names the element type). |
 | `description`, `required`, `default`, `enum` | As in JSON Schema; `enum` is comma-separated. A default is filled in when the model leaves the parameter out. |
-| `in` | Where it goes: `body` (default; path parameters are in the body too, as Magento wants the id in the entity), `path`, `query` (as is), `criteria` (a `searchCriteria` filter), `page_size`, `store` (the store code the call runs in, as `/rest/<code>/V1/` would; without one the call runs in the default store view, so a module whose texts live in the default scope gives this parameter `default="all"`), `none`. |
+| `in` | Where it goes: `body` (default; path parameters are in the body too, as Magento wants the id in the entity), `path` (always required, and checked against `type` before the call, so a stray word cannot become a route segment), `query` (as is), `criteria` (a `searchCriteria` filter), `page_size`, `store` (the store code the call runs in, as `/rest/<code>/V1/` would; without one the call runs in the default store view, so a module whose texts live in the default scope gives this parameter `default="all"`), `none`. |
 | `criteria`, `condition`, `wrap` | For `in="criteria"`: the field to filter, the condition type (`eq`, `like`, `in`, ...) and a wrap around the value (`%` for `like`). A list value is joined with commas, for `in`. |
 
 A `GET` with any `criteria` or `page_size` parameter sends a `searchCriteria` query; without one it
-is a plain `GET`. An optional parameter is nullable in the schema sent to the model, and a null, an
-empty string or a zero value (0, false, an empty list) of an optional parameter counts as not given:
-a provider in strict mode makes the model send every property, and those must not become filters.
-A required parameter keeps a genuine 0. The schema sent to the model lists each parameter once, and the schema of the
+is a plain `GET`; the page size is capped at 50. An optional parameter is nullable in the schema
+sent to the model, and null or an empty string counts as not given. For a filter (`criteria`,
+`page_size`, `store`, `query`) a zero value (0, false, an empty list) counts as not given too: a
+provider in strict mode makes the model send every property, and those must not become filters. A
+body field keeps its 0 or false, also against a manifest default. Every given value is checked
+against its `type` before the call. The schema sent to the model lists each parameter once, and the schema of the
 called action is also the allowlist: `execute()` never receives a key the action does not declare.
 
 ### `<step>`
@@ -158,7 +160,8 @@ undeclared scalar is stripped (see [privacy-mode/README.md](privacy-mode/README.
   it strips undeclared fields anyway, but says so less clearly. The `items` and `total_count`
   wrappers of a list route stay public under it, so the named rules reach the rows inside.
 - `<pick field="entity_id"/>` limits the result (each item of a list, or the record) to the fields
-  named, so a wide entity does not flood the context. `items` and `total_count` always stay.
+  named, so a wide entity does not flood the context. `items` and `total_count` always stay. A route
+  that answers with a bare list is treated as `items` with a `total_count`.
 - `<link label="Open RMA {increment_id}" route="rma/rma/edit" param="entity_id" from="entity_id"/>` adds
   an admin link per record that carries `from`, rendered as a button in the panel.
 
