@@ -1,0 +1,251 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © Mago Assistant
+ */
+-->
+<!--
+    Reference manifest for mage-os/module-rma (Return Merchandise Authorization). Drafted with
+    `bin/magento mago:tool:manifest MageOS_RMA` and filled in by hand. Dropped into the RMA module as
+    etc/mago_tools.xml it gives the admin chat the returns without a line of PHP; the RMA module keeps
+    no dependency on Mago. Every call runs through the module's own REST routes as the admin using the
+    chat, under MageOS_RMA::rma_manage and the route's own resource.
+-->
+<config>
+    <tool name="rma" acl="MageOS_RMA::rma_manage" module="MageOS_RMA" title="Returns (RMA)"
+          description="Find and handle return requests (RMAs): look one up by number or order, read its items and comments, change its status, approve item quantities, add a comment to the customer or an internal note, and list the statuses, reasons, resolution types and item conditions the store uses.">
+        <instructions>An RMA is identified by its increment_id (the number the customer sees) and its entity_id (the id the routes take). Resolve a number to an id with get_by_number before changing anything. Statuses, reasons and resolution types are ids: call list_statuses, list_reasons or list_resolution_types once, then map ids to labels yourself; never guess an id. For "open" RMAs, search once without a status filter and leave out the ones whose status code is resolved, rejected or canceled_by_customer. Customer name and email are personal data and reach you as tokens.</instructions>
+
+        <action name="search" description="Find RMAs by number, order id, status or customer email" method="GET" path="rma/search" readonly="true" sort="created_at:desc" status="Searching returns...">
+            <param name="number" type="string" description="Part of the RMA number" in="criteria" criteria="increment_id" condition="like" wrap="%"/>
+            <param name="order_id" type="integer" description="Only RMAs of this order (entity id)" in="criteria" criteria="order_id" condition="eq"/>
+            <param name="status_id" type="integer" description="Only RMAs in this status; ids from list_statuses" in="criteria" criteria="status_id" condition="eq"/>
+            <param name="customer_email" type="string" description="Only RMAs of this customer email" in="criteria" criteria="customer_email" condition="eq"/>
+            <param name="limit" type="integer" description="Maximum number of RMAs, default 20" in="page_size" default="20"/>
+            <field name="entity_id" class="public"/>
+            <field name="increment_id" class="public"/>
+            <field name="order_id" class="public"/>
+            <field name="customer_id" class="public"/>
+            <field name="store_id" class="public"/>
+            <field name="status_id" class="public"/>
+            <field name="reason_id" class="public"/>
+            <field name="resolution_type_id" class="public"/>
+            <field name="created_at" class="public"/>
+            <field name="updated_at" class="public"/>
+            <field name="customer_email" class="tokenise" token="email"/>
+            <field name="customer_name" class="tokenise" token="name"/>
+            <field name="total_count" class="public"/>
+            <fields class="strip"/>
+            <pick field="entity_id"/>
+            <pick field="increment_id"/>
+            <pick field="order_id"/>
+            <pick field="status_id"/>
+            <pick field="reason_id"/>
+            <pick field="customer_name"/>
+            <pick field="created_at"/>
+            <link label="Open RMA {increment_id}" route="rma/rma/edit" param="entity_id" from="entity_id"/>
+        </action>
+
+        <action name="get" description="Read one RMA by its entity id" method="GET" path="rma/{entity_id}" readonly="true">
+            <param name="entity_id" type="integer" description="Entity id of the RMA" required="true" in="path"/>
+            <field name="entity_id" class="public"/>
+            <field name="increment_id" class="public"/>
+            <field name="order_id" class="public"/>
+            <field name="customer_id" class="public"/>
+            <field name="store_id" class="public"/>
+            <field name="status_id" class="public"/>
+            <field name="reason_id" class="public"/>
+            <field name="resolution_type_id" class="public"/>
+            <field name="created_at" class="public"/>
+            <field name="updated_at" class="public"/>
+            <field name="customer_email" class="tokenise" token="email"/>
+            <field name="customer_name" class="tokenise" token="name"/>
+            <fields class="strip"/>
+            <link label="Open RMA {increment_id}" route="rma/rma/edit" param="entity_id" from="entity_id"/>
+        </action>
+
+        <action name="get_by_number" description="Read one RMA by the number the customer sees" method="GET" path="rma/increment-id/{number}" readonly="true" status="Looking up RMA {number}...">
+            <param name="number" type="string" description="The RMA number (increment id)" required="true" in="path"/>
+            <field name="entity_id" class="public"/>
+            <field name="increment_id" class="public"/>
+            <field name="order_id" class="public"/>
+            <field name="customer_id" class="public"/>
+            <field name="store_id" class="public"/>
+            <field name="status_id" class="public"/>
+            <field name="reason_id" class="public"/>
+            <field name="resolution_type_id" class="public"/>
+            <field name="created_at" class="public"/>
+            <field name="updated_at" class="public"/>
+            <field name="customer_email" class="tokenise" token="email"/>
+            <field name="customer_name" class="tokenise" token="name"/>
+            <fields class="strip"/>
+            <link label="Open RMA {increment_id}" route="rma/rma/edit" param="entity_id" from="entity_id"/>
+        </action>
+
+        <action name="list_items" description="The items of an RMA with requested, approved and returned quantities" method="GET" path="rma/{rma_id}/items" readonly="true">
+            <param name="rma_id" type="integer" description="Entity id of the RMA" required="true" in="path"/>
+            <field name="entity_id" class="public"/>
+            <field name="rma_id" class="public"/>
+            <field name="order_item_id" class="public"/>
+            <field name="qty_requested" class="public"/>
+            <field name="qty_approved" class="public"/>
+            <field name="qty_returned" class="public"/>
+            <field name="condition_id" class="public"/>
+            <field name="total_count" class="public"/>
+            <fields class="strip"/>
+        </action>
+
+        <action name="list_comments" description="The comments on an RMA, from the customer and from the store" method="GET" path="rma/{rma_id}/comments" readonly="true" sort="created_at:asc">
+            <param name="rma_id" type="integer" description="Entity id of the RMA" required="true" in="path"/>
+            <field name="entity_id" class="public"/>
+            <field name="rma_id" class="public"/>
+            <field name="author_type" class="public"/>
+            <field name="is_visible_to_customer" class="public"/>
+            <field name="created_at" class="public"/>
+            <field name="author_name" class="tokenise" token="name"/>
+            <field name="comment" class="tokenise" token="comment"/>
+            <field name="total_count" class="public"/>
+            <fields class="strip"/>
+        </action>
+
+        <action name="set_status" description="Move an RMA to another status" status="Changing the status of RMA {entity_id}...">
+            <instructions>Pass the status id, not its code; list_statuses maps codes to ids.</instructions>
+            <param name="entity_id" type="integer" description="Entity id of the RMA" required="true" in="path"/>
+            <param name="status_id" type="integer" description="Id of the new status" required="true"/>
+            <step name="save" method="PUT" path="rma/{entity_id}" body="rma">
+                <field name="entity_id" value="{entity_id}" as="int"/>
+                <field name="status_id" value="{status_id}" as="int"/>
+            </step>
+            <field name="entity_id" class="public"/>
+            <field name="increment_id" class="public"/>
+            <field name="status_id" class="public"/>
+            <fields class="strip"/>
+            <pick field="entity_id"/>
+            <pick field="increment_id"/>
+            <pick field="status_id"/>
+        </action>
+
+        <action name="set_resolution" description="Set the resolution type and optionally the reason of an RMA" status="Updating RMA {entity_id}...">
+            <param name="entity_id" type="integer" description="Entity id of the RMA" required="true" in="path"/>
+            <param name="resolution_type_id" type="integer" description="Id of the resolution type; ids from list_resolution_types"/>
+            <param name="reason_id" type="integer" description="Id of the reason; ids from list_reasons"/>
+            <step name="save" method="PUT" path="rma/{entity_id}" body="rma">
+                <field name="entity_id" value="{entity_id}" as="int"/>
+                <field name="resolution_type_id" value="{resolution_type_id}" as="int"/>
+                <field name="reason_id" value="{reason_id}" as="int"/>
+            </step>
+            <field name="entity_id" class="public"/>
+            <field name="increment_id" class="public"/>
+            <field name="resolution_type_id" class="public"/>
+            <field name="reason_id" class="public"/>
+            <fields class="strip"/>
+            <pick field="entity_id"/>
+            <pick field="increment_id"/>
+            <pick field="resolution_type_id"/>
+            <pick field="reason_id"/>
+        </action>
+
+        <action name="approve_item" description="Approve a quantity of one RMA item and record its condition" status="Approving item {item_id}...">
+            <param name="rma_id" type="integer" description="Entity id of the RMA" required="true" in="path"/>
+            <param name="item_id" type="integer" description="Entity id of the RMA item; from list_items" required="true" in="none"/>
+            <param name="qty_approved" type="integer" description="Quantity approved for return" required="true" in="none"/>
+            <param name="condition_id" type="integer" description="Id of the item condition; ids from list_item_conditions" in="none"/>
+            <step name="save" method="POST" path="rma/{rma_id}/items" body="item">
+                <field name="entity_id" value="{item_id}" as="int"/>
+                <field name="rma_id" value="{rma_id}" as="int"/>
+                <field name="qty_approved" value="{qty_approved}" as="int"/>
+                <field name="condition_id" value="{condition_id}" as="int"/>
+            </step>
+            <field name="entity_id" class="public"/>
+            <field name="rma_id" class="public"/>
+            <field name="order_item_id" class="public"/>
+            <field name="qty_requested" class="public"/>
+            <field name="qty_approved" class="public"/>
+            <field name="qty_returned" class="public"/>
+            <field name="condition_id" class="public"/>
+            <fields class="strip"/>
+        </action>
+
+        <action name="add_comment" description="Add a comment to an RMA, shown to the customer or kept internal" method="POST" path="rma/{rma_id}/comments" body="comment" status="Adding a comment to RMA {rma_id}...">
+            <instructions>Keep is_visible_to_customer false unless the admin asks to inform the customer.</instructions>
+            <param name="rma_id" type="integer" description="Entity id of the RMA" required="true" in="path"/>
+            <param name="comment" type="string" description="The comment text" required="true"/>
+            <param name="is_visible_to_customer" type="boolean" description="true to show it to the customer, false for an internal note" default="false"/>
+            <param name="author_type" type="string" description="Who writes it" enum="admin" default="admin"/>
+            <field name="entity_id" class="public"/>
+            <field name="rma_id" class="public"/>
+            <field name="author_type" class="public"/>
+            <field name="is_visible_to_customer" class="public"/>
+            <field name="created_at" class="public"/>
+            <field name="author_name" class="tokenise" token="name"/>
+            <field name="comment" class="tokenise" token="comment"/>
+            <fields class="strip"/>
+        </action>
+
+        <action name="delete" description="Delete an RMA permanently" method="DELETE" path="rma/{entity_id}" irreversible="true" impact="RMA {entity_id} is deleted with its items, comments and attachments; the customer loses its history." status="Deleting RMA {entity_id}...">
+            <param name="entity_id" type="integer" description="Entity id of the RMA" required="true" in="path"/>
+            <field name="result" class="public"/>
+            <fields class="strip"/>
+        </action>
+
+        <action name="list_statuses" description="The RMA statuses with their ids and codes" method="GET" path="rma/status/search" readonly="true" sort="sort_order:asc" acl="MageOS_RMA::rma_status" status="Loading RMA statuses...">
+            <param name="limit" type="integer" description="Maximum number, default 50" in="page_size" default="50"/>
+            <field name="entity_id" class="public"/>
+            <field name="code" class="public"/>
+            <field name="label" class="public"/>
+            <field name="is_active" class="public"/>
+            <field name="sort_order" class="public"/>
+            <field name="total_count" class="public"/>
+            <fields class="strip"/>
+            <pick field="entity_id"/>
+            <pick field="code"/>
+            <pick field="label"/>
+            <pick field="is_active"/>
+        </action>
+
+        <action name="list_reasons" description="The return reasons with their ids and codes" method="GET" path="rma/reason/search" readonly="true" sort="sort_order:asc" acl="MageOS_RMA::rma_reason" status="Loading return reasons...">
+            <param name="limit" type="integer" description="Maximum number, default 50" in="page_size" default="50"/>
+            <field name="entity_id" class="public"/>
+            <field name="code" class="public"/>
+            <field name="label" class="public"/>
+            <field name="is_active" class="public"/>
+            <field name="sort_order" class="public"/>
+            <field name="total_count" class="public"/>
+            <fields class="strip"/>
+            <pick field="entity_id"/>
+            <pick field="code"/>
+            <pick field="label"/>
+            <pick field="is_active"/>
+        </action>
+
+        <action name="list_resolution_types" description="The resolution types (refund, replacement, ...) with their ids and codes" method="GET" path="rma/resolution-type/search" readonly="true" sort="sort_order:asc" acl="MageOS_RMA::rma_resolution_type" status="Loading resolution types...">
+            <param name="limit" type="integer" description="Maximum number, default 50" in="page_size" default="50"/>
+            <field name="entity_id" class="public"/>
+            <field name="code" class="public"/>
+            <field name="label" class="public"/>
+            <field name="is_active" class="public"/>
+            <field name="sort_order" class="public"/>
+            <field name="total_count" class="public"/>
+            <fields class="strip"/>
+            <pick field="entity_id"/>
+            <pick field="code"/>
+            <pick field="label"/>
+            <pick field="is_active"/>
+        </action>
+
+        <action name="list_item_conditions" description="The item conditions with their ids and codes" method="GET" path="rma/item-condition/search" readonly="true" sort="sort_order:asc" acl="MageOS_RMA::rma_item_condition" status="Loading item conditions...">
+            <param name="limit" type="integer" description="Maximum number, default 50" in="page_size" default="50"/>
+            <field name="entity_id" class="public"/>
+            <field name="code" class="public"/>
+            <field name="label" class="public"/>
+            <field name="is_active" class="public"/>
+            <field name="sort_order" class="public"/>
+            <field name="total_count" class="public"/>
+            <fields class="strip"/>
+            <pick field="entity_id"/>
+            <pick field="code"/>
+            <pick field="label"/>
+            <pick field="is_active"/>
+        </action>
+    </tool>
+</config>

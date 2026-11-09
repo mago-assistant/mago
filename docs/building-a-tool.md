@@ -8,6 +8,12 @@ edited. Reference implementation: https://github.com/mago-assistant/vies
 
 For the architecture behind it, see [skills-architecture.md](skills-architecture.md).
 
+**Does the module already have a REST API?** Then it may not need a line of PHP: a manifest in
+`etc/mago_tools.xml` turns its `webapi.xml` routes into a chat tool, and the module keeps working on
+stores without Mago. See [manifest-tools.md](manifest-tools.md), and `bin/magento mago:tool:manifest
+<Vendor_Module>` for a draft. The guide below is for a tool that needs PHP, and whose module may
+depend on Mago.
+
 ## Using a coding agent
 
 Point your agent at this file. Most agents read `AGENTS.md` in the project root (Claude Code reads
