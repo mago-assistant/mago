@@ -18,6 +18,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
 use MagoAssistant\Mago\Service\Privacy\PrivacyFilter;
 use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
+use MagoAssistant\Mago\Service\Tool\ToolCallGate;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Test\Unit\Fakes\BuildsStoreLayouts;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAction;
@@ -193,10 +194,12 @@ final class ChatServiceToolConfirmationTest extends TestCase
         $json = new Json();
         $vault = new ConversationVault();
 
+        $toolRegistry = new ToolRegistry($this->permissions, array_merge([$cmsData], $extraSkills));
+
         return new ChatService(
             (new FakeConfigRepository())->withMaxToolIterations(5)->withMaxResponseTokens(4000),
             $this->client,
-            new ToolRegistry($this->permissions, array_merge([$cmsData], $extraSkills)),
+            $toolRegistry,
             new DebugLogger(new FakeLogger(), $json, new FakeConfigRepository()),
             new ErrorReporter(new ErrorLogger(new FakeLogger(), $json), new PiiHeuristic()),
             new FakeUsageLogger(),
@@ -204,7 +207,7 @@ final class ChatServiceToolConfirmationTest extends TestCase
             new AnswerWidgets(new ErrorLogger(new FakeLogger(), new Json())),
             new PageContextHolder(),
             new PrivacyService(new PrivacyFilter($vault, new PiiHeuristic()), $vault, new PiiHeuristic()),
-            new ToolAccess($authorization, $this->permissions),
+            new ToolCallGate($toolRegistry, new ToolAccess($authorization, $this->permissions)),
             new ErrorLogger(new FakeLogger(), new Json())
         );
     }
