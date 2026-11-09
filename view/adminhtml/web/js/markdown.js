@@ -140,9 +140,15 @@ define([
                     return '<div class="mago-table-wrap" tabindex="0" role="region" aria-label="'
                         + escapeHtml(tableLabel) + '">' + defaults.table.call(this, token) + '</div>';
                 },
+                // Code reaches marked still escaped by renderText, and marked escapes code again:
+                // undo the first escape, so "&" shows as "&" and a widget spec holds the plain text.
                 code: function (token) {
-                    var html = renderFencedBlock(token.lang, token.text, resolveUrls);
-                    return html === null ? defaults.code.call(this, token) : html;
+                    var text = unescapeText(token.text);
+                    var html = renderFencedBlock(token.lang, text, resolveUrls);
+                    return html === null ? defaults.code.call(this, Object.assign({}, token, {text: text, escaped: false})) : html;
+                },
+                codespan: function (token) {
+                    return defaults.codespan.call(this, Object.assign({}, token, {text: unescapeText(token.text)}));
                 }
             }
         });
@@ -172,6 +178,14 @@ define([
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
+    }
+
+    // The exact inverse of escapeText: "&amp;lt;" (a literal "&lt;" in the answer) comes back as "&lt;".
+    function unescapeText(text) {
+        return String(text)
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&');
     }
 
     return {
