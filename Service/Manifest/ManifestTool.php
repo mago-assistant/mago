@@ -527,7 +527,9 @@ class ManifestTool implements
      */
     private function paramSchema(array $param): array
     {
-        $schema = ['type' => $param['type']];
+        // A provider in strict mode makes the model send every property; null is the one value an
+        // optional parameter can carry that cannot be mistaken for a filter or a field.
+        $schema = ['type' => $param['required'] ? $param['type'] : [$param['type'], 'null']];
         if ($param['description'] !== '') {
             $schema['description'] = $param['description'];
         }

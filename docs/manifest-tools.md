@@ -121,7 +121,10 @@ with `method` and `path`; a composite action lists `<step>` elements instead.
 | `criteria`, `condition`, `wrap` | For `in="criteria"`: the field to filter, the condition type (`eq`, `like`, `in`, ...) and a wrap around the value (`%` for `like`). A list value is joined with commas, for `in`. |
 
 A `GET` with any `criteria` or `page_size` parameter sends a `searchCriteria` query; without one it
-is a plain `GET`. The schema sent to the model lists each parameter once, and the schema of the
+is a plain `GET`. An optional parameter is nullable in the schema sent to the model, and a null, an
+empty string or a zero value (0, false, an empty list) of an optional parameter counts as not given:
+a provider in strict mode makes the model send every property, and those must not become filters.
+A required parameter keeps a genuine 0. The schema sent to the model lists each parameter once, and the schema of the
 called action is also the allowlist: `execute()` never receives a key the action does not declare.
 
 ### `<step>`

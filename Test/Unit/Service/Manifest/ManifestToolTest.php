@@ -70,10 +70,21 @@ final class ManifestToolTest extends TestCase
         self::assertSame(['action'], $schema['required']);
         self::assertSame(
             ['type' => 'string', 'description' => 'Part of the RMA number'],
-            $schema['properties']['query']
+            $schema['properties']['query'],
+            'a required parameter has its plain type'
         );
         self::assertSame(
-            ['type' => 'array', 'enum' => ['refund', 'replacement', 'repair'], 'items' => ['type' => 'string']],
+            ['type' => ['integer', 'null']],
+            $schema['properties']['limit'],
+            'an optional parameter is nullable, so a strict-mode model can leave it out'
+        );
+        self::assertSame('integer', $schema['properties']['entity_id']['type'], 'a required path parameter is not');
+        self::assertSame(
+            [
+                'type' => ['array', 'null'],
+                'enum' => ['refund', 'replacement', 'repair'],
+                'items' => ['type' => 'string'],
+            ],
             $schema['properties']['tags']
         );
 
