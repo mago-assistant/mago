@@ -7,14 +7,18 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Analytics\SalesData;
 
 use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\DB\Select;
 use Magento\Framework\DB\Sql\Expression;
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Data\ExportColumn;
+use MagoAssistant\Mago\Api\Skill\ExportableActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\PeriodParser;
 use MagoAssistant\Mago\Service\Skills\ResultLimit;
 
-class TopRefundedAction implements ActionInterface
+class TopRefundedAction implements ExportableActionInterface
 {
+    private const DEFAULT_PERIOD = '30days';
+
     public function __construct(
         private readonly ResourceConnection $resourceConnection,
         private readonly PeriodParser $periodParser
@@ -74,41 +78,87 @@ class TopRefundedAction implements ActionInterface
 
     public function execute(array $params, int $adminUserId): array
     {
-        $period = $params['period'] ?? '30days';
-        $limit = ResultLimit::fromParams($params, 10);
+        $period = (string)($params['period'] ?? self::DEFAULT_PERIOD);
+        $rows = $this->resourceConnection->getConnection()->fetchAll(
+            $this->select($period, ResultLimit::fromParams($params, 10))
+        );
+
+        return ['period' => $period, 'top_refunded' => array_map($this->row(...), $rows)];
+    }
+
+    public function getExportTitle(array $params): string
+    {
+        return (string)__('Full most-refunded list');
+    }
+
+    public function countExportRows(array $params, int $adminUserId): int
+    {
         $connection = $this->resourceConnection->getConnection();
-        $creditmemoTable = $this->resourceConnection->getTableName('sales_creditmemo');
-        $creditmemoItemTable = $this->resourceConnection->getTableName('sales_creditmemo_item');
+        $products = $this->select((string)($params['period'] ?? self::DEFAULT_PERIOD), 1)
+            ->reset(Select::LIMIT_COUNT)
+            ->reset(Select::LIMIT_OFFSET)
+            ->reset(Select::ORDER);
+
+        return (int)$connection->fetchOne($connection->select()->from(['products' => $products], ['COUNT(*)']));
+    }
+
+    public function getExportColumns(): array
+    {
+        return [
+            new ExportColumn('sku', (string)__('SKU')),
+            new ExportColumn('name', (string)__('Product name')),
+            new ExportColumn('qty_refunded', (string)__('Quantity refunded'), true),
+            new ExportColumn('refund_total', (string)__('Refund total'), true),
+            new ExportColumn('creditmemo_count', (string)__('Credit memos'), true),
+        ];
+    }
+
+    public function exportRows(array $params, int $adminUserId, int $maxRows): iterable
+    {
+        $statement = $this->resourceConnection->getConnection()->query(
+            $this->select((string)($params['period'] ?? self::DEFAULT_PERIOD), max(1, $maxRows))
+        );
+        while (is_array($row = $statement->fetch(\Zend_Db::FETCH_ASSOC))) {
+            yield $this->row($row);
+        }
+    }
+
+    /**
+     * The products of the period, most first; the SKU breaks ties so the order is stable.
+     */
+    private function select(string $period, int $limit): Select
+    {
         [$from, $to] = $this->periodParser->parse($period);
 
-        $select = $connection->select()
-            ->from(['ci' => $creditmemoItemTable], [
+        return $this->resourceConnection->getConnection()->select()
+            ->from(['ci' => $this->resourceConnection->getTableName('sales_creditmemo_item')], [
                 'sku' => 'ci.sku',
                 'name' => 'ci.name',
                 'qty_refunded' => new Expression('SUM(ci.qty)'),
                 'refund_total' => new Expression('SUM(ci.row_total)'),
                 'creditmemo_count' => new Expression('COUNT(DISTINCT ci.parent_id)'),
             ])
-            ->join(['c' => $creditmemoTable], 'c.entity_id = ci.parent_id', [])
+            ->join(['c' => $this->resourceConnection->getTableName('sales_creditmemo')], 'c.entity_id = ci.parent_id', [])
             ->where('c.created_at >= ?', $from)
             ->where('c.created_at <= ?', $to)
             ->where('ci.qty > 0')
             ->group('ci.sku')
-            ->order('qty_refunded DESC')
+            ->order(['qty_refunded DESC', 'ci.sku ASC'])
             ->limit($limit);
+    }
 
-        $rows = $connection->fetchAll($select);
-        $products = [];
-        foreach ($rows as $row) {
-            $products[] = [
-                'sku' => $row['sku'],
-                'name' => $row['name'],
-                'qty_refunded' => (int)$row['qty_refunded'],
-                'refund_total' => round((float)$row['refund_total'], 2),
-                'creditmemo_count' => (int)$row['creditmemo_count'],
-            ];
-        }
-
-        return ['period' => $period, 'top_refunded' => $products];
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, string|int|float>
+     */
+    private function row(array $row): array
+    {
+        return [
+            'sku' => (string)$row['sku'],
+            'name' => (string)$row['name'],
+            'qty_refunded' => (int)$row['qty_refunded'],
+            'refund_total' => round((float)$row['refund_total'], 2),
+            'creditmemo_count' => (int)$row['creditmemo_count'],
+        ];
     }
 }

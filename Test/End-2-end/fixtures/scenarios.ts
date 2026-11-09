@@ -576,3 +576,37 @@ export const invoiceOrderAfterLongAnswer: ChatScenario = {
     ],
     status: { message_id: MESSAGE_ID },
 }
+
+export const EXPORT_CONVERSATION_ID = CONVERSATION_ID;
+
+/* A read whose full result the admin can download (#298), or one the server did not mark */
+export const lowStockRead = (
+    exportable: boolean,
+    isPendingConfirmation = false,
+    answer = '50 products came back at or below 5 in stock.',
+): ChatScenario => ({
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        { event: 'tool_call', data: { id: 'toolu_low_1', name: 'product_data', input: { action: 'low_stock' } } },
+        {
+            event: 'tool_status',
+            data: { name: 'product_data', tool_call_id: 'toolu_low_1', status: 'running', message: 'Checking low stock...' },
+        },
+        {
+            event: 'tool_status',
+            data: {
+                name: 'product_data',
+                tool_call_id: 'toolu_low_1',
+                status: 'done',
+                duration_ms: 12,
+                done_message: 'Checked low stock',
+                ...(exportable ? { exportable: true, export_title: 'Full low stock list', export_row_count: 23 } : {}),
+            },
+        },
+        ...textDeltas(answer),
+        {
+            event: 'done',
+            data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: isPendingConfirmation },
+        },
+    ],
+});

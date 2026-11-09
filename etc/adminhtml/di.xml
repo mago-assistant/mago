@@ -18,6 +18,9 @@
     <type name="MagoAssistant\Mago\Controller\Adminhtml\Chat\Delete">
         <plugin name="mago_require_assistant_enabled" type="MagoAssistant\Mago\Plugin\Controller\Adminhtml\RequireAssistantEnabled"/>
     </type>
+    <type name="MagoAssistant\Mago\Controller\Adminhtml\Chat\Export">
+        <plugin name="mago_require_assistant_enabled" type="MagoAssistant\Mago\Plugin\Controller\Adminhtml\RequireAssistantEnabled"/>
+    </type>
     <type name="MagoAssistant\Mago\Controller\Adminhtml\Chat\Flag">
         <plugin name="mago_require_assistant_enabled" type="MagoAssistant\Mago\Plugin\Controller\Adminhtml\RequireAssistantEnabled"/>
     </type>

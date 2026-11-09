@@ -1,0 +1,40 @@
+{
+  "mappings": [
+    {
+      "name": "Low stock export - turn 2, summary of the read",
+      "priority": 1,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/chat/completions",
+        "bodyPatterns": [
+          {"contains": "E2E low stock export check"},
+          {"contains": "\"role\":\"tool\""}
+        ]
+      },
+      "response": {
+        "status": 200,
+        "headers": {"Content-Type": "text/event-stream"},
+        "bodyFileName": "low-stock-export-summary.sse",
+        "chunkedDribbleDelay": {"numberOfChunks": 10, "totalDuration": 100}
+      }
+    },
+    {
+      "name": "Low stock export - turn 1, read the low stock list",
+      "priority": 2,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/chat/completions",
+        "bodyPatterns": [
+          {"contains": "E2E low stock export check"},
+          {"doesNotMatch": "(?s).*\"role\":\"tool\".*"}
+        ]
+      },
+      "response": {
+        "status": 200,
+        "headers": {"Content-Type": "text/event-stream"},
+        "bodyFileName": "low-stock-export-tool-call.sse",
+        "chunkedDribbleDelay": {"numberOfChunks": 10, "totalDuration": 100}
+      }
+    }
+  ]
+}

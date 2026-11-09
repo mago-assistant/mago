@@ -57,6 +57,14 @@ final class SalesOrderFixture
      * An order with the given addresses; null leaves that address out, as a virtual order has no
      * shipping address.
      */
+    /**
+     * A plain processing order, for tests that add their own items to it
+     */
+    public function processingOrder(): int
+    {
+        return $this->insert(Order::STATE_PROCESSING, 10.00, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+    }
+
     public function addressedOrder(?string $shippingCountry, ?string $billingCountry): void
     {
         $orderId = $this->insert(Order::STATE_PROCESSING, 10.00, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);

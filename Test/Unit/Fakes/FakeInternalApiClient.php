@@ -23,8 +23,24 @@ final class FakeInternalApiClient implements InternalApiClientInterface
     /** @var array<string, array<string, mixed>> */
     private array $methodResponses = [];
 
+    /** @var array<string, list<array<string, mixed>>> Items served a page at a time, keyed by "METHOD endpoint" */
+    private array $pagedItems = [];
+
     /** @var list<array{method: string, endpoint: string, payload: array<string, mixed>, admin_user_id: int, store_code: ?string}> */
     private array $calls = [];
+
+    /**
+     * Serves these items as a search result, sliced by the request's pageSize and currentPage, with
+     * the full count as total_count, the way the REST API pages a list.
+     *
+     * @param list<array<string, mixed>> $items
+     */
+    public function withPagedItems(string $method, string $endpoint, array $items): self
+    {
+        $this->pagedItems[$method . ' ' . $endpoint] = $items;
+
+        return $this;
+    }
 
     /**
      * @param array<string, mixed> $response
@@ -109,6 +125,17 @@ final class FakeInternalApiClient implements InternalApiClientInterface
             'admin_user_id' => $adminUserId,
             'store_code' => $storeCode,
         ];
+
+        $items = $this->pagedItems[$method . ' ' . $endpoint] ?? null;
+        if ($items !== null) {
+            $pageSize = (int)($payload['searchCriteria[pageSize]'] ?? count($items));
+            $currentPage = (int)($payload['searchCriteria[currentPage]'] ?? 1);
+
+            return [
+                'items' => array_slice($items, ($currentPage - 1) * $pageSize, $pageSize),
+                'total_count' => count($items),
+            ];
+        }
 
         return $this->responses[$method . ' ' . $endpoint] ?? $this->methodResponses[$method] ?? [];
     }
