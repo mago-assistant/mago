@@ -6,13 +6,19 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Form;
 
+use MagoAssistant\Mago\Api\Tool\AdminDescribedToolInterface;
 use MagoAssistant\Mago\Service\Skills\AbstractSkill;
 
-class PageForm extends AbstractSkill
+class PageForm extends AbstractSkill implements AdminDescribedToolInterface
 {
     public function getName(): string
     {
         return 'page_form';
+    }
+
+    public function getAdminDescription(): string
+    {
+        return (string)__('Read and fill in the admin form that is open in the browser.');
     }
 
     /**

@@ -103,6 +103,7 @@
                 <item name="indexer_manager" xsi:type="object">MagoAssistant\Mago\Service\Skills\Configuration\IndexerManager</item>
                 <item name="sales_data" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\SalesData</item>
                 <item name="product_data" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\ProductData</item>
+                <item name="category_data" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\CategoryData</item>
                 <item name="customer_data" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\CustomerData</item>
                 <item name="content_generator" xsi:type="object">MagoAssistant\Mago\Service\Skills\Content\ContentGenerator</item>
                 <item name="cms_data" xsi:type="object">MagoAssistant\Mago\Service\Skills\Content\CmsData</item>
@@ -215,6 +216,15 @@
                 <item name="search" xsi:type="object">MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager\SearchAction</item>
                 <item name="create" xsi:type="object">MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager\CreateAction</item>
                 <item name="delete" xsi:type="object">MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager\DeleteAction</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!-- Skill Actions: CategoryData -->
+    <type name="MagoAssistant\Mago\Service\Skills\Catalog\CategoryData">
+        <arguments>
+            <argument name="actions" xsi:type="array">
+                <item name="empty_categories" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\EmptyCategoriesAction</item>
             </argument>
         </arguments>
     </type>
@@ -469,12 +479,19 @@
         </arguments>
     </type>
 
-    <!-- Conversations Grid DataProvider -->
-    <type name="MagoAssistant\Mago\Ui\DataProvider\ConversationsDataProvider">
+    <!--
+        Conversations grid. Same setup as the flags grid below: the standard DataProvider over a
+        SearchResult collection, so filters, sorting and paging run in SQL (#310).
+    -->
+    <virtualType name="MagoConversationGridCollection" type="MagoAssistant\Mago\Model\ResourceModel\Conversation\Grid">
         <arguments>
-            <argument name="name" xsi:type="string">mago_conversations_listing_data_source</argument>
-            <argument name="primaryFieldName" xsi:type="string">entity_id</argument>
-            <argument name="requestFieldName" xsi:type="string">id</argument>
+            <argument name="mainTable" xsi:type="string">mago_conversation</argument>
+            <argument name="resourceModel" xsi:type="string">MagoAssistant\Mago\Model\ResourceModel\Conversation</argument>
+        </arguments>
+    </virtualType>
+    <type name="MagoAssistant\Mago\Controller\Adminhtml\Conversations\MassDelete">
+        <arguments>
+            <argument name="gridCollection" xsi:type="object" shared="false">MagoConversationGridCollection</argument>
         </arguments>
     </type>
 
@@ -491,6 +508,7 @@
     <type name="Magento\Framework\View\Element\UiComponent\DataProvider\CollectionFactory">
         <arguments>
             <argument name="collections" xsi:type="array">
+                <item name="mago_conversations_listing_data_source" xsi:type="string">MagoConversationGridCollection</item>
                 <item name="mago_flags_listing_data_source" xsi:type="string">MagoFlagGridCollection</item>
             </argument>
         </arguments>

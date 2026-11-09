@@ -15,6 +15,7 @@ use Magento\InventoryApi\Api\SourceRepositoryInterface;
 use Magento\InventoryApi\Api\StockRepositoryInterface;
 use Magento\InventorySalesApi\Api\GetProductSalableQtyInterface;
 use Magento\InventorySalesApi\Api\IsProductSalableInterface;
+use MagoAssistant\Mago\Api\Tool\AdminDescribedToolInterface;
 use MagoAssistant\Mago\Api\Tool\AvailabilityAwareToolInterface;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
@@ -24,7 +25,7 @@ use MagoAssistant\Mago\Service\Privacy\PiiClass;
  * resolved when the tool runs rather than injected, because stores can disable or remove the
  * Inventory modules and a constructor dependency on them would then break the whole registry.
  */
-class StockLevelMsi implements AvailabilityAwareToolInterface
+class StockLevelMsi implements AvailabilityAwareToolInterface, AdminDescribedToolInterface
 {
     public function __construct(
         private readonly ProductRepositoryInterface $productRepository,
@@ -43,6 +44,11 @@ class StockLevelMsi implements AvailabilityAwareToolInterface
     public function getName(): string
     {
         return 'stock_level_msi';
+    }
+
+    public function getAdminDescription(): string
+    {
+        return (string)__('Show the stock of a product per source, and its salable quantity.');
     }
 
     public function getDescription(): string

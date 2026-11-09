@@ -11,7 +11,8 @@
             "PRIMARY": true
         },
         "index": {
-            "MAGO_CONVERSATION_ADMIN_USER_ID": true
+            "MAGO_CONVERSATION_ADMIN_USER_ID": true,
+            "MAGO_CONVERSATION_FULLTEXT": true
         }
     },
     "mago_message": {
@@ -74,7 +75,8 @@
         "index": {
             "MAGO_USAGE_LOG_ADMIN_USER_ID": true,
             "MAGO_USAGE_LOG_CREATED_AT": true,
-            "MAGO_USAGE_LOG_PROVIDER": true
+            "MAGO_USAGE_LOG_PROVIDER": true,
+            "MAGO_USAGE_LOG_CONVERSATION_ID": true
         }
     },
     "mago_doc": {

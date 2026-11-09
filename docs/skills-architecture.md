@@ -205,6 +205,17 @@ tool from another module implements this interface instead. The display name rea
 through the skills list (`MAGO_CONFIG.skills[].title`). To add an answer widget alongside a tool,
 see [widgets.md](widgets.md).
 
+#### `AdminDescribedToolInterface`
+
+The Skills & Permissions page describes each tool to the administrator. `getDescription()` is
+written for the model, so by default the page shows only its first sentence, cut before any
+`Actions:` list. A tool chooses its own text by implementing
+`MagoAssistant\Mago\Api\Tool\AdminDescribedToolInterface`:
+
+- `getAdminDescription(): string` is one short, plain sentence, e.g. "Look up and manage orders,
+  invoices, shipments and credit memos." Return an empty string to keep the first-sentence
+  default. The text never reaches the model, so it can be translated with `__()`.
+
 #### `ActionScopedToolInterface`
 
 ```
@@ -416,7 +427,7 @@ Which service a store runs on is `mago/api/ai_service`, an id pointing at a row 
 
 ## Built-in Skills
 
-The module ships with 10 tools grouped into 4 skill areas:
+The module ships with these tools, grouped by skill area:
 
 ### Store Analytics
 
@@ -425,6 +436,12 @@ The module ships with 10 tools grouped into 4 skill areas:
 | `sales_data` | `Service\Skills\Analytics\SalesData` | Yes | Revenue summaries, top products, recent orders, order counts by status. Supports period filters (`today`, `7days`, `30days`, custom date ranges). |
 | `product_data` | `Service\Skills\Analytics\ProductData` | Yes | Product search, lookup by SKU, inventory counts, low-stock alerts. |
 | `customer_data` | `Service\Skills\Analytics\CustomerData` | Yes | Customer counts, recent signups, top spenders. **Never returns PII** — only aggregates and IDs. |
+
+### Catalog
+
+| Tool | Class | Read-only | Description |
+|------|-------|-----------|-------------|
+| `category_data` | `Service\Skills\Catalog\CategoryData` | Yes | `empty_categories`: enabled categories that show no products, per active store view or one store view (`store`). A product counts when it is enabled and visible in the catalog in that store view, assigned to its website and, when the store hides out-of-stock products, salable in the website's stock (legacy stock status, or the MSI stock index of the website's stock); an anchor category also counts the products of its enabled subcategories, as Magento's category product indexer does. Each row gives the reason (`no_products_assigned`, `no_live_products`, `out_of_stock_only`, `static_block_only`) and the store views it is empty in. Gated by the Categories screen resource (`Magento_Catalog::categories`). |
 
 ### Inventory
 

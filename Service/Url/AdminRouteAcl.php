@@ -41,7 +41,8 @@ class AdminRouteAcl
     }
 
     /**
-     * @param string $route An admin route path: "sales/order/view", "cms/page/edit"
+     * @param string $route An admin route path: "sales/order/view", "cms/page/edit", by front name
+     *                      ("admin/user") or route id ("adminhtml/user")
      * @return string|null The resource, or null when no controller answers that route
      */
     public function forRoute(string $route): ?string
@@ -63,7 +64,7 @@ class AdminRouteAcl
             return null;
         }
 
-        foreach ($this->routeConfig->getModulesByFrontName($frontName, self::AREA) as $module) {
+        foreach ($this->modulesFor($frontName) as $module) {
             $class = $this->actionList->get($module, self::AREA, $controller, $action);
             if (is_string($class) && defined($class . '::' . self::RESOURCE_CONSTANT)) {
                 return (string)constant($class . '::' . self::RESOURCE_CONSTANT);
@@ -71,5 +72,28 @@ class AdminRouteAcl
         }
 
         return null;
+    }
+
+    /**
+     * The first segment is read as a front name first, so a path taken off the browser keeps
+     * resolving the way the router reads it. When no module claims it, it is read as a route id
+     * ("adminhtml" for front name "admin"), the form `Backend\Model\Url::getUrl()` needs to sign a
+     * link Magento accepts on arrival.
+     *
+     * @return string[]
+     */
+    private function modulesFor(string $segment): array
+    {
+        $modules = $this->routeConfig->getModulesByFrontName($segment, self::AREA);
+        if ($modules !== []) {
+            return $modules;
+        }
+
+        $frontName = $this->routeConfig->getRouteFrontName($segment, self::AREA);
+        if (!is_string($frontName) || $frontName === '' || $frontName === $segment) {
+            return [];
+        }
+
+        return $this->routeConfig->getModulesByFrontName($frontName, self::AREA);
     }
 }

@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl-e2e-adminusers-2","object":"chat.completion.chunk","created":1754000202,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-adminusers-2","object":"chat.completion.chunk","created":1754000202,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"Admin users are managed here: "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-adminusers-2","object":"chat.completion.chunk","created":1754000202,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"[Admin Users](mago://url_1)"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-adminusers-2","object":"chat.completion.chunk","created":1754000202,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1300,"completion_tokens":30,"total_tokens":1330}}
+
+data: [DONE]
+

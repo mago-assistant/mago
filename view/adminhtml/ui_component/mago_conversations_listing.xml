@@ -20,7 +20,7 @@
             <updateUrl path="mui/index/render"/>
         </settings>
         <aclResource>MagoAssistant_Mago::conversations</aclResource>
-        <dataProvider class="MagoAssistant\Mago\Ui\DataProvider\ConversationsDataProvider"
+        <dataProvider class="Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider"
                       name="mago_conversations_listing_data_source">
             <settings>
                 <requestFieldName>id</requestFieldName>
@@ -60,7 +60,6 @@
             <settings>
                 <label translate="true">ID</label>
                 <filter>textRange</filter>
-                <sorting>desc</sorting>
             </settings>
         </column>
         <column name="admin_username" sortOrder="20">
@@ -125,6 +124,7 @@
             <settings>
                 <label translate="true">Updated At</label>
                 <filter>dateRange</filter>
+                <sorting>desc</sorting>
                 <dataType>date</dataType>
             </settings>
         </column>

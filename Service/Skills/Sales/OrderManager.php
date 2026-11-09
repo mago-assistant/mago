@@ -6,13 +6,19 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Sales;
 
+use MagoAssistant\Mago\Api\Tool\AdminDescribedToolInterface;
 use MagoAssistant\Mago\Service\Skills\AbstractSkill;
 
-class OrderManager extends AbstractSkill
+class OrderManager extends AbstractSkill implements AdminDescribedToolInterface
 {
     public function getName(): string
     {
         return 'order_manager';
+    }
+
+    public function getAdminDescription(): string
+    {
+        return (string)__('Look up and manage orders, invoices, shipments and credit memos.');
     }
 
     protected function getBaseDescription(): string

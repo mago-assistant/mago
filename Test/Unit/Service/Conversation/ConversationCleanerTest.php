@@ -54,9 +54,9 @@ final class ConversationCleanerTest extends TestCase
 
         self::assertSame(7, $deleted);
         self::assertEqualsWithDelta(
-            strtotime('-90 days'),
+            $this->ninetyDaysAgoInUtc(),
             strtotime($deletes->forTable('mago_conversation')[0]['updated_at < ?'] . ' UTC'),
-            86400
+            60
         );
     }
 
@@ -74,7 +74,7 @@ final class ConversationCleanerTest extends TestCase
         self::assertCount(1, $flagDeletes);
         self::assertSame(['created_at < ?'], array_keys($flagDeletes[0]));
         self::assertEqualsWithDelta(
-            strtotime('-90 days'),
+            $this->ninetyDaysAgoInUtc(),
             strtotime($flagDeletes[0]['created_at < ?'] . ' UTC'),
             60
         );
@@ -143,5 +143,10 @@ final class ConversationCleanerTest extends TestCase
         $select->method('where')->willReturnSelf();
 
         return $select;
+    }
+
+    private function ninetyDaysAgoInUtc(): int
+    {
+        return (new \DateTimeImmutable('-90 days', new \DateTimeZone('UTC')))->getTimestamp();
     }
 }

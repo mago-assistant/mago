@@ -585,6 +585,7 @@
     margin-top: @mago-size__14;
 
     .mago-composition-seg {
+        position: relative;
         min-width: @mago-size__3;
 
         &:first-child {
@@ -600,6 +601,105 @@
 // ---------------------------------------------------------------------------
 // W07–W12 Charts
 // ---------------------------------------------------------------------------
+
+// Shown on hover and keyboard focus; the builders add it, answers keep no listeners (#249)
+.mago-tip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + @mago-size__6);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    padding: @mago-size__4 @mago-size__8;
+    border-radius: @mago-size__6;
+    background: var(--mago-ink, #373330);
+    color: var(--mago-panel, #FFFFFF);
+    font-size: @mago-font-size__11-5;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+
+    &.is-start {
+        left: 0;
+        transform: none;
+    }
+
+    &.is-end {
+        left: auto;
+        right: 0;
+        transform: none;
+    }
+
+    .has-tip:hover > &,
+    .has-tip:focus-visible > & {
+        display: block;
+    }
+}
+
+// Y-axis gutter beside the plot, x labels under it. The gutter overhangs the plot by half a
+// tick line, so the top and bottom tick centres sit on the top and bottom gridlines.
+.mago-plot {
+    display: grid;
+    // minmax(0, …): the plot may be narrower than its labels, which then overflow their own column
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: @mago-size__8;
+
+    .mago-caption + & {
+        margin-top: @mago-size__16;
+    }
+
+    > .mago-axis {
+        grid-column: 2;
+    }
+}
+
+.mago-y-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    margin: -@mago-size__7 0;
+
+    .mago-lines & {
+        margin: @mago-size__1 0;
+    }
+}
+
+.mago-y-tick {
+    height: @mago-size__14;
+    line-height: @mago-size__14;
+    font-size: @mago-font-size__11-5;
+    color: var(--mago-ink-muted, #736B65);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.mago-y-grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+
+    span {
+        position: absolute;
+        left: 0;
+        right: 0;
+        border-top: @mago-size__1 solid var(--mago-track);
+
+        &:nth-child(1) {
+            top: 0;
+        }
+
+        &:nth-child(2) {
+            top: 50%;
+        }
+
+        &:nth-child(3) {
+            top: 100%;
+        }
+    }
+}
 
 .mago-ranked-rows {
     display: flex;
@@ -648,10 +748,7 @@
     align-items: flex-end;
     gap: @mago-size__8;
     height: @mago-size__96;
-
-    .mago-caption + & {
-        margin-top: @mago-size__16;
-    }
+    position: relative;
 
     &.is-stacked {
         gap: @mago-size__10;
@@ -665,6 +762,7 @@
     background: var(--mago-ramp-4);
     border-radius: @mago-size__6 @mago-size__6 @mago-size__3 @mago-size__3;
     transition: height .3s ease;
+    position: relative;
 
     &.is-peak {
         background: var(--mago-ramp-1);
@@ -680,6 +778,7 @@
     min-height: @mago-size__3;
 
     .mago-stack-seg {
+        position: relative;
         border-radius: @mago-size__2;
         min-height: @mago-size__2;
 
@@ -710,6 +809,9 @@
 
 .mago-axis-label {
     flex: 1;
+    display: flex;
+    justify-content: center;
+    min-width: 0;
     text-align: center;
     font-size: @mago-font-size__11-5;
     color: var(--mago-ink-muted, #736B65);
@@ -723,10 +825,29 @@
     .is-spread & {
         flex: none;
     }
+
+    .is-thinned & {
+        white-space: nowrap;
+    }
 }
 
 .mago-lines .mago-widget-head {
     align-items: center;
+}
+
+.mago-lines-area {
+    position: relative;
+}
+
+.mago-lines-points .mago-line-point {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+
+    &:hover,
+    &:focus-visible {
+        background: linear-gradient(var(--mago-track), var(--mago-track)) var(--mago-guide, 50%) 0 / @mago-size__1 100% no-repeat;
+    }
 }
 
 .mago-lines-svg {
@@ -797,6 +918,7 @@
 }
 
 .mago-heat-cell {
+    position: relative;
     border-radius: @mago-size__5;
 }
 

@@ -29,7 +29,7 @@ $defaultLabel = $block->getDefaultPermissionLabel();
             </tr>
             <tr>
                 <th><?= $block->escapeHtml(__('Description')) ?></th>
-                <td><?= $block->escapeHtml($skill->getDescription()) ?></td>
+                <td><?= $block->escapeHtml($block->getSkillDescription()) ?></td>
             </tr>
             <tr>
                 <th><?= $block->escapeHtml(__('Type')) ?></th>

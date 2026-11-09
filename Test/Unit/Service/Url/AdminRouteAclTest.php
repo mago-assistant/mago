@@ -116,6 +116,58 @@ final class AdminRouteAclTest extends TestCase
         self::assertNull($this->resolver()->forRoute('example/thing/edit'));
     }
 
+    /**
+     * Links are built from route ids ("adminhtml/user"), which is what the secret key is signed
+     * with; no module claims "adminhtml" as a front name, so it is read as the route id it is.
+     */
+    #[Test]
+    public function itResolvesARouteGivenByRouteIdThroughItsFrontName(): void
+    {
+        $this->routeConfig->method('getModulesByFrontName')->willReturnCallback(
+            fn(string $frontName): array => $frontName === 'admin' ? ['Magento_User'] : []
+        );
+        $this->routeConfig->method('getRouteFrontName')->with('adminhtml', 'adminhtml')->willReturn('admin');
+        $this->actionList->method('get')->willReturnCallback(
+            fn(string $module, string $area, string $controller, string $action): ?string =>
+                [$module, $controller, $action] === ['Magento_User', 'user', 'index'] ? ControllerWithOwnResource::class : null
+        );
+
+        $resource = $this->resolver()->forRoute('adminhtml/user');
+
+        self::assertSame('Magento_Example::own', $resource);
+    }
+
+    /**
+     * A path taken off the browser carries the front name; it resolves as one, never through the
+     * route id lookup.
+     */
+    #[Test]
+    public function aFrontNameIsNotReadAsARouteId(): void
+    {
+        $this->routeConfig->method('getModulesByFrontName')->with('admin', 'adminhtml')->willReturn(['Magento_User']);
+        $this->routeConfig->expects(self::never())->method('getRouteFrontName');
+        $this->actionList->method('get')->willReturn(ControllerWithOwnResource::class);
+
+        $resource = $this->resolver()->forRoute('admin/user');
+
+        self::assertSame('Magento_Example::own', $resource);
+    }
+
+    /**
+     * Route config hands back the segment itself for a route id it does not know; that is not a
+     * second front name to try.
+     */
+    #[Test]
+    public function aSegmentThatIsNeitherFrontNameNorRouteIdResolvesToNothing(): void
+    {
+        $this->routeConfig->expects(self::once())->method('getModulesByFrontName')->willReturn([]);
+        $this->routeConfig->method('getRouteFrontName')->willReturnArgument(0);
+
+        $resource = $this->resolver()->forRoute('nonsense/thing/edit');
+
+        self::assertNull($resource);
+    }
+
     #[Test]
     public function aRouteWithNoFrontNameIsNotLookedUpAtAll(): void
     {
