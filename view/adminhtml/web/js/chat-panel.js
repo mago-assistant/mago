@@ -1383,10 +1383,11 @@ define([
             el.setAttribute('data-tool', toolName);
             var trace = msgEl.querySelector('.mago-tool-trace');
             if (trace) {
-                trace.appendChild(el);
+                trace.insertBefore(el, trace.querySelector(':scope > .mago-tool-more'));
             } else {
                 msgEl.querySelector('.mago-message-content').before(el);
             }
+            foldTools(msgEl);
             msgs.scrollTop = msgs.scrollHeight;
         } else if (status === 'done' || status === 'failed') {
             var statusEl = msgEl.querySelector('.mago-tool-status[data-tool="' + toolName + '"]:not(.is-done)');
@@ -1396,6 +1397,7 @@ define([
                 if (status === 'failed' && message) {
                     statusEl.title = message;
                 }
+                foldTools(msgEl);
             }
             return statusEl;
         }
@@ -1527,7 +1529,67 @@ define([
         tag.className = 'mago-tool-tag';
         tag.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>'
             + esc(toolName);
-        tags.appendChild(tag);
+        tags.insertBefore(tag, tags.querySelector(':scope > .mago-tool-more'));
+        foldTools(msgEl);
+    }
+
+    // #312: a turn that runs the same read twenty times should not push the answer off screen.
+    // Each row shows its first TOOL_FOLD_LIMIT entries and folds the rest behind a toggle; both
+    // toggles open both rows. A running or failed line is never folded, the admin has to see what
+    // is happening and what broke. Runs after every tag and status change, live and on reload.
+    var TOOL_FOLD_LIMIT = 5;
+
+    function foldTools(msgEl) {
+        var tags = msgEl.querySelector('.mago-tool-tags');
+        var trace = msgEl.querySelector('.mago-tool-trace');
+        var tagCount = tags ? foldRow(tags, '.mago-tool-tag:not(.mago-tool-more)', function() { return true; }) : 0;
+        var lineCount = trace ? foldRow(trace, '.mago-tool-status', function(line) {
+            return line.classList.contains('is-done') && !line.classList.contains('is-failed');
+        }) : 0;
+        var expanded = msgEl.classList.contains('is-tools-expanded');
+        // Open, one "Show less" is enough: under the trace, or on the tags when only they fold.
+        var lineLabel = lineCount ? (expanded ? t('Show less') : t('…and %1 more tool calls', lineCount)) : '';
+        var tagLabel = tagCount ? (expanded ? (lineLabel ? '' : t('Show less')) : t('+%1', tagCount)) : '';
+
+        if (tags) setFoldToggle(msgEl, tags, tagLabel, 'mago-tool-tag');
+        if (trace) setFoldToggle(msgEl, trace, lineLabel, 'mago-readline');
+    }
+
+    // Marks the entries past the limit that may fold and returns how many did.
+    function foldRow(row, selector, mayFold) {
+        var folded = 0;
+        row.querySelectorAll(':scope > ' + selector).forEach(function(item, index) {
+            var fold = index >= TOOL_FOLD_LIMIT && mayFold(item);
+            item.classList.toggle('is-folded', fold);
+            if (fold) folded++;
+        });
+        return folded;
+    }
+
+    // The toggle is always the last child of its row; an empty label removes it.
+    function setFoldToggle(msgEl, row, label, styleClass) {
+        var toggle = row.querySelector(':scope > .mago-tool-more');
+        if (!label) {
+            if (toggle) toggle.remove();
+            return;
+        }
+        if (!toggle) {
+            toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'mago-tool-more ' + styleClass;
+            toggle.addEventListener('click', function() {
+                msgEl.classList.toggle('is-tools-expanded');
+                foldTools(msgEl);
+                // Opening removes the +N chip; keep keyboard focus on the toggle that is left
+                if (!toggle.isConnected) {
+                    var next = msgEl.querySelector('.mago-tool-more');
+                    if (next) next.focus();
+                }
+            });
+        }
+        toggle.textContent = label;
+        toggle.setAttribute('aria-expanded', msgEl.classList.contains('is-tools-expanded') ? 'true' : 'false');
+        row.appendChild(toggle);
     }
 
     // Errors land as a callout (W18) under whatever text already streamed.
