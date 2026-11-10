@@ -145,6 +145,14 @@
             <argument name="cacheId" xsi:type="const">MagoAssistant\Mago\Model\Manifest\Config::CACHE_ID</argument>
         </arguments>
     </type>
+    <!-- Config\Data reads and validates the manifests in its constructor; the proxy defers that to the
+         provider's getTools(), where a malformed manifest is caught and logged instead of taking the
+         registry down -->
+    <type name="MagoAssistant\Mago\Service\Manifest\ManifestToolProvider">
+        <arguments>
+            <argument name="config" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\Proxy</argument>
+        </arguments>
+    </type>
 
     <!-- Welcome screen example questions: each must be answerable by the tool/action it names -->
     <type name="MagoAssistant\Mago\Service\Welcome\ExampleQuestions">

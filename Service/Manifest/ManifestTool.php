@@ -220,9 +220,9 @@ class ManifestTool implements
 
         $values = $this->paramsOf($action, $params);
         foreach ($action['params'] as $name => $param) {
-            // A path parameter is always required: an empty one would leave a hole in the route.
-            if (($param['required'] || $param['in'] === 'path')
-                && !$this->placeholders->isSet('{' . $name . '}', $values, [])) {
+            // A path parameter is always required: an empty one would leave a hole in the route. A
+            // required value is any value paramsOf() kept, so false and an empty list count.
+            if (($param['required'] || $param['in'] === 'path') && !array_key_exists($name, $values)) {
                 return ['error' => 'Parameter "' . $name . '" is required for ' . $action['name']];
             }
             if (array_key_exists($name, $values)) {
@@ -412,7 +412,10 @@ class ManifestTool implements
      * the ones it has no value for. Null and an empty string always count as "not given". A zero
      * value (0, false, an empty list) counts as not given only where the parameter is a filter
      * (FILTER_LOCATIONS): a filter on zero is never meant, while a body field set to 0 or false is a
-     * value the model chose, also against a manifest default.
+     * value the model chose, also against a manifest default. A zero the model did send for a
+     * criteria or query filter means "do not filter", so the manifest default does not step in
+     * either; a page size or store code of zero falls back to the default, since there is nothing
+     * to decline there.
      *
      * @param ActionDef $action
      * @param array<string, mixed> $input
@@ -423,11 +426,12 @@ class ManifestTool implements
         $values = [];
         foreach ($action['params'] as $name => $param) {
             $value = $input[$name] ?? null;
-            $filter = in_array($param['in'], self::FILTER_LOCATIONS, true);
-            $given = $value !== null && $value !== '' && !($filter && $this->isZeroValue($value));
-            if ($given) {
+            $sent = $value !== null && $value !== '';
+            $zero = $sent && in_array($param['in'], self::FILTER_LOCATIONS, true) && $this->isZeroValue($value);
+            $declined = $zero && in_array($param['in'], ['criteria', 'query'], true);
+            if ($sent && !$zero) {
                 $values[$name] = $value;
-            } elseif ($param['default'] !== null) {
+            } elseif ($param['default'] !== null && !$declined) {
                 $values[$name] = $param['default'];
             }
         }

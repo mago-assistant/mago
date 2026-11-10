@@ -124,9 +124,10 @@ A `GET` with any `criteria` or `page_size` parameter sends a `searchCriteria` qu
 is a plain `GET`; the page size is capped at 50. An optional parameter is nullable in the schema
 sent to the model, and null or an empty string counts as not given. For a filter (`criteria`,
 `page_size`, `store`, `query`) a zero value (0, false, an empty list) counts as not given too: a
-provider in strict mode makes the model send every property, and those must not become filters. A
-body field keeps its 0 or false, also against a manifest default. Every given value is checked
-against its `type` before the call. The schema sent to the model lists each parameter once, and the schema of the
+provider in strict mode makes the model send every property, and those must not become filters. A body field keeps its 0 or false, also against a manifest default; a required boolean or list may
+be false or empty. A zero the model sent for a `criteria` or `query` filter means "do not filter",
+so the default does not step in either; a zero page size falls back to the default. Every given
+value is checked against its `type` before the call. The schema sent to the model lists each parameter once, and the schema of the
 called action is also the allowlist: `execute()` never receives a key the action does not declare.
 
 ### `<step>`
@@ -177,8 +178,11 @@ Next to the checks every tool gets, a manifest tool is checked for: the declarin
 enabled, every step's route existing in the store's merged `webapi.xml` (matched as a call would
 be, with a placeholder in each path parameter), the route's ACL resources being declared in an
 `acl.xml`, and the manifest's resource agreeing with the route's (a difference is a warning: both
-apply, so an admin needs both). The manifest is read with the configuration cache, so clean
-`config` after a change.
+apply, so an admin needs both). The manifest is read with the configuration cache, so clean `config` after a change. A manifest
+that does not validate is logged under `var/log/mago-error.log` (context `ManifestTools`) and its
+tools are left out; the built-in tools keep working, and `mago:tool:verify <tool>` then reports the
+tool as missing from the registry. Tool names merge across modules like other Magento configuration,
+so prefix them with your module.
 
 Running the call from the command line answers with a permission error: in-process calls run as
 the admin using the chat, and the command line has none. Test the call in the chat panel.

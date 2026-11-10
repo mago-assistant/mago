@@ -10,8 +10,11 @@ use Magento\Framework\Config\Reader\Filesystem;
 
 /**
  * Reads every module's etc/mago_tools.xml, validated against etc/mago_tools.xsd, into one tree.
- * Tools, actions, params and steps merge by name, so a module can only declare its own. The file
- * name, converter and schema locator come from di.xml.
+ * Tools, actions, params and steps merge by name across modules, in module load order, the way
+ * Magento merges its other configuration: a later module that declares a <tool> with a name an
+ * earlier module used adds to and overrides it, module, acl and readonly included. Nothing rejects
+ * that yet; a module should therefore prefix its tool names. The file name, converter and schema
+ * locator come from di.xml.
  */
 class Reader extends Filesystem
 {

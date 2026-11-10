@@ -300,6 +300,49 @@ final class ManifestToolTest extends TestCase
     }
 
     #[Test]
+    public function aRequiredBooleanOrListCanBeFalseOrEmpty(): void
+    {
+        $tool = $this->tool(
+            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="set" description="d" method="POST" path="x" body="e">'
+            . '<param name="id" type="integer" required="true"/>'
+            . '<param name="visible" type="boolean" required="true"/>'
+            . '<param name="tags" type="array" required="true"/>'
+            . '</action></tool></config>'
+        );
+
+        $result = $tool->execute(
+            ['action' => 'set', 'id' => 5, 'visible' => false, 'tags' => [], '_admin_user_id' => self::ADMIN_ID]
+        );
+
+        self::assertArrayNotHasKey('error', $result);
+        self::assertSame(['e' => ['id' => 5, 'visible' => false, 'tags' => []]], $this->api->calls()[0]['payload']);
+    }
+
+    /**
+     * A zero the model sent for a filter means "do not filter"; the manifest default must not turn
+     * that into the opposite filter.
+     */
+    #[Test]
+    public function aZeroSentForAFilterWithADefaultFiltersOnNeither(): void
+    {
+        $tool = $this->tool(
+            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="list" description="d" method="GET" path="x" readonly="true">'
+            . '<param name="is_active" type="integer" in="criteria" criteria="is_active" condition="eq" default="1"/>'
+            . '</action></tool></config>'
+        );
+
+        $tool->execute(['action' => 'list', 'is_active' => false, '_admin_user_id' => self::ADMIN_ID]);
+        $tool->execute(['action' => 'list', '_admin_user_id' => self::ADMIN_ID]);
+
+        $sent = $this->api->calls()[0]['payload'];
+        $omitted = $this->api->calls()[1]['payload'];
+        self::assertArrayNotHasKey('searchCriteria[filter_groups][0][filters][0][field]', $sent, 'false: no filter');
+        self::assertSame('1', $omitted['searchCriteria[filter_groups][0][filters][0][value]'], 'omitted: the default');
+    }
+
+    #[Test]
     public function aPathParamIsRequiredAndMustHaveTheDeclaredType(): void
     {
         $tool = $this->tool(
