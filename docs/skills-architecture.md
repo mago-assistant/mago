@@ -155,7 +155,12 @@ error report addresses, `twofactorauth/*`, `admin/security/*`, `admin/captcha/*`
 `design/head/includes` and `design/footer/absolute_footer`). `config_writer` refuses them before the confirmation card and
 again on execution, and points the admin to Stores > Configuration. A module blocks settings of
 its own by adding glob patterns (`*`, `?`) to the `additionalPatterns` argument in di.xml; the
-defaults cannot be removed that way.
+defaults cannot be removed that way. The two design settings also live on the
+Content > Design > Configuration form, so `page_form.write_fields` refuses the fields storing them
+too (`BlockedFormFields` maps field to config path through Magento's own design metadata and asks
+the same `BlockedConfigPaths`), on the server before and after the card and once more in the
+browser before staging; an `additionalPatterns` entry matching a design setting covers the form
+the same instant.
 
 An action that is only irreversible for some calls implements
 `ConditionallyIrreversibleActionInterface` and answers `isIrreversible(array $params)`; the other

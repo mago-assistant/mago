@@ -10,6 +10,7 @@ use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Block\Adminhtml\ChatPanel;
 use MagoAssistant\Mago\Model\Form\PageContext;
+use MagoAssistant\Mago\Service\Form\BlockedFormFields;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
 use MagoAssistant\Mago\Service\Form\PageAccess;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
@@ -61,6 +62,12 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
  * now before staging on it, the navigation target before sending the browser there. Both run in
  * findRefusal(), so a denied page is refused before the confirmation prompt and again on the
  * confirm request, against the page context that request carries.
+ *
+ * BlockedFormFields is the third policy, per field rather than per form: a field that stores a
+ * setting BlockedConfigPaths keeps away from config_writer (the Design Configuration storefront
+ * script fields) is refused before the card and again on the confirm request, so this action is
+ * not a second door to a setting the chat never changes (security audit follow-up 2026-11-02,
+ * finding 3). form-bridge.js applies the same list once more before staging.
  */
 class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActionInterface
 {
@@ -76,6 +83,7 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
         private readonly SecureAdminUrl $secureAdminUrl,
         private readonly NewEntityUrlBuilder $newEntityUrlBuilder,
         private readonly FormPolicy $formPolicy,
+        private readonly BlockedFormFields $blockedFormFields,
         PageAccess $pageAccess
     ) {
         parent::__construct($pageContextHolder, $pageAccess);
@@ -463,6 +471,11 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
             if ($field['hidden'] ?? false) {
                 return '"' . $change['path'] . '" is a hidden field on this form (a record id or a value carried '
                     . 'along), never shown to the administrator, so it is not written to from the chat.';
+            }
+            if ($this->blockedFormFields->isBlocked($pageContext->namespace, $change['path'])) {
+                return 'Changing "' . $change['path'] . '" from the chat is turned off: a wrong value in the '
+                    . 'setting it stores can hand the storefront to someone else. Edit the field on the page '
+                    . 'yourself, where Magento checks the value.';
             }
         }
 

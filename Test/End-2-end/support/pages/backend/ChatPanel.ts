@@ -74,6 +74,10 @@ const LISTING_RECIPES: Record<string, ListingRecipe> = {
     listingNamespace: 'sales_order_grid',
     actionKey: 'view',
   },
+  'theme/design_config': {
+    menuHrefContains: '/theme/design_config/',
+    listingNamespace: 'design_config_listing',
+  },
   'admin/user': {
     menuHrefContains: '/admin/user/',
     legacyEditHrefContains: '/user_id/',

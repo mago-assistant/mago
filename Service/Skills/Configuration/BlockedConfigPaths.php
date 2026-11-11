@@ -19,6 +19,11 @@ namespace MagoAssistant\Mago\Service\Skills\Configuration;
  * loads. The admin changes them under Stores > Configuration, where Magento's own validation and
  * warnings apply.
  *
+ * The design settings in this list also live on the Content > Design > Configuration form, the
+ * one admin screen editing config values through a UI component form, so Service\Form\
+ * BlockedFormFields applies the same list to page_form's write_fields there; a pattern added here
+ * covers that form's matching fields too.
+ *
  * Patterns are globs matched against the lowercased config path: "*" stands for any run of
  * characters, slashes included, and "?" for one character. $additionalPatterns
  * extends the list from di.xml, the way FormPolicy's deny lists are extended, so a module can

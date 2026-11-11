@@ -7,9 +7,11 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Form\PageForm;
 
 use MagoAssistant\Mago\Model\Form\PageContext;
+use MagoAssistant\Mago\Service\Form\BlockedFormFields;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
 use MagoAssistant\Mago\Service\Form\PageAccess;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
+use MagoAssistant\Mago\Service\Skills\Configuration\BlockedConfigPaths;
 use MagoAssistant\Mago\Service\Skills\Form\PageForm\WriteFieldsAction;
 use MagoAssistant\Mago\Service\Url\AdminPath;
 use MagoAssistant\Mago\Service\Url\AdminRouteAcl;
@@ -19,6 +21,7 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAclAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAdminRouteAcl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeBackendUrl;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeDesignConfigMetadata;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -112,6 +115,7 @@ final class WriteFieldsDeniedEntityTest extends TestCase
             $this->createStub(SecureAdminUrl::class),
             $this->createStub(NewEntityUrlBuilder::class),
             new FormPolicy(),
+            new BlockedFormFields(new BlockedConfigPaths(), new FakeDesignConfigMetadata()),
             new PageAccess(
                 new AdminPath(new FakeBackendUrl()),
                 new FakeAdminRouteAcl(['catalog/product/new' => 'Magento_Catalog::products']),

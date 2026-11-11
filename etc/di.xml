@@ -376,6 +376,7 @@
             <argument name="commandRegistry" xsi:type="object">MagoAssistant\Mago\Service\Command\CommandRegistry\Proxy</argument>
             <argument name="commandRunner" xsi:type="object">MagoAssistant\Mago\Service\Command\CommandRunner\Proxy</argument>
             <argument name="formPolicy" xsi:type="object">MagoAssistant\Mago\Service\Form\FormPolicy\Proxy</argument>
+            <argument name="blockedFormFields" xsi:type="object">MagoAssistant\Mago\Service\Form\BlockedFormFields\Proxy</argument>
             <argument name="exampleQuestions" xsi:type="object">MagoAssistant\Mago\Service\Welcome\ExampleQuestions\Proxy</argument>
         </arguments>
     </type>
@@ -448,8 +449,10 @@
 
         BlockedConfigPaths: the settings config_writer never changes from the chat (storefront and
         admin URLs, mail server, every address customer mail goes to, two-factor and admin login security,
-        storefront head and footer scripts). A module adds glob patterns (* and ?) for settings of
-        its own; the defaults stay:
+        storefront head and footer scripts). BlockedFormFields applies the same list to the
+        Content > Design > Configuration form, so page_form refuses the fields storing a blocked
+        design setting too. A module adds glob patterns (* and ?) for settings of its own; the
+        defaults stay:
 
         <type name="MagoAssistant\Mago\Service\Skills\Configuration\BlockedConfigPaths">
             <arguments>
