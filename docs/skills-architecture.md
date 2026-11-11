@@ -148,11 +148,15 @@ environment and sensitive settings, with the current and the new value (#245). T
 decides whether the admin may make the change at all.
 
 Some settings are not offered at all: `BlockedConfigPaths` lists those where one wrong value hands
-over the store, its admin or its mail (storefront and admin base URLs, the SMTP host, port and
-bounce address, every `copy_to` of order mail, the contact form recipient, the store email
-addresses `trans_email/ident_*/email`, which receive customer replies and the payment-failed mail,
-error report addresses, `twofactorauth/*`, `admin/security/*`, `admin/captcha/*`,
-`design/head/includes` and `design/footer/absolute_footer`). `config_writer` refuses them before the confirmation card and
+over the store, its admin, its mail or the credentials of a service it connects to (storefront and
+admin base URLs, the SMTP host, port and bounce address, every `copy_to` of order mail, the
+contact form recipient, the store email addresses `trans_email/ident_*/email`, which receive
+customer replies and the payment-failed mail, error report addresses, `twofactorauth/*`,
+`admin/security/*`, `admin/captcha/*`, `design/head/includes`, `design/footer/absolute_footer`,
+the search engine host and port `catalog/search/*_server_hostname` and `*_server_port`, the
+shipping carrier gateway, tracking and web-services URLs under `carriers/*`, and the New Relic
+API URLs `newrelicreporting/general/*_url`, since the matching clients send their requests, and
+with HTTP auth their stored credentials, to whatever host those settings name). `config_writer` refuses them before the confirmation card and
 again on execution, and points the admin to Stores > Configuration. A module blocks settings of
 its own by adding glob patterns (`*`, `?`) to the `additionalPatterns` argument in di.xml; the
 defaults cannot be removed that way.
