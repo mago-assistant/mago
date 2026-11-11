@@ -169,6 +169,22 @@ and refuses a request whose ticked calls include a flagged one unless it carries
 `"acknowledged": true`. The refusal comes before the claim, so the proposal stays pending. The
 REST route `POST /V1/mago/confirm/:messageId` takes the same field in its body.
 
+A proposal that holds more than one confirmable action only runs the calls named in
+`tool_call_ids`; a confirm without that field is refused and the proposal stays pending (#332).
+"No selection" used to mean "run them all", which let a request run every action of a tick list
+nobody ticked. The REST route takes the same list as `toolCallIds`; calls left out are answered
+with a skipped tool result and never run. A single-action card keeps sending no selection, so
+reads the model bundled with the write keep running alongside it.
+
+A proposal the admin moves past is superseded: when a new message arrives in the conversation
+(panel or REST), `ProposalSuperseder` claims every open proposal through the same atomic claim a
+confirm uses, clears its pending flag, and stamps its calls `superseded` so a reloaded
+conversation draws the card without buttons. The proposal that was still the newest message also
+gets a skipped tool result per call, so the provider sees a resolved chain and does not propose
+the same action again; a proposal buried under later turns (stored before this fix) is retired
+without results, and replay keeps dropping its unanswered calls. A superseded proposal can no
+longer be confirmed; asking again produces a fresh card (#332).
+
 Every `order_manager` action that e-mails the customer first asks `CustomerNotificationGuard`,
 after approval and right before the API call. It lets each kind of e-mail (comment, invoice,
 shipment, credit memo, order confirmation) go to the customer of an order once per
