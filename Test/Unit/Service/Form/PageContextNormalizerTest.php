@@ -94,16 +94,55 @@ final class PageContextNormalizerTest extends TestCase
         $this->assertTrue($normalizer->isDenied($payload));
     }
 
+    /**
+     * form-bridge.js already sends null for a hidden field's value; this is the server's own check
+     * for a client that did not. No action serves a hidden value (describe_form does not list the
+     * field, read_fields answers "not a field", write_fields refuses it), so the snapshot should
+     * not carry one either.
+     */
+    #[Test]
+    public function itDropsTheValueOfAHiddenField(): void
+    {
+        $context = $this->normalize(['fields' => [
+            [
+                'path' => 'page_id',
+                'label' => '',
+                'type' => 'hidden',
+                'value' => '3',
+                'hidden' => true,
+            ],
+        ]]);
+
+        $this->assertTrue($context->fields[0]['hidden']);
+        $this->assertNull($context->fields[0]['value']);
+    }
+
+    #[Test]
+    public function itKeepsTheValueOfAFieldTheAdministratorCanSee(): void
+    {
+        $context = $this->normalize(['fields' => [
+            [
+                'path' => 'title',
+                'label' => 'Page Title',
+                'type' => 'input',
+                'value' => 'About us',
+                'hidden' => false,
+            ],
+        ]]);
+
+        $this->assertSame('About us', $context->fields[0]['value']);
+    }
+
     private function normalize(array $extra): \MagoAssistant\Mago\Model\Form\PageContext
     {
-        $context = (new PageContextNormalizer(new FormPolicy()))->normalize([
+        $context = (new PageContextNormalizer(new FormPolicy()))->normalize($extra + [
             'hasForm' => true,
             'route' => '/admin/catalog/product/edit/id/1/',
             'namespace' => 'product_form',
             'entityType' => 'product',
             'entityId' => '1',
             'fields' => [],
-        ] + $extra);
+        ]);
 
         $this->assertNotNull($context, 'the payload should normalize to a context');
 

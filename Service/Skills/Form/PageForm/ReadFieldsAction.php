@@ -67,12 +67,16 @@ class ReadFieldsAction extends AbstractPageFormReadAction
     }
 
     /**
+     * A hidden field answers exactly like an unknown path: describe_form never offers it, so its
+     * path is not one the model can legitimately hold, and a distinct message would only confirm
+     * the field exists. write_fields already refuses it; this closes the read side.
+     *
      * @return array<string,mixed>
      */
     private function readField(PageContext $pageContext, string $path): array
     {
         $field = $this->findField($pageContext, $path);
-        if ($field === null) {
+        if ($field === null || ($field['hidden'] ?? false)) {
             return [
                 'path' => $path,
                 'found' => false,

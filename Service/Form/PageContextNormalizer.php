@@ -179,15 +179,20 @@ class PageContextNormalizer
             return $this->redactedField($path, $type, $rawField);
         }
 
+        $isHidden = (bool)($rawField['hidden'] ?? false);
+
         return [
             'path' => $path,
             'label' => $this->toStringValue($rawField['label'] ?? ''),
             'type' => $type,
-            'value' => $this->capValueLength($value),
+            // A hidden field's value is never served: describe_form does not list the field,
+            // read_fields answers "not a field", write_fields refuses it. form-bridge.js already
+            // sends null for it; this is the server's own check for a client that did not.
+            'value' => $isHidden ? null : $this->capValueLength($value),
             'options' => $this->normalizeOptions($rawField['options'] ?? null),
             'required' => (bool)($rawField['required'] ?? false),
             'disabled' => (bool)($rawField['disabled'] ?? false),
-            'hidden' => (bool)($rawField['hidden'] ?? false),
+            'hidden' => $isHidden,
             'usesDefaultValue' => (bool)($rawField['usesDefaultValue'] ?? false),
         ];
     }
