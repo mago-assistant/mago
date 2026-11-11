@@ -10,6 +10,7 @@ use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationAlreadyHandledException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationExpiredException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationNotAcknowledgedException;
+use MagoAssistant\Mago\Model\Conversation\ConfirmationSelectionRequiredException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Model\Conversation\ConversationNotFoundException;
 use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
@@ -130,6 +131,41 @@ final class ConfirmationClaimTest extends TestCase
         $message = $this->claim->claimToConfirm(new ConfirmRequest($messageId, false, ['call_2']), self::ADMIN_USER_ID);
 
         self::assertSame($messageId, $message['entity_id']);
+    }
+
+    /**
+     * Issue #332: a card for one action sends no ticked ids, and "no ids" meant "run them all"
+     */
+    #[Test]
+    public function itLeavesATickListPendingWhenTheRequestTickedNothing(): void
+    {
+        $messageId = $this->proposal(
+            ['id' => 'call_1', 'name' => 'cms_data', 'input' => ['action' => 'update_block', 'identifier' => 'promo_a']],
+            ['id' => 'call_2', 'name' => 'cms_data', 'input' => ['action' => 'update_block', 'identifier' => 'promo_b']]
+        );
+
+        $refusal = $this->unacknowledgedConfirmRefusal($messageId);
+
+        self::assertInstanceOf(ConfirmationSelectionRequiredException::class, $refusal);
+        self::assertSame(
+            1,
+            $this->repository->getMessageById($messageId)['pending_confirmation'],
+            'A confirm without tool_call_ids claimed a two-action tick list, so both actions run unticked'
+        );
+    }
+
+    #[Test]
+    public function itConfirmsATickListForExactlyTheTickedCalls(): void
+    {
+        $messageId = $this->proposal(
+            ['id' => 'call_1', 'name' => 'cms_data', 'input' => ['action' => 'update_block', 'identifier' => 'promo_a']],
+            ['id' => 'call_2', 'name' => 'cms_data', 'input' => ['action' => 'update_block', 'identifier' => 'promo_b']]
+        );
+
+        $message = $this->claim->claimToConfirm(new ConfirmRequest($messageId, false, ['call_2']), self::ADMIN_USER_ID);
+
+        self::assertSame($messageId, $message['entity_id']);
+        self::assertSame(0, $this->repository->getMessageById($messageId)['pending_confirmation']);
     }
 
     #[Test]

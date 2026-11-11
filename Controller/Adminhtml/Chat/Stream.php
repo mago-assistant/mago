@@ -21,6 +21,7 @@ use MagoAssistant\Mago\Model\Conversation\PageLocationRecorder;
 use MagoAssistant\Mago\Service\Ai\Client;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
 use MagoAssistant\Mago\Service\Conversation\NavigationNoteInjector;
+use MagoAssistant\Mago\Service\Conversation\ProposalSuperseder;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
 use MagoAssistant\Mago\Service\Form\PageContextNormalizer;
@@ -31,6 +32,7 @@ class Stream extends Action implements HttpPostActionInterface
 {
     use FormKeyJsonValidation;
     use FinishesStreamedResponse;
+    use HoldsConfirmEvent;
     use ReleasesSessionLock;
 
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::assistant_read';
@@ -51,7 +53,8 @@ class Stream extends Action implements HttpPostActionInterface
         private readonly NavigationNoteInjector $navigationNoteInjector,
         private readonly PageLocationRecorder $pageLocationRecorder,
         private readonly PrivacyService $privacyService,
-        private readonly EventStreamHeaders $eventStreamHeaders
+        private readonly EventStreamHeaders $eventStreamHeaders,
+        private readonly ProposalSuperseder $proposalSuperseder
     ) {
         parent::__construct($context);
     }
@@ -138,6 +141,11 @@ class Stream extends Action implements HttpPostActionInterface
             if ($isNewConversation) {
                 $this->conversationRepository->updateTitle($conversationId, $this->privacyService->safeTitle($message));
             }
+            // A new message moves past every open proposal: retired here, before it is stored, so
+            // an older card can never run what a newer turn proposed (#332)
+            if (!$isNewConversation) {
+                $this->proposalSuperseder->supersedePendingProposals($conversationId, $adminUserId);
+            }
             $messageId = $this->conversationRepository->addMessage($conversationId, 'user', $message);
             if ($pageContext !== null) {
                 $this->pageLocationRecorder->record($messageId, $pageContext->toLocation());
@@ -216,11 +224,10 @@ class Stream extends Action implements HttpPostActionInterface
                 'admin_user_id' => $adminUserId,
             ]);
 
+            $heldConfirm = null;
             $result = $this->chatService->processMessageStreaming(
                 $formattedMessages,
-                function (string $type, array $data) {
-                    $this->sendSse($type, $data);
-                },
+                $this->sendingSseHoldingConfirm($heldConfirm),
                 $conversationId,
                 $adminUserId
             );
@@ -246,6 +253,7 @@ class Stream extends Action implements HttpPostActionInterface
                 $pendingConfirmation
             );
 
+            $this->sendHeldConfirm($heldConfirm, $messageId, $conversationId);
             $this->sendSse('done', [
                 'message_id' => $messageId,
                 'conversation_id' => $conversationId,
@@ -274,6 +282,10 @@ class Stream extends Action implements HttpPostActionInterface
         $storedMessage = $this->privacyService->scrubText($message);
         if ($isNewConversation) {
             $this->conversationRepository->updateTitle($conversationId, $this->privacyService->safeTitle($storedMessage));
+        }
+        // A new message moves past every open proposal, slash command or not (#332)
+        if (!$isNewConversation) {
+            $this->proposalSuperseder->supersedePendingProposals($conversationId, $adminUserId);
         }
         $this->conversationRepository->addMessage($conversationId, 'user', $storedMessage);
 
@@ -340,11 +352,10 @@ class Stream extends Action implements HttpPostActionInterface
     private function confirmCommand(array $toolCalls, int $conversationId): ResultInterface
     {
         $adminUserId = (int)($this->_auth->getUser()?->getId() ?? 0);
+        $heldConfirm = null;
         $result = $this->chatService->prepareToolConfirmation(
             $toolCalls,
-            function (string $type, array $data) {
-                $this->sendSse($type, $data);
-            },
+            $this->sendingSseHoldingConfirm($heldConfirm),
             $adminUserId
         );
 
@@ -356,6 +367,7 @@ class Stream extends Action implements HttpPostActionInterface
             true
         );
 
+        $this->sendHeldConfirm($heldConfirm, $messageId, $conversationId);
         $this->sendSse('done', [
             'message_id' => $messageId,
             'conversation_id' => $conversationId,

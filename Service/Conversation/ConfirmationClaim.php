@@ -11,6 +11,7 @@ use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationAlreadyHandledException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationExpiredException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationNotAcknowledgedException;
+use MagoAssistant\Mago\Model\Conversation\ConfirmationSelectionRequiredException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Model\Conversation\ConversationNotFoundException;
 
@@ -49,6 +50,7 @@ class ConfirmationClaim
      * @param int $adminUserId
      * @return array<string, mixed> The message row that asked for confirmation
      * @throws ConversationNotFoundException when the message is missing or belongs to another admin
+     * @throws ConfirmationSelectionRequiredException when a multi-call proposal is confirmed without ids
      * @throws ConfirmationNotAcknowledgedException when a write that needs the acknowledgement lacks it
      * @throws ConfirmationAlreadyHandledException when another request confirmed or rejected it first
      * @throws ConfirmationExpiredException when it was proposed more than MAX_AGE_SECONDS ago
@@ -57,6 +59,12 @@ class ConfirmationClaim
     {
         $messageId = $request->messageId;
         $message = $this->conversationRepository->getMessageForUser($messageId, $adminUserId);
+        // "No ids" may not mean "run them all" on a tick list: the card says nothing is ticked for
+        // you, so a request without a selection ran actions nobody chose (#332). Checked before the
+        // claim, like the acknowledgement, so the proposal stays pending for a retry that picks.
+        if ($request->selectedIds === null && $this->holdsSeveralCalls($message)) {
+            throw new ConfirmationSelectionRequiredException();
+        }
         // Checked before the claim, so a refused request leaves the card pending for a ticked retry.
         // A proposal past its hour cannot be retried at all, so that refusal says so instead.
         if (!$request->acknowledged && $this->needsAcknowledgement($message, $request->selectedIds)) {
@@ -93,6 +101,46 @@ class ConfirmationClaim
     }
 
     /**
+     * Whether the proposal holds more than one call the admin was asked about. Only calls with a
+     * stored description count: describedConfirmationCalls() describes exactly the calls the card
+     * lists, and a read carried through undescribed was never anyone's to tick, so refusing over it
+     * would block the single card that legitimately sends no ids. A row where no call carries a
+     * description was stored before the descriptions existed; every call counts there, so a legacy
+     * tick list cannot be run in full without a selection either.
+     *
+     * @param array<string, mixed> $message
+     */
+    private function holdsSeveralCalls(array $message): bool
+    {
+        // A handled proposal runs nothing either way; the claim below reports why
+        if (empty($message['pending_confirmation'])) {
+            return false;
+        }
+
+        $toolCalls = $this->toolCallsOf($message);
+        $describedCalls = array_filter(
+            $toolCalls,
+            static fn (array $toolCall): bool => isset($toolCall['description'])
+        );
+
+        return count($describedCalls === [] ? $toolCalls : $describedCalls) > 1;
+    }
+
+    /**
+     * @param array<string, mixed> $message
+     * @return array<int, array<string, mixed>>
+     */
+    private function toolCallsOf(array $message): array
+    {
+        $toolCalls = $message['tool_calls'] ?? [];
+        if (is_string($toolCalls)) {
+            $toolCalls = $this->json->unserialize($toolCalls);
+        }
+
+        return is_array($toolCalls) ? $toolCalls : [];
+    }
+
+    /**
      * @param array<string, mixed> $message
      * @param string[]|null $selectedIds
      */
@@ -102,13 +150,9 @@ class ConfirmationClaim
         if (empty($message['pending_confirmation'])) {
             return false;
         }
-        $toolCalls = $message['tool_calls'] ?? [];
-        if (is_string($toolCalls)) {
-            $toolCalls = $this->json->unserialize($toolCalls);
-        }
 
         return array_filter(
-            is_array($toolCalls) ? $toolCalls : [],
+            $this->toolCallsOf($message),
             static fn (array $toolCall): bool => ($selectedIds === null
                     || in_array((string)($toolCall['id'] ?? ''), $selectedIds, true))
                 && (!empty($toolCall['irreversible']) || !empty($toolCall['caution']))

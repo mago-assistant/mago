@@ -29,7 +29,9 @@ test('Asks for confirmation before creating a CMS page and reports the result', 
   await expect(chatPanel.lastAssistantMessage(page)).toContainText('is live at /summer-sale');
 });
 
-test('Resolves the message id through the status endpoint before confirming', async ({page}) => {
+/* #332: the card carries its message id from the confirm event, so no status lookup may decide
+   which proposal runs. The lookup used to answer an older card with the newest pending proposal. */
+test('Confirms with the id the card carries, without a status lookup', async ({page}) => {
   await chatMock.install(page, createCmsPage);
   const statusCalls = chatMock.countRequestsTo(page, /\/mago\/chat\/status/);
 
@@ -38,7 +40,7 @@ test('Resolves the message id through the status endpoint before confirming', as
   await chatPanel.confirmButton(page).click();
 
   await expect(chatPanel.confirmActions(page)).toHaveCount(0);
-  expect(statusCalls.total()).toBe(1);
+  expect(statusCalls.total()).toBe(0);
 });
 
 test('Asks for confirmation before creating a coupon rule', async ({page}) => {

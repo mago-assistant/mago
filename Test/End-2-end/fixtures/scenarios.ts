@@ -28,6 +28,7 @@ export const createCmsPage: ChatScenario = {
         {
             event: 'confirm',
             data: {
+                message_id: MESSAGE_ID,
                 tools: [
                     {
                         name: 'cms_data',
@@ -74,6 +75,7 @@ export const createCoupon: ChatScenario = {
         {
             event: 'confirm',
             data: {
+                message_id: MESSAGE_ID,
                 tools: [
                     {
                         name: 'coupon_manager',
@@ -188,6 +190,7 @@ export const formApplyOnConfirm: ChatScenario = {
         {
             event: 'confirm',
             data: {
+                message_id: MESSAGE_ID,
                 tools: [
                     {
                         name: 'write_fields',
@@ -234,6 +237,7 @@ export const stageFieldChange: ChatScenario = {
         {
             event: 'confirm',
             data: {
+                message_id: MESSAGE_ID,
                 tools: [
                     {
                         name: 'page_form',
@@ -352,6 +356,7 @@ export const stageFieldValue = (value: string): ChatScenario => {
             {
                 event: 'confirm',
                 data: {
+                    message_id: MESSAGE_ID,
                     tools: [{
                         name: 'page_form',
                         description: 'Read and write the admin form currently open in the browser',
@@ -392,6 +397,7 @@ export const batchWrites: ChatScenario = {
         {
             event: 'confirm',
             data: {
+                message_id: MESSAGE_ID,
                 tools: [
                     { ...batchConfigCall, description: 'Write store configuration' },
                     { ...batchCmsCall, description: 'Manage CMS pages and blocks' },
@@ -426,6 +432,7 @@ export const irreversibleWrite: ChatScenario = {
         {
             event: 'confirm',
             data: {
+                message_id: MESSAGE_ID,
                 tools: [{
                     ...cancelOrderCall,
                     description: 'Manage orders',
@@ -455,7 +462,7 @@ export const chainedIrreversibleWrite: ChatScenario = {
         { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
         ...textDeltas('I will update the home page first. '),
         { event: 'tool_call', data: batchCmsCall },
-        { event: 'confirm', data: { tools: [{ ...batchCmsCall, description: 'Manage CMS pages and blocks' }] } },
+        { event: 'confirm', data: { message_id: MESSAGE_ID, tools: [{ ...batchCmsCall, description: 'Manage CMS pages and blocks' }] } },
         {
             event: 'done',
             data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true },
@@ -468,6 +475,7 @@ export const chainedIrreversibleWrite: ChatScenario = {
         {
             event: 'confirm',
             data: {
+                message_id: CHAINED_MESSAGE_ID,
                 tools: [{
                     ...cancelOrderCall,
                     description: 'Manage orders',
@@ -490,6 +498,7 @@ export const batchWritesWithCaution: ChatScenario = {
     stream: batchWrites.stream.map((event) => event.event !== 'confirm' ? event : {
         event: 'confirm',
         data: {
+            message_id: MESSAGE_ID,
             tools: [
                 {
                     ...batchConfigCall,
@@ -528,6 +537,7 @@ export const stageManyFieldChanges: ChatScenario = {
         {
             event: 'confirm',
             data: {
+                message_id: MESSAGE_ID,
                 tools: [
                     {
                         name: 'page_form',
@@ -559,6 +569,7 @@ export const invoiceOrderAfterLongAnswer: ChatScenario = {
         {
             event: 'confirm',
             data: {
+                message_id: MESSAGE_ID,
                 tools: [
                     {
                         name: 'order_manager',

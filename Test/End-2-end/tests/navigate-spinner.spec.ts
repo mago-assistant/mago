@@ -31,6 +31,7 @@ function navigateDirectiveScenario(directive: Record<string, unknown>): ChatScen
       {
         event: 'confirm',
         data: {
+          message_id: MESSAGE_ID,
           tools: [
             {
               name: 'page_form',

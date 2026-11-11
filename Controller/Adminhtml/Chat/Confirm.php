@@ -27,6 +27,7 @@ class Confirm extends Action implements HttpPostActionInterface
 {
     use FormKeyJsonValidation;
     use FinishesStreamedResponse;
+    use HoldsConfirmEvent;
     use ReleasesSessionLock;
 
     public const ADMIN_RESOURCE = 'MagoAssistant_Mago::assistant_write';
@@ -192,11 +193,10 @@ class Confirm extends Action implements HttpPostActionInterface
                 $formattedMessages[] = $entry;
             }
 
+            $heldConfirm = null;
             $result = $this->chatService->processMessageStreaming(
                 $formattedMessages,
-                function (string $type, array $data) {
-                    $this->sendSse($type, $data);
-                },
+                $this->sendingSseHoldingConfirm($heldConfirm),
                 $conversationId,
                 $adminUserId
             );
@@ -221,6 +221,7 @@ class Confirm extends Action implements HttpPostActionInterface
                 $pendingConfirmation
             );
 
+            $this->sendHeldConfirm($heldConfirm, $newMessageId, $conversationId);
             $this->sendSse('done', [
                 'message_id' => $newMessageId,
                 'conversation_id' => $conversationId,

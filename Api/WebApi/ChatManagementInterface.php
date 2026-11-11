@@ -48,13 +48,17 @@ interface ChatManagementInterface
      * Confirm a pending write action
      *
      * A proposal whose tool calls carry "irreversible" or "caution" only runs with acknowledged
-     * set to true, the API's counterpart of the checkbox on the admin panel's card.
+     * set to true, the API's counterpart of the checkbox on the admin panel's card. A proposal
+     * that holds more than one confirmable action only runs the calls named in toolCallIds, the
+     * API's counterpart of the tick list; without it such a proposal is refused (#332). Calls left
+     * out are answered with a skipped result and never run.
      *
      * @param int $messageId
      * @param bool $acknowledged The caller read the impacts and cautions and accepts them
+     * @param string[]|null $toolCallIds The tool calls to run; required for more than one confirmable action
      * @return string JSON response
      */
-    public function confirmAction(int $messageId, bool $acknowledged = false): string;
+    public function confirmAction(int $messageId, bool $acknowledged = false, ?array $toolCallIds = null): string;
 
     /**
      * Reject a pending write action

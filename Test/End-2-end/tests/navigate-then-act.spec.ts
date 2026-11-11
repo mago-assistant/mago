@@ -40,6 +40,7 @@ function navigateDirectiveScenario(directive: Record<string, unknown>, summaryTe
       {
         event: 'confirm',
         data: {
+          message_id: MESSAGE_ID,
           tools: [
             {
               name: 'page_form',
