@@ -14,7 +14,9 @@ use Magento\Theme\Model\Design\Config\MetadataProviderInterface;
 final class FakeDesignConfigMetadata implements MetadataProviderInterface
 {
     /**
-     * @param string[] $paths
+     * @param array<int|string, string> $paths config paths, keyed by the form field name the way
+     *        Magento_Theme's di.xml declares them ('head_includes' => 'design/head/includes'); a
+     *        bare path gets a name derived from it.
      */
     public function __construct(
         private readonly array $paths = []
@@ -27,8 +29,8 @@ final class FakeDesignConfigMetadata implements MetadataProviderInterface
     public function get(): array
     {
         $fields = [];
-        foreach ($this->paths as $path) {
-            $fields[str_replace('/', '_', $path)] = ['path' => $path];
+        foreach ($this->paths as $name => $path) {
+            $fields[is_string($name) ? $name : str_replace('/', '_', $path)] = ['path' => $path];
         }
 
         return $fields;

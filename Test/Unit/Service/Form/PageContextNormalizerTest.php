@@ -94,6 +94,36 @@ final class PageContextNormalizerTest extends TestCase
         $this->assertTrue($normalizer->isDenied($payload));
     }
 
+    /**
+     * A hidden field's value is never carried in the snapshot: no page_form action may return it
+     * (describe omits the field, write refuses it, read answers "not a field"), so keeping the
+     * value only creates something to leak. The field itself stays, flagged hidden.
+     */
+    #[Test]
+    public function itDropsTheValueOfAHiddenField(): void
+    {
+        $context = (new PageContextNormalizer(new FormPolicy()))->normalize([
+            'hasForm' => true,
+            'route' => '/admin/cms/page/edit/page_id/3/',
+            'namespace' => 'cms_page_form',
+            'entityType' => 'cms_page',
+            'entityId' => '3',
+            'fields' => [
+                ['path' => 'page_id', 'type' => 'input', 'value' => '3', 'hidden' => true],
+                ['path' => 'title', 'type' => 'input', 'value' => 'About us', 'hidden' => false],
+            ],
+        ]);
+        $this->assertNotNull($context);
+
+        $this->assertSame(
+            [['page_id', null, true], ['title', 'About us', false]],
+            array_map(
+                static fn (array $field): array => [$field['path'], $field['value'], $field['hidden']],
+                $context->fields
+            )
+        );
+    }
+
     private function normalize(array $extra): \MagoAssistant\Mago\Model\Form\PageContext
     {
         $context = (new PageContextNormalizer(new FormPolicy()))->normalize([

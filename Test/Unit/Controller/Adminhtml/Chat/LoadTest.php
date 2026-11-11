@@ -73,14 +73,46 @@ final class LoadTest extends TestCase
     }
 
     /**
+     * A stored confirmation call keeps its input and impact lines tokenised (#97 decision 1), and
+     * the panel rebuilds the card from that row, so a token that occurs only there must be in the
+     * token map or the reloaded card shows token grammar instead of the order number.
+     */
+    #[Test]
+    public function itSendsTheValueOfATokenThatOnlyOccursInAStoredToolCall(): void
+    {
+        $vault = new ConversationVault();
+        $order = $vault->tokenise('000000549', 'order');
+
+        $this->loadMessages($vault, [[
+            'role' => 'assistant',
+            'content' => '',
+            'tool_calls' => (new Json())->serialize([[
+                'id' => 'call_1',
+                'name' => 'order_manager',
+                'input' => ['action' => 'cancel', 'order_number' => $order],
+                'impacts' => ['Order #' . $order . ' is canceled and cannot be reopened.'],
+            ]]),
+        ]]);
+
+        self::assertSame([$order => '000000549'], $this->response['tokens']);
+    }
+
+    /**
      * @param list<string> $contents
      */
     private function load(ConversationVault $vault, array $contents): void
     {
-        $messages = array_map(
+        $this->loadMessages($vault, array_map(
             static fn (string $content): array => ['role' => 'assistant', 'content' => $content],
             $contents
-        );
+        ));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $messages
+     */
+    private function loadMessages(ConversationVault $vault, array $messages): void
+    {
         $repository = new FakeConversationRepository(
             [self::CONVERSATION_ID => ['entity_id' => self::CONVERSATION_ID, 'admin_user_id' => self::ADMIN_ID, 'title' => 'Reviews']],
             [self::CONVERSATION_ID => $messages]

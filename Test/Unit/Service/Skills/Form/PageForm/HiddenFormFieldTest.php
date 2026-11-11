@@ -7,10 +7,13 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Form\PageForm;
 
 use MagoAssistant\Mago\Model\Form\PageContext;
+use MagoAssistant\Mago\Service\Form\BlockedDesignConfigFields;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
 use MagoAssistant\Mago\Service\Form\PageAccess;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
+use MagoAssistant\Mago\Service\Skills\Configuration\BlockedConfigPaths;
 use MagoAssistant\Mago\Service\Skills\Form\PageForm\DescribeFormAction;
+use MagoAssistant\Mago\Service\Skills\Form\PageForm\ReadFieldsAction;
 use MagoAssistant\Mago\Service\Skills\Form\PageForm\WriteFieldsAction;
 use MagoAssistant\Mago\Service\Url\AdminPath;
 use MagoAssistant\Mago\Service\Url\EntityRouteMap;
@@ -19,6 +22,7 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAclAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAdminRouteAcl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeBackendUrl;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeDesignConfigMetadata;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -65,6 +69,28 @@ final class HiddenFormFieldTest extends TestCase
         self::assertSame(['title'], array_column($result['fields'], 'path'));
     }
 
+    #[Test]
+    public function readFieldsDoesNotReturnTheValueOfAHiddenField(): void
+    {
+        $result = (new ReadFieldsAction($this->holder(), $this->pageAccess()))
+            ->execute(['field_paths' => ['page_id']], 1);
+
+        self::assertArrayNotHasKey(
+            'value',
+            $result['fields'][0],
+            'read_fields returned the value of the hidden field "page_id", which describe_form never offers'
+        );
+    }
+
+    #[Test]
+    public function readFieldsStillReturnsTheValueOfAFieldTheAdministratorCanSee(): void
+    {
+        $result = (new ReadFieldsAction($this->holder(), $this->pageAccess()))
+            ->execute(['field_paths' => ['title']], 1);
+
+        self::assertSame('3', $result['fields'][0]['value']);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -86,7 +112,8 @@ final class HiddenFormFieldTest extends TestCase
             new SecureAdminUrl(new FakeBackendUrl()),
             (new \ReflectionClass(NewEntityUrlBuilder::class))->newInstanceWithoutConstructor(),
             new FormPolicy(),
-            $this->pageAccess()
+            $this->pageAccess(),
+            new BlockedDesignConfigFields(new FakeDesignConfigMetadata(), new BlockedConfigPaths())
         );
     }
 

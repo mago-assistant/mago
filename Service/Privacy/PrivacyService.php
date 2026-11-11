@@ -96,6 +96,17 @@ class PrivacyService
     }
 
     /**
+     * Swap known vault values in a string back to their tokens before it is persisted. The inverse
+     * of rehydrate(), for text that was built from rehydrated values (the confirmation card's
+     * impact lines), so the stored copy honours #97 decision 1 the same way scrubbed text does.
+     * The vault skips values shorter than its conceal floor; those stay readable at rest.
+     */
+    public function concealText(string $text): string
+    {
+        return $this->vault->concealKnownValues($text);
+    }
+
+    /**
      * Rehydrate tokens in tool-call arguments before the tool runs. The model only ever saw tokens
      * for scrubbed values, so it passes e.g. search="[email_1]"; the tool must receive the real
      * address or its lookup finds nothing. Applied on every execution path (read, stream, confirm).

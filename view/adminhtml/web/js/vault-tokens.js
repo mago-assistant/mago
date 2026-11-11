@@ -184,6 +184,7 @@ define([], function () {
         resolveUrl: resolveUrl,
         resolveUrlsDeep: resolveUrlsDeep,
         rehydrateHtml: rehydrateHtml,
+        rehydrateNode: rehydrateNode,
         merge: merge
     };
 });

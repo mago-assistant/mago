@@ -90,12 +90,17 @@ class ReadFieldsAction extends AbstractPageFormReadAction
     }
 
     /**
+     * A hidden field is answered exactly like an unknown path: describe_form never offered it, so
+     * read_fields confirming its existence (let alone its value) would leak what the administrator
+     * cannot see on the form. The snapshot no longer carries hidden values, but this keeps older
+     * or forged snapshots from answering through this action.
+     *
      * @return array<string,mixed>|null
      */
     private function findField(PageContext $pageContext, string $path): ?array
     {
         foreach ($pageContext->fields as $field) {
-            if ($field['path'] === $path) {
+            if ($field['path'] === $path && ($field['hidden'] ?? false) !== true) {
                 return $field;
             }
         }

@@ -179,15 +179,17 @@ class PageContextNormalizer
             return $this->redactedField($path, $type, $rawField);
         }
 
+        $isHidden = (bool)($rawField['hidden'] ?? false);
+
         return [
             'path' => $path,
             'label' => $this->toStringValue($rawField['label'] ?? ''),
             'type' => $type,
-            'value' => $this->capValueLength($value),
+            'value' => $isHidden ? null : $this->capValueLength($value),
             'options' => $this->normalizeOptions($rawField['options'] ?? null),
             'required' => (bool)($rawField['required'] ?? false),
             'disabled' => (bool)($rawField['disabled'] ?? false),
-            'hidden' => (bool)($rawField['hidden'] ?? false),
+            'hidden' => $isHidden,
             'usesDefaultValue' => (bool)($rawField['usesDefaultValue'] ?? false),
         ];
     }

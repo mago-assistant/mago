@@ -922,6 +922,9 @@ define([
                     } else {
                         restoreWriteResult(confirmEl, tools);
                     }
+                    // The stored call is tokenised (its input, and since the impact lines were
+                    // concealed, those too); the rebuilt card shows the owning admin the values.
+                    vaultTokens.rehydrateNode(confirmEl, tokens);
                 } else if ((m.role === 'user' || m.role === 'assistant') && (m.content || '').trim()) {
                     addDateSep(m.created_at);
                     // No timestamp: a live bubble never carries one, and a reloaded conversation

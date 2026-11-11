@@ -479,6 +479,46 @@ test.describe('page_form.write_fields real backend', () => {
     expect(toolResult.client_directive).toBeUndefined();
   });
 
+  /* Against the REAL design configuration form, so the field path is the component's runtime
+     dataScope ("data.head_includes"), not a hand-built fixture path: the storefront script
+     settings config_writer blocks (design/head/includes) must be refused by page_form too,
+     before any confirmation card. */
+  test('it refuses to stage the head scripts field on the design configuration form', async ({page, request}) => {
+    test.setTimeout(40000);
+
+    await ensureWireMockReachable(request);
+
+    const trigger = 'E2E WriteFields BlockedDesignConfig Check';
+
+    await installWriteFieldsTurn(request, {
+      triggerPhrase: trigger,
+      id: 'wf-blocked-design-1',
+      toolArgs: {
+        form_namespace: 'design_config_form',
+        entity_id: '',
+        store_id: '',
+        changes: [{path: 'data.head_includes', value: '<script src="https://evil.example/s.js"></script>'}],
+      },
+      summaryText: 'That setting cannot be changed from the chat.',
+    }, mappingIds);
+
+    await chatPanel.openOn(page, 'theme/design_config/edit');
+    await stubFormBridgeApply(page);
+    await chatPanel.ask(page, trigger + ': add this script to the head');
+
+    /* Refused before any confirmation: the answer arrives as a plain reply, no Confirm button. */
+
+    await expect(chatPanel.lastAssistantMessage(page)).toContainText('That setting cannot be changed from the chat.', {timeout: PROVIDER_ROUND_TRIP_TIMEOUT});
+
+    await expect(chatPanel.confirmActions(page)).toHaveCount(0);
+
+    const toolResult = await findToolResult(request, trigger);
+
+    expect(toolResult.error).toBeTruthy();
+    expect(toolResult.error).toContain('Changing "data.head_includes" from the chat is turned off');
+    expect(toolResult.client_directive).toBeUndefined();
+  });
+
   test('it refuses a write whose target no longer matches the open form', async ({page, request}) => {
     test.setTimeout(40000);
 

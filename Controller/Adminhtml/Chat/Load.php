@@ -75,13 +75,18 @@ class Load extends Action implements HttpPostActionInterface
     }
 
     /**
+     * The values behind every token the panel may need to show: those in the message texts, and
+     * those in the stored tool calls, whose inputs and concealed impact lines the panel rehydrates
+     * when it rebuilds a confirmation card.
+     *
      * @param array<int, array<string, mixed>> $messages
      * @return array<string, string>
      */
     private function tokenValuesOf(array $messages): array
     {
-        return $this->privacyService->tokenValues(
-            implode("\n", array_filter(array_column($messages, 'content'), 'is_string'))
-        );
+        return $this->privacyService->tokenValues(implode("\n", array_filter(
+            [...array_column($messages, 'content'), ...array_column($messages, 'tool_calls')],
+            'is_string'
+        )));
     }
 }

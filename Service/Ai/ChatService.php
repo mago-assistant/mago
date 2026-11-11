@@ -451,7 +451,9 @@ class ChatService implements ChatServiceInterface
      * values they are approving, not opaque tokens; the persisted tool_calls stay tokenised and are
      * re-checked on the confirm round-trip. describeRisk() reads the same copy, because looking an
      * impact up by mago://order_1 finds nothing and the card then loses its list for precisely the
-     * irreversible actions it exists to spell out.
+     * irreversible actions it exists to spell out. The impact lines built from that copy carry the
+     * real values too, so the stored call gets them folded back to tokens (decision 1); the panel
+     * and the REST display copy rehydrate them again for the owning admin.
      *
      * @param array<int, array<string, mixed>> $toolCalls
      * @param int|null $adminUserId
@@ -482,10 +484,28 @@ class ChatService implements ChatServiceInterface
                 $details['sensitive'] = true;
             }
             $confirmTools[] = $details;
-            $describedCalls[] = $tc + $details;
+            $describedCalls[] = $tc + $this->withConcealedImpacts($details);
         }
 
         return [$confirmTools, $describedCalls];
+    }
+
+    /**
+     * @param array<string,mixed> $details
+     * @return array<string,mixed>
+     */
+    private function withConcealedImpacts(array $details): array
+    {
+        if (!isset($details['impacts'])) {
+            return $details;
+        }
+
+        $details['impacts'] = array_map(
+            fn (string $impact): string => $this->privacyService->concealText($impact),
+            $details['impacts']
+        );
+
+        return $details;
     }
 
     /**

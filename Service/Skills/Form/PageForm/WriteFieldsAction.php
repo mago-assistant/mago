@@ -10,6 +10,7 @@ use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Block\Adminhtml\ChatPanel;
 use MagoAssistant\Mago\Model\Form\PageContext;
+use MagoAssistant\Mago\Service\Form\BlockedDesignConfigFields;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
 use MagoAssistant\Mago\Service\Form\PageAccess;
 use MagoAssistant\Mago\Service\Form\PageContextHolder;
@@ -76,7 +77,8 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
         private readonly SecureAdminUrl $secureAdminUrl,
         private readonly NewEntityUrlBuilder $newEntityUrlBuilder,
         private readonly FormPolicy $formPolicy,
-        PageAccess $pageAccess
+        PageAccess $pageAccess,
+        private readonly BlockedDesignConfigFields $blockedDesignConfigFields
     ) {
         parent::__construct($pageContextHolder, $pageAccess);
     }
@@ -463,6 +465,11 @@ class WriteFieldsAction extends AbstractPageFormAction implements ValidatingActi
             if ($field['hidden'] ?? false) {
                 return '"' . $change['path'] . '" is a hidden field on this form (a record id or a value carried '
                     . 'along), never shown to the administrator, so it is not written to from the chat.';
+            }
+            if ($this->blockedDesignConfigFields->findBlockedPath($pageContext->namespace, $change['path']) !== null) {
+                return 'Changing "' . $change['path'] . '" from the chat is turned off: a wrong value here can '
+                    . 'hand over the store, its admin or its mail. Change it under Content > Design > '
+                    . 'Configuration, where Magento checks the value.';
             }
         }
 

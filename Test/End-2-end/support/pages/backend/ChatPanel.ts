@@ -51,6 +51,10 @@ const LISTING_RECIPES: Record<string, ListingRecipe> = {
     menuHrefContains: '/cms/block/',
     listingNamespace: 'cms_block_listing',
   },
+  'theme/design_config': {
+    menuHrefContains: '/theme/design_config/',
+    listingNamespace: 'design_config_listing',
+  },
   'mago/skills': {
     menuHrefContains: '/mago/skills/',
     listingNamespace: 'mago_skills_listing',

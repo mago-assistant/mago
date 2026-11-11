@@ -83,6 +83,14 @@ Also out of scope, by design, not as a bug to fix:
   options, or a customer's individual address rows. `page_form` sees the top-level form's own
   fields only.
 - **File and image uploads** — there is no field type this skill can stage a file into.
+- **The storefront script settings** on the design configuration form (Scripts and Style Sheets,
+  Miscellaneous HTML) — the same two settings `config_writer` never changes
+  (`BlockedConfigPaths`: `design/head/includes`, `design/footer/absolute_footer`), because they
+  put markup on every storefront page. `write_fields` refuses to stage them
+  (`Service/Form/BlockedDesignConfigFields.php` maps the form fields to their config paths through
+  Magento's design config metadata, so a module that blocks a design path of its own in di.xml is
+  covered here too). Reading them stays allowed: "is there a skimmer in my head scripts?" is a
+  question the assistant may answer.
 
 ### What the confirmation prompt means
 

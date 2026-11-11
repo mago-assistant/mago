@@ -75,6 +75,12 @@ class ChatManagement implements ChatManagementInterface
             $toolCallsDisplay = [];
             foreach (($response['tool_calls'] ?? []) as $tc) {
                 $tc['input'] = $this->privacyService->rehydrateArguments($tc['input'] ?? []);
+                if (isset($tc['impacts']) && is_array($tc['impacts'])) {
+                    $tc['impacts'] = array_map(
+                        fn (string $impact): string => $this->privacyService->displayText($impact),
+                        $tc['impacts']
+                    );
+                }
                 $toolCallsDisplay[] = $tc;
             }
 
