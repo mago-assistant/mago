@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+ * Copyright © Mago Assistant
+ */
+-->
+<config version="1">
+    <tool name="rma" acl="MageOS_RMA::rma" module="MageOS_RMA" title="Returns" description="Search and handle return requests.">
+        <instructions>Resolve a number to an id with search before changing anything.</instructions>
+        <action name="search" description="Find RMAs by number" method="GET" path="rma/search" readonly="true" sort="created_at:desc" status="Searching returns for {query}...">
+            <param name="query" type="string" description="Part of the RMA number" required="true" in="criteria" criteria="increment_id" condition="like" wrap="%"/>
+            <param name="limit" type="integer" in="page_size" default="10"/>
+            <param name="store" type="string" in="store"/>
+            <field name="entity_id" class="public"/>
+            <field name="increment_id" class="public"/>
+            <fields class="strip"/>
+            <pick field="entity_id"/>
+            <pick field="increment_id"/>
+            <link label="Open RMA {increment_id}" route="rma/rma/edit" param="entity_id" from="entity_id"/>
+        </action>
+        <action name="create" description="Create an RMA" method="POST" path="rma" body="rma" acl="MageOS_RMA::rma_manage">
+            <instructions>Only create an RMA for an order the customer named.</instructions>
+            <param name="order_id" type="integer" required="true"/>
+            <param name="reason" type="string" required="true"/>
+            <param name="tags" type="array" items="string" enum="refund, replacement ,repair"/>
+        </action>
+        <action name="approve" description="Approve an RMA" irreversible="true" impact="RMA {entity_id} is approved and the customer is told." result="{steps.save}">
+            <param name="entity_id" type="integer" required="true" in="path"/>
+            <param name="note" type="string"/>
+            <step name="load" method="GET" path="rma/{entity_id}"/>
+            <step name="save" method="PUT" path="rma/{entity_id}" body="rma">
+                <field name="entity_id" value="{entity_id}" as="int"/>
+                <field name="status_id" value="3" as="int"/>
+                <field name="increment_id" value="{steps.load.increment_id}" as="string"/>
+            </step>
+            <step name="comment" method="POST" path="rma/{entity_id}/comments" when="{note}">
+                <field name="comment" value="{note}"/>
+            </step>
+        </action>
+    </tool>
+</config>

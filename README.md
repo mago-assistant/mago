@@ -234,7 +234,9 @@ See [docs/skills-architecture.md](docs/skills-architecture.md) for the full arch
 - Data & privacy details
 - MCP compatibility roadmap
 
-Building your own tool? `bin/magento mago:tool:create` scaffolds the module and `bin/magento mago:tool:verify` checks
+Building your own tool? A module that has a REST API declares its tools in `etc/mago_tools.xml`, drafted by
+`bin/magento mago:tool:manifest`, with no dependency on Mago: [docs/manifest-tools.md](docs/manifest-tools.md). For a tool
+that needs PHP, `bin/magento mago:tool:create` scaffolds the module and `bin/magento mago:tool:verify` checks
 it, including every returned field's privacy class. [docs/building-a-tool.md](docs/building-a-tool.md) walks through it
 and works as instructions for any coding agent: point your `AGENTS.md` at it.
 

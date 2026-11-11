@@ -92,10 +92,13 @@
         </arguments>
     </type>
 
-    <!-- Tool Registry: inject all tools -->
+    <!-- Tool Registry: inject all tools; providers add tools other modules declare in etc/mago_tools.xml -->
     <type name="MagoAssistant\Mago\Service\Tool\ToolRegistry">
         <arguments>
             <argument name="permissionChecker" xsi:type="object">MagoAssistant\Mago\Service\Skills\PermissionChecker</argument>
+            <argument name="providers" xsi:type="array">
+                <item name="manifest" xsi:type="object">MagoAssistant\Mago\Service\Manifest\ManifestToolProvider</item>
+            </argument>
             <argument name="tools" xsi:type="array">
                 <item name="config_reader" xsi:type="object">MagoAssistant\Mago\Service\Skills\Configuration\ConfigReader</item>
                 <item name="config_writer" xsi:type="object">MagoAssistant\Mago\Service\Skills\Configuration\ConfigWriter</item>
@@ -124,6 +127,30 @@
                 <item name="stock_level_msi" xsi:type="object">MagoAssistant\Mago\Service\Skills\Inventory\StockLevelMsi</item>
                 <item name="dead_stock" xsi:type="object">MagoAssistant\Mago\Service\Skills\Inventory\DeadStock</item>
             </argument>
+        </arguments>
+    </type>
+
+    <!-- Tool manifests: every module's etc/mago_tools.xml, merged and cached with the configuration -->
+    <type name="MagoAssistant\Mago\Model\Manifest\Config\Reader">
+        <arguments>
+            <argument name="converter" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\Converter</argument>
+            <argument name="schemaLocator" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\SchemaLocator</argument>
+            <argument name="fileName" xsi:type="string">mago_tools.xml</argument>
+        </arguments>
+    </type>
+    <type name="MagoAssistant\Mago\Model\Manifest\Config">
+        <arguments>
+            <argument name="reader" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\Reader</argument>
+            <argument name="cache" xsi:type="object">Magento\Framework\App\Cache\Type\Config</argument>
+            <argument name="cacheId" xsi:type="const">MagoAssistant\Mago\Model\Manifest\Config::CACHE_ID</argument>
+        </arguments>
+    </type>
+    <!-- Config\Data reads and validates the manifests in its constructor; the proxy defers that to the
+         provider's getTools(), where a malformed manifest is caught and logged instead of taking the
+         registry down -->
+    <type name="MagoAssistant\Mago\Service\Manifest\ManifestToolProvider">
+        <arguments>
+            <argument name="config" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\Proxy</argument>
         </arguments>
     </type>
 
@@ -347,6 +374,7 @@
                 <item name="mago_docs_index" xsi:type="object">MagoAssistant\Mago\Console\Command\IndexDocs</item>
                 <item name="mago_tool_verify" xsi:type="object">MagoAssistant\Mago\Console\Command\VerifyTool</item>
                 <item name="mago_tool_create" xsi:type="object">MagoAssistant\Mago\Console\Command\CreateTool</item>
+                <item name="mago_tool_manifest" xsi:type="object">MagoAssistant\Mago\Console\Command\CreateManifest</item>
             </argument>
         </arguments>
     </type>
@@ -356,6 +384,11 @@
 
     <!-- Every bin/magento run builds the command list, so the tool commands must not build the
          registry (and every tool in it) until they actually run -->
+    <type name="MagoAssistant\Mago\Service\Tool\Verify\ToolVerifier">
+        <arguments>
+            <argument name="manifestChecker" xsi:type="object">MagoAssistant\Mago\Service\Manifest\ManifestChecker</argument>
+        </arguments>
+    </type>
     <type name="MagoAssistant\Mago\Console\Command\VerifyTool">
         <arguments>
             <argument name="toolRegistry" xsi:type="object">MagoAssistant\Mago\Service\Tool\ToolRegistry\Proxy</argument>

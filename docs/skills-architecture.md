@@ -634,7 +634,13 @@ Unlike the admin panel, the REST endpoints return message content with the priva
 
 Third-party modules (hosting providers, PSPs, marketplace integrations) can register their own tools.
 
-The quickest route is `bin/magento mago:tool:create` to scaffold the module and `bin/magento mago:tool:verify` to check
+A module that already has a REST API needs no PHP for that: it declares its tools in `etc/mago_tools.xml`, and Mago
+builds a `ManifestTool` per declaration that calls the module's `webapi.xml` routes through the internal API client.
+The module keeps no dependency on Mago, so it installs on stores without it; see [manifest-tools.md](manifest-tools.md).
+`ToolRegistry` takes these from `ToolProviderInterface` implementations after the tools `di.xml` lists, and a provided
+tool whose name a listed tool already has is left out.
+
+For a tool that needs PHP, the quickest route is `bin/magento mago:tool:create` to scaffold the module and `bin/magento mago:tool:verify` to check
 it; [building-a-tool.md](building-a-tool.md) is the step-by-step guide. The steps below show what the scaffold contains.
 
 ### Step 1: Implement `ToolInterface`

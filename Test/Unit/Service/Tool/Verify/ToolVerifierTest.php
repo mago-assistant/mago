@@ -20,6 +20,8 @@ use MagoAssistant\Mago\Test\Unit\Fakes\FakeTool;
 use MagoAssistant\Mago\Service\Acl\ToolAccess;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakePermissionChecker;
+use MagoAssistant\Mago\Service\Manifest\ManifestChecker;
+use MagoAssistant\Mago\Service\Manifest\ManifestTool;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -213,12 +215,51 @@ final class ToolVerifierTest extends TestCase
         );
     }
 
-    private function verifier(): ToolVerifier
+    #[Test]
+    public function aManifestToolAlsoGetsTheChecksOfItsRoutes(): void
+    {
+        $tool = $this->createStub(ManifestTool::class);
+        $tool->method('getName')->willReturn('faq');
+        $tool->method('getDescription')->willReturn('FAQ.');
+        $tool->method('getParameterSchema')->willReturn(['type' => 'object']);
+        $tool->method('getMagentoAcl')->willReturn(self::ACL);
+        $tool->method('isReadOnly')->willReturn(true);
+        $tool->method('isReadOnlyAction')->willReturn(true);
+        $tool->method('getFieldClassification')->willReturn(['faq_id' => [PiiClass::PUBLIC]]);
+        $routeCheck = ToolCheck::pass('Action "search": GET /V1/faq/search -> Repo::getList()');
+        $checker = $this->createMock(ManifestChecker::class);
+        $checker->expects(self::once())->method('check')->with($tool, ['action' => 'search'])->willReturn([$routeCheck]);
+
+        $checks = $this->verifier($checker)->inspect($tool, ['action' => 'search']);
+
+        self::assertSame($routeCheck, end($checks));
+        self::assertSame([], array_filter($checks, static fn (ToolCheck $c) => $c->isFailure()));
+    }
+
+    #[Test]
+    public function aVerifierWithoutTheCheckerLeavesAManifestToolToTheGenericChecks(): void
+    {
+        $tool = $this->createStub(ManifestTool::class);
+        $tool->method('getName')->willReturn('faq');
+        $tool->method('getDescription')->willReturn('FAQ.');
+        $tool->method('getParameterSchema')->willReturn(['type' => 'object']);
+        $tool->method('getMagentoAcl')->willReturn(self::ACL);
+        $tool->method('isReadOnly')->willReturn(true);
+        $tool->method('isReadOnlyAction')->willReturn(true);
+        $tool->method('getFieldClassification')->willReturn(['faq_id' => [PiiClass::PUBLIC]]);
+
+        $messages = array_map(static fn (ToolCheck $c) => $c->message, $this->verifier()->inspect($tool, []));
+
+        self::assertSame([], preg_grep('/^Action /', $messages));
+    }
+
+    private function verifier(?ManifestChecker $manifestChecker = null): ToolVerifier
     {
         return new ToolVerifier(
             new PrivacyFilter(new ConversationVault(), new PiiHeuristic()),
             new AclResourceIndex(FakeAclResourceProvider::withResources(self::ACL)),
-            new ToolAccess(new FakeAuthorization(), new FakePermissionChecker())
+            new ToolAccess(new FakeAuthorization(), new FakePermissionChecker()),
+            $manifestChecker
         );
     }
 
