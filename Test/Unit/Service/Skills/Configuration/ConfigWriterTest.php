@@ -24,6 +24,7 @@ use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeConfigStructure;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeDesignConfigMetadata;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeObjectManagerConfig;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -32,6 +33,7 @@ class ConfigWriterTest extends TestCase
     use BuildsStoreLayouts;
 
     private const PATH = 'general/store_information/name';
+    private const SEARCH_HOST_PATH = 'catalog/search/opensearch_server_hostname';
 
     #[Test]
     public function itWritesToTheDefaultScopeWhenNoneIsGiven(): void
@@ -364,12 +366,57 @@ class ConfigWriterTest extends TestCase
         self::assertStringContainsString('turned off', $result['error'] ?? '');
     }
 
+    /**
+     * Security report 2026-11-02 (search endpoint SSRF sinks): an admin holding the catalog section
+     * must not be offered a card that points the search client, and its credentials, at another host.
+     */
     #[Test]
-    public function aBlockedSettingNeedsNoCaution(): void
+    public function itRefusesTheSearchServerHostBeforeTheConfirmationCard(): void
     {
         $writer = $this->writerWith($this->createMock(ConfigValueSaver::class));
 
-        self::assertSame([], $writer->getCautions(['path' => 'design/head/includes', 'value' => 'x'], 1));
+        $refusal = $writer->findRefusal(['path' => self::SEARCH_HOST_PATH, 'value' => 'search.evil.example']);
+
+        self::assertNotNull($refusal, 'config_writer offers a confirmation card for the search server host');
+    }
+
+    #[Test]
+    public function itNeverSavesTheSearchServerHostEvenWhenConfirmed(): void
+    {
+        $resource = $this->createMock(ConfigValueSaver::class);
+        $resource->expects(self::never())->method('save');
+
+        $result = $this->writerWith($resource)->execute(['path' => self::SEARCH_HOST_PATH, 'value' => 'search.evil.example']);
+
+        self::assertStringContainsString('turned off', $result['error'] ?? '', 'config_writer saved the search server host');
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function blockedPathsNeedingNoCaution(): array
+    {
+        return [
+            'head scripts' => ['design/head/includes'],
+            'search server host' => [self::SEARCH_HOST_PATH],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('blockedPathsNeedingNoCaution')]
+    public function aBlockedSettingNeedsNoCaution(string $path): void
+    {
+        $writer = $this->writerWith($this->createMock(ConfigValueSaver::class));
+
+        self::assertSame([], $writer->getCautions(['path' => $path, 'value' => 'x'], 1));
+    }
+
+    #[Test]
+    public function itLetsTheSearchEngineChoiceReachTheConfirmationCard(): void
+    {
+        $writer = $this->writerWith($this->createMock(ConfigValueSaver::class));
+
+        self::assertNull($writer->findRefusal(['path' => 'catalog/search/engine', 'value' => 'opensearch']));
     }
 
     #[Test]
@@ -423,6 +470,9 @@ class ConfigWriterTest extends TestCase
                     ->withSection('admin', 'Magento_Config::config_admin')
                     ->withField(self::PATH)
                     ->withField('admin/url/custom_path')
+                    ->withSection('catalog', 'Magento_Catalog::config_catalog')
+                    ->withField(self::SEARCH_HOST_PATH)
+                    ->withField('catalog/search/engine')
                     ->withSection('design', 'Magento_Config::config_design')
                     ->withCloningGroup('general/cloned'),
                 $authorization ?? new FakeAuthorization(),
