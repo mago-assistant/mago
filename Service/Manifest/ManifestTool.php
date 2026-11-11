@@ -45,6 +45,12 @@ class ManifestTool implements
     private const FILTER_LOCATIONS = ['criteria', 'page_size', 'store', 'query'];
 
     /**
+     * The locations where a zero means "do not filter", so the manifest default must not step in
+     * and filter on the opposite.
+     */
+    private const DECLINABLE_LOCATIONS = ['criteria', 'query'];
+
+    /**
      * @param ToolDef $definition
      */
     public function __construct(
@@ -261,9 +267,10 @@ class ManifestTool implements
         if ($result !== [] && array_is_list($result)) {
             $result = ['items' => $result, 'total_count' => count($result)];
         }
-        $result = $this->pick($result, $action['pick']);
-
+        // The links are read from the whole record, before pick narrows it: a label may name a
+        // field the admin does not need to see in the result itself.
         $links = $this->links($action, $result);
+        $result = $this->pick($result, $action['pick']);
         if ($links !== []) {
             $result['_links'] = $links;
         }
@@ -286,6 +293,13 @@ class ManifestTool implements
         int $adminUserId,
         ?string $storeCode
     ): array {
+        // A placeholder in the path that resolves to nothing would leave a hole in the route and
+        // could match another one (rma/{id}/items with an empty id is rma//items).
+        foreach ($this->placeholders->names($step['path']) as $name) {
+            if (!$this->placeholders->isSet('{' . $name . '}', $values, $steps)) {
+                return ['error' => 'No value for {' . $name . '} in the route of ' . $action['name']];
+            }
+        }
         $path = $this->placeholders->render($step['path'], $values, $steps, true);
 
         if ($step['method'] === 'GET') {
@@ -427,8 +441,9 @@ class ManifestTool implements
         foreach ($action['params'] as $name => $param) {
             $value = $input[$name] ?? null;
             $sent = $value !== null && $value !== '';
-            $zero = $sent && in_array($param['in'], self::FILTER_LOCATIONS, true) && $this->isZeroValue($value);
-            $declined = $zero && in_array($param['in'], ['criteria', 'query'], true);
+            $zero = $sent && $this->isFilter($param) && $this->isZeroValue($value);
+            $declined = $zero && ($param['criteria'] !== null
+                || in_array($param['in'], self::DECLINABLE_LOCATIONS, true));
             if ($sent && !$zero) {
                 $values[$name] = $value;
             } elseif ($param['default'] !== null && !$declined) {
@@ -437,6 +452,17 @@ class ManifestTool implements
         }
 
         return $values;
+    }
+
+    /**
+     * A parameter that narrows a call rather than carrying a value. A criteria field counts wherever
+     * it is declared, since query() turns it into a searchCriteria filter either way.
+     *
+     * @param ParamDef $param
+     */
+    private function isFilter(array $param): bool
+    {
+        return $param['criteria'] !== null || in_array($param['in'], self::FILTER_LOCATIONS, true);
     }
 
     private function isZeroValue(mixed $value): bool
@@ -454,6 +480,10 @@ class ManifestTool implements
             case 'integer':
                 if (is_int($value)) {
                     return $value;
+                }
+                // A model may answer with 5.0 or "5" where the schema asks for an integer
+                if (is_float($value) && floor($value) === $value && !is_nan($value) && !is_infinite($value)) {
+                    return (int)$value;
                 }
                 return is_string($value) && preg_match('/^-?\d+$/', $value) === 1 ? (int)$value : null;
             case 'number':

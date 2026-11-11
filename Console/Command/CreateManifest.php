@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Console\Command;
 
+use Magento\Framework\Exception\FileSystemException;
 use Magento\Framework\Filesystem\Driver\File;
 use Magento\Framework\Module\Dir;
 use Magento\Framework\Module\Dir\Reader as ModuleDirReader;
@@ -73,7 +74,14 @@ class CreateManifest extends Command
             $output->writeln('<error>' . $target . ' already exists; nothing was written.</error>');
             return Command::FAILURE;
         }
-        $this->fileDriver->filePutContents($target, $xml);
+        try {
+            $this->fileDriver->filePutContents($target, $xml);
+        } catch (FileSystemException $exception) {
+            // A module installed through composer sits in a directory the web user may not write
+            $output->writeln('<error>Could not write ' . $target . ': ' . $exception->getMessage()
+                . '. Run the command without --write and save the draft yourself.</error>');
+            return Command::FAILURE;
+        }
         $output->writeln([
             'Created ' . $target,
             '',

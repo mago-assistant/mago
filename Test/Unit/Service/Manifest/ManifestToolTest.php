@@ -127,7 +127,7 @@ final class ManifestToolTest extends TestCase
     public function anIrreversibleActionWithoutAnImpactTextGetsTheDefaultLine(): void
     {
         $tool = $this->tool(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="drop" description="d" method="DELETE" path="x/{id}" irreversible="true">'
             . '<param name="id" type="integer" in="path"/></action>'
             . '</tool></config>'
@@ -272,7 +272,7 @@ final class ManifestToolTest extends TestCase
     public function aZeroOrFalseBodyValueIsSentAndOverridesTheDefault(): void
     {
         $tool = $this->tool(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="set" description="d" method="POST" path="x" body="e">'
             . '<param name="id" type="integer" required="true"/>'
             . '<param name="active" type="integer" required="true"/>'
@@ -303,7 +303,7 @@ final class ManifestToolTest extends TestCase
     public function aRequiredBooleanOrListCanBeFalseOrEmpty(): void
     {
         $tool = $this->tool(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="set" description="d" method="POST" path="x" body="e">'
             . '<param name="id" type="integer" required="true"/>'
             . '<param name="visible" type="boolean" required="true"/>'
@@ -327,7 +327,7 @@ final class ManifestToolTest extends TestCase
     public function aZeroSentForAFilterWithADefaultFiltersOnNeither(): void
     {
         $tool = $this->tool(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="list" description="d" method="GET" path="x" readonly="true">'
             . '<param name="is_active" type="integer" in="criteria" criteria="is_active" condition="eq" default="1"/>'
             . '</action></tool></config>'
@@ -346,7 +346,7 @@ final class ManifestToolTest extends TestCase
     public function aPathParamIsRequiredAndMustHaveTheDeclaredType(): void
     {
         $tool = $this->tool(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="get" description="d" method="GET" path="rma/{entity_id}" readonly="true">'
             . '<param name="entity_id" type="integer" in="path"/></action>'
             . '<action name="items" description="d" method="GET" path="rma/{rma_id}/items" readonly="true">'
@@ -367,6 +367,88 @@ final class ManifestToolTest extends TestCase
     }
 
     #[Test]
+    public function aPathPlaceholderThatIsNotAParamStopsTheCall(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="items" description="d" method="GET" path="rma/{rmaId}/items" readonly="true">'
+            . '<param name="rma_id" type="integer" in="path"/></action>'
+            . '</tool></config>'
+        );
+
+        $result = $tool->execute(['action' => 'items', 'rma_id' => 3, '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertSame(['error' => 'No value for {rmaId} in the route of items'], $result);
+        self::assertSame([], $this->api->calls());
+    }
+
+    /**
+     * The label of a link may name a field the result itself does not have to carry.
+     */
+    #[Test]
+    public function aLinkLabelReadsTheWholeRecordEvenWhenPickNarrowsTheResult(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="list" description="d" method="GET" path="rma/search" readonly="true">'
+            . '<pick field="entity_id"/>'
+            . '<link label="Open RMA {increment_id}" route="rma/rma/edit" param="id" from="entity_id"/>'
+            . '</action></tool></config>'
+        );
+        $this->api->withResponse(FakeInternalApiClient::GET, 'rma/search', [
+            'items' => [['entity_id' => 7, 'increment_id' => 'RMA-7', 'customer_name' => 'Jan']],
+            'total_count' => 1,
+        ]);
+
+        $result = $tool->execute(['action' => 'list', '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertSame([['entity_id' => 7]], $result['items'], 'pick still narrows the rows');
+        self::assertSame(
+            [['label' => 'Open RMA RMA-7', 'url' => 'https://admin.test/rma/rma/edit/id/7']],
+            $result['_links']
+        );
+    }
+
+    /**
+     * A criteria field makes a parameter a filter wherever it is declared, so a zero means "do not
+     * filter" there too and the default must not invert it.
+     */
+    #[Test]
+    public function aCriteriaParamWithoutAFilterLocationIsStillAFilter(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="list" description="d" method="GET" path="x" readonly="true">'
+            . '<param name="is_active" type="integer" criteria="is_active" condition="eq" default="1"/>'
+            . '</action></tool></config>'
+        );
+
+        $tool->execute(['action' => 'list', 'is_active' => 0, '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertArrayNotHasKey(
+            'searchCriteria[filter_groups][0][filters][0][field]',
+            $this->api->calls()[0]['payload']
+        );
+    }
+
+    #[Test]
+    public function anIntegerParamAcceptsAWholeNumberSentAsAFloatOrString(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="get" description="d" method="GET" path="rma/{id}" readonly="true">'
+            . '<param name="id" type="integer" in="path"/></action></tool></config>'
+        );
+
+        $tool->execute(['action' => 'get', 'id' => 7.0, '_admin_user_id' => self::ADMIN_ID]);
+        $tool->execute(['action' => 'get', 'id' => '8', '_admin_user_id' => self::ADMIN_ID]);
+        $refused = $tool->execute(['action' => 'get', 'id' => 7.5, '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertSame(['rma/7', 'rma/8'], array_column($this->api->calls(), 'endpoint'));
+        self::assertSame(['error' => 'Parameter "id" must be of type integer'], $refused);
+    }
+
+    #[Test]
     public function thePageSizeIsCappedAtTheResultLimit(): void
     {
         $this->tool()->execute(
@@ -380,7 +462,7 @@ final class ManifestToolTest extends TestCase
     public function aRouteAnsweringWithABareListIsTreatedAsItems(): void
     {
         $tool = $this->tool(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="list" description="d" method="GET" path="rma/status/all" readonly="true">'
             . '<pick field="entity_id"/><pick field="code"/>'
             . '<link label="Open {code}" route="rma/status/edit" param="id" from="entity_id"/>'
@@ -508,7 +590,7 @@ final class ManifestToolTest extends TestCase
     public function pathPlaceholdersAreUrlEncodedAndADeleteCarriesNoBody(): void
     {
         $tool = $this->tool(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="drop" description="d" method="DELETE" path="products/{sku}">'
             . '<param name="sku" type="string" in="path" required="true"/></action>'
             . '</tool></config>'
@@ -528,7 +610,7 @@ final class ManifestToolTest extends TestCase
     public function aScalarResultExpressionIsWrappedUnderValue(): void
     {
         $tool = $this->tool(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="count" description="d" method="GET" path="x/count" readonly="true" '
             . 'result="{steps.main.total}"/>'
             . '</tool></config>'
@@ -543,7 +625,7 @@ final class ManifestToolTest extends TestCase
     public function queryParamsGoInTheQueryAsIsNextToTheCriteria(): void
     {
         $tool = $this->tool(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="list" description="d" method="GET" path="x" readonly="true">'
             . '<param name="status" type="string" in="criteria" criteria="status"/>'
             . '<param name="fields" type="string" in="query"/>'

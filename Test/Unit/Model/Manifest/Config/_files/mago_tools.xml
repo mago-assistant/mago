@@ -4,7 +4,7 @@
  * Copyright © Mago Assistant
  */
 -->
-<config>
+<config version="1">
     <tool name="rma" acl="MageOS_RMA::rma" module="MageOS_RMA" title="Returns" description="Search and handle return requests.">
         <instructions>Resolve a number to an id with search before changing anything.</instructions>
         <action name="search" description="Find RMAs by number" method="GET" path="rma/search" readonly="true" sort="created_at:desc" status="Searching returns for {query}...">

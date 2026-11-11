@@ -79,6 +79,13 @@ final class PlaceholdersTest extends TestCase
     }
 
     #[Test]
+    public function namesListsThePlaceholdersAnExpressionUses(): void
+    {
+        self::assertSame(['sku', 'steps.load.id'], $this->placeholders->names('x/{sku}/{steps.load.id}/{sku}'));
+        self::assertSame([], $this->placeholders->names('plain'));
+    }
+
+    #[Test]
     public function isSetTellsWhetherAnExpressionHasSomethingNonEmpty(): void
     {
         self::assertTrue($this->placeholders->isSet('{sku}', $this->params, $this->steps));

@@ -11,7 +11,7 @@
     no dependency on Mago. Every call runs through the module's own REST routes as the admin using the
     chat, under MageOS_RMA::rma_manage and the route's own resource.
 -->
-<config>
+<config version="1">
     <tool name="rma" acl="MageOS_RMA::rma_manage" module="MageOS_RMA" title="Returns (RMA)"
           description="Find and handle return requests (RMAs): look one up by number or order, read its items and comments, change its status, approve item quantities, add a comment to the customer or an internal note, and list the statuses, reasons, resolution types and item conditions the store uses.">
         <instructions>An RMA is identified by its increment_id (the number the customer sees) and its entity_id (the id the routes take). Resolve a number to an id with get_by_number before changing anything. Statuses, reasons and resolution types are ids: call list_statuses, list_reasons or list_resolution_types once, then map ids to labels yourself; never guess an id. For "open" RMAs, search once without a status filter and leave out the ones whose status code is resolved, rejected or canceled_by_customer. Customer name and email are personal data and reach you as tokens.</instructions>

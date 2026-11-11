@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Manifest;
 
 use Magento\Framework\Module\Manager as ModuleManager;
+use MagoAssistant\Mago\Model\Manifest\Config\Reader;
 use MagoAssistant\Mago\Service\Api\InProcess\ApiCall;
 use MagoAssistant\Mago\Service\Api\InProcess\RouteResolver;
 use MagoAssistant\Mago\Service\Tool\Verify\AclResourceIndex;
@@ -21,6 +22,7 @@ use MagoAssistant\Mago\Service\Tool\Verify\ToolCheck;
 class ManifestChecker
 {
     private const PLACEHOLDER_VALUE = '1';
+    private const TODO_MARKER = 'TODO';
 
     public function __construct(
         private readonly RouteResolver $routeResolver,
@@ -39,12 +41,22 @@ class ManifestChecker
     public function check(ManifestTool $tool, array $params): array
     {
         $definition = $tool->getDefinition();
-        $checks = [$this->checkModule($definition['module'])];
+        $checks = [$this->checkModule($definition['module']), $this->checkSchemaVersion($definition['schema_version'])];
 
         $actionName = $params['action'] ?? null;
         $actions = is_string($actionName) && isset($definition['actions'][$actionName])
             ? [$definition['actions'][$actionName]]
             : $definition['actions'];
+
+        $checks = [...$checks, ...$this->checkParameterTypes($definition['actions'])];
+        $todo = $this->findTodoMarkers($definition);
+        if ($todo !== []) {
+            $checks[] = ToolCheck::failure(
+                'The manifest still carries what mago:tool:manifest left for you to decide: '
+                . implode(', ', array_slice($todo, 0, 5)) . (count($todo) > 5 ? ', ...' : '')
+                . '. The model reads these words, and a TODO criteria field filters on nothing'
+            );
+        }
 
         foreach ($actions as $action) {
             if ($action['readonly_declared'] && !$action['readonly']) {
@@ -67,6 +79,75 @@ class ManifestChecker
         return $checks;
     }
 
+    /**
+     * The model is shown one schema for the whole tool, so a parameter name carries one type. Two
+     * actions declaring the same name with different types would have the model send the first
+     * type to both, and the second call refuses it.
+     *
+     * @param array<string, array<string, mixed>> $actions
+     * @return ToolCheck[]
+     */
+    private function checkParameterTypes(array $actions): array
+    {
+        $seen = [];
+        $clashes = [];
+        foreach ($actions as $action) {
+            foreach ($action['params'] as $name => $param) {
+                $type = $param['type'];
+                if (isset($seen[$name]) && $seen[$name]['type'] !== $type) {
+                    $clashes[$name] = 'Parameter "' . $name . '" is ' . $seen[$name]['type'] . ' in action "'
+                        . $seen[$name]['action'] . '" and ' . $type . ' in action "' . $action['name']
+                        . '"; the model is shown one schema per tool, so give one of them its own name';
+                    continue;
+                }
+                $seen[$name] = ['type' => $type, 'action' => $action['name']];
+            }
+        }
+
+        return array_values(array_map(ToolCheck::failure(...), $clashes));
+    }
+
+    /**
+     * Where the draft the scaffolder wrote still says TODO. The model is given these words as the
+     * tool's description, and a TODO criteria field would filter on a column that does not exist.
+     *
+     * @param array<string, mixed> $definition
+     * @return list<string>
+     */
+    private function findTodoMarkers(array $definition): array
+    {
+        $found = [];
+        if (str_contains($definition['description'], self::TODO_MARKER)) {
+            $found[] = 'the tool description';
+        }
+        foreach ($definition['actions'] as $action) {
+            foreach (['description', 'instructions', 'impact', 'status'] as $field) {
+                if (str_contains((string)($action[$field] ?? ''), self::TODO_MARKER)) {
+                    $found[] = 'action "' . $action['name'] . '" ' . $field;
+                }
+            }
+            foreach ($action['params'] as $name => $param) {
+                foreach (['description', 'criteria'] as $field) {
+                    if (str_contains((string)($param[$field] ?? ''), self::TODO_MARKER)) {
+                        $found[] = 'parameter "' . $name . '" ' . $field;
+                    }
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    private function checkSchemaVersion(string $version): ToolCheck
+    {
+        return $version === Reader::SCHEMA_VERSION
+            ? ToolCheck::pass('Manifest format version ' . $version)
+            : ToolCheck::warning(
+                'Manifest format version ' . $version . ' is older than the current ' . Reader::SCHEMA_VERSION
+                . '; it is still read, but check the release notes for what changed'
+            );
+    }
+
     private function checkModule(string $module): ToolCheck
     {
         return $this->moduleManager->isEnabled($module)
@@ -83,6 +164,16 @@ class ManifestChecker
     private function checkStep(string $toolAcl, array $action, array $step): ToolCheck
     {
         $label = 'Action "' . $action['name'] . '"' . ($step['name'] === 'main' ? '' : ' step "' . $step['name'] . '"');
+        $unknown = array_filter(
+            $this->placeholders->names($step['path']),
+            static fn (string $name): bool => !isset($action['params'][$name]) && !str_starts_with($name, 'steps.')
+        );
+        if ($unknown !== []) {
+            return ToolCheck::failure(
+                $label . ': the path uses {' . implode('}, {', $unknown) . '}, which no <param> of the action '
+                . 'declares; the call would leave that segment empty'
+            );
+        }
         $path = $this->placeholders->render($step['path'], $this->placeholderValues($action), [], true);
 
         try {

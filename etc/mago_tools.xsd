@@ -14,6 +14,9 @@
             <xs:sequence>
                 <xs:element name="tool" type="toolType" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
+            <!-- The version of this format the file is written in, so a later format can still
+                 read, or warn about, manifests shipped under an earlier one -->
+            <xs:attribute name="version" type="schemaVersion" use="required"/>
         </xs:complexType>
         <xs:unique name="uniqueToolName">
             <xs:selector xpath="tool"/>
@@ -31,6 +34,8 @@
         <xs:attribute name="module" type="moduleName" use="required"/>
         <xs:attribute name="description" type="xs:string" use="required"/>
         <xs:attribute name="title" type="xs:string"/>
+        <!-- Set by the reader from the file's version before the files are merged; not for authors -->
+        <xs:attribute name="schema" type="schemaVersion"/>
     </xs:complexType>
 
     <xs:complexType name="actionType">
@@ -110,6 +115,12 @@
         <xs:attribute name="param" type="xs:string" use="required"/>
         <xs:attribute name="from" type="xs:string" use="required"/>
     </xs:complexType>
+
+    <xs:simpleType name="schemaVersion">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="1"/>
+        </xs:restriction>
+    </xs:simpleType>
 
     <xs:simpleType name="toolName">
         <xs:restriction base="xs:string">

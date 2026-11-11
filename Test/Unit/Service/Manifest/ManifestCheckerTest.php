@@ -58,11 +58,11 @@ final class ManifestCheckerTest extends TestCase
         self::assertSame('Declaring module MageOS_RMA is enabled', $checks[0]->message);
         self::assertSame(
             'Action "search": GET /V1/rma/search -> MageOS\RMA\Api\RMARepositoryInterface::getList()',
-            $checks[1]->message
+            $checks[2]->message
         );
-        self::assertSame(CheckStatus::Pass, $checks[2]->status, 'create names the route\'s own resource');
-        self::assertSame(CheckStatus::Pass, $checks[3]->status);
-        self::assertStringStartsWith('Action "approve" step "load":', $checks[3]->message);
+        self::assertSame(CheckStatus::Pass, $checks[3]->status, 'create names the route\'s own resource');
+        self::assertSame(CheckStatus::Pass, $checks[4]->status);
+        self::assertStringStartsWith('Action "approve" step "load":', $checks[4]->message);
     }
 
     #[Test]
@@ -70,14 +70,14 @@ final class ManifestCheckerTest extends TestCase
     {
         $checks = $this->checker()->check($this->tool(), []);
 
-        $save = $checks[4];
+        $save = $checks[5];
         self::assertSame(CheckStatus::Warning, $save->status);
         self::assertSame(
             'Action "approve" step "save": the manifest gates it by MageOS_RMA::rma, the route /V1/rma/:entityId '
             . 'by MageOS_RMA::rma_status; all apply, so an admin needs each of them',
             $save->message
         );
-        self::assertSame(CheckStatus::Pass, $checks[5]->status, 'a route without resources cannot disagree');
+        self::assertSame(CheckStatus::Pass, $checks[6]->status, 'a route without resources cannot disagree');
     }
 
     #[Test]
@@ -86,7 +86,7 @@ final class ManifestCheckerTest extends TestCase
         $checks = $this->checker()->check($this->tool(), ['action' => 'create', 'order_id' => 7]);
 
         self::assertSame(['POST rma'], $this->resolved);
-        self::assertCount(2, $checks);
+        self::assertCount(3, $checks);
     }
 
     #[Test]
@@ -96,10 +96,10 @@ final class ManifestCheckerTest extends TestCase
 
         $checks = $this->checker()->check($this->tool(), ['action' => 'create']);
 
-        self::assertSame(CheckStatus::Failure, $checks[1]->status);
+        self::assertSame(CheckStatus::Failure, $checks[2]->status);
         self::assertSame(
             'Action "create": no route matches POST /V1/rma in any webapi.xml (Request does not match any route.)',
-            $checks[1]->message
+            $checks[2]->message
         );
     }
 
@@ -110,10 +110,10 @@ final class ManifestCheckerTest extends TestCase
 
         $checks = $this->checker()->check($this->tool(), ['action' => 'create']);
 
-        self::assertSame(CheckStatus::Failure, $checks[1]->status);
+        self::assertSame(CheckStatus::Failure, $checks[2]->status);
         self::assertSame(
             'Action "create": route /V1/rma is gated by MageOS_RMA::nope, which no acl.xml declares',
-            $checks[1]->message
+            $checks[2]->message
         );
     }
 
@@ -121,17 +121,17 @@ final class ManifestCheckerTest extends TestCase
     public function anActionMarkedReadonlyOnAWritingRouteFails(): void
     {
         $tool = $this->tool(
-            '<config><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
+            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
             . '<action name="save" description="d" method="POST" path="rma" readonly="true"/></tool></config>'
         );
 
         $checks = $this->checker()->check($tool, []);
 
-        self::assertSame(CheckStatus::Failure, $checks[1]->status);
+        self::assertSame(CheckStatus::Failure, $checks[2]->status);
         self::assertSame(
             'Action "save" is marked readonly but has a step that writes (POST, PUT or DELETE); it is treated as a '
             . 'write, so the admin confirms it. Remove readonly="true"',
-            $checks[1]->message
+            $checks[2]->message
         );
     }
 
@@ -140,22 +140,102 @@ final class ManifestCheckerTest extends TestCase
     {
         $this->moduleEnabled = false;
         $tool = $this->tool(
-            '<config><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
+            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
             . '<action name="a" description="d"/></tool></config>'
         );
 
         $checks = $this->checker()->check($tool, []);
 
         self::assertSame(
-            [CheckStatus::Failure, CheckStatus::Failure],
+            [CheckStatus::Failure, CheckStatus::Pass, CheckStatus::Failure],
             array_map(static fn (ToolCheck $c): CheckStatus => $c->status, $checks)
         );
         self::assertSame(
             'Declaring module MageOS_RMA is not enabled, so the tool is left out of the registry',
             $checks[0]->message
         );
-        self::assertSame('Action "a" has no route: give it method and path, or <step> elements', $checks[1]->message);
+        self::assertSame('Action "a" has no route: give it method and path, or <step> elements', $checks[2]->message);
         self::assertSame([], $this->resolved);
+    }
+
+    #[Test]
+    public function aPathPlaceholderWithoutAParamFails(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
+            . '<action name="items" description="d" method="GET" path="rma/{rmaId}/items">'
+            . '<param name="rma_id" type="integer" in="path"/></action></tool></config>'
+        );
+
+        $checks = $this->checker()->check($tool, []);
+
+        self::assertSame(CheckStatus::Failure, $checks[2]->status);
+        self::assertSame(
+            'Action "items": the path uses {rmaId}, which no <param> of the action declares; the call would leave '
+            . 'that segment empty',
+            $checks[2]->message
+        );
+        self::assertSame([], $this->resolved, 'nothing is matched against the routes');
+    }
+
+    #[Test]
+    public function aDraftThatStillCarriesItsTodoMarkersFails(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" '
+            . 'description="TODO: what the model can do">'
+            . '<action name="list" description="TODO: Find rma by text" method="GET" path="rma/search">'
+            . '<param name="query" type="string" criteria="TODO_field"/></action></tool></config>'
+        );
+
+        $checks = $this->checker()->check($tool, []);
+
+        self::assertSame(CheckStatus::Failure, $checks[2]->status);
+        self::assertStringContainsString('the tool description', $checks[2]->message);
+        self::assertStringContainsString('action "list" description', $checks[2]->message);
+        self::assertStringContainsString('parameter "query" criteria', $checks[2]->message);
+    }
+
+    #[Test]
+    public function oneParameterNameWithTwoTypesAcrossActionsFails(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
+            . '<action name="get" description="d" method="GET" path="rma/search">'
+            . '<param name="id" type="integer"/></action>'
+            . '<action name="find" description="d" method="GET" path="rma/search">'
+            . '<param name="id" type="string"/></action></tool></config>'
+        );
+
+        $checks = $this->checker()->check($tool, []);
+
+        self::assertSame(CheckStatus::Failure, $checks[2]->status);
+        self::assertSame(
+            'Parameter "id" is integer in action "get" and string in action "find"; the model is shown one schema '
+            . 'per tool, so give one of them its own name',
+            $checks[2]->message
+        );
+    }
+
+    #[Test]
+    public function aManifestInAnOlderFormatIsAWarning(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d" schema="0">'
+            . '<action name="a" description="d" method="GET" path="rma/search"/></tool></config>'
+        );
+
+        $older = $this->checker()->check($tool, [])[1];
+        $current = $this->checker()->check($this->tool(), [])[1];
+
+        self::assertSame(CheckStatus::Warning, $older->status);
+        self::assertSame(
+            'Manifest format version 0 is older than the current 1; it is still read, but check the release notes '
+            . 'for what changed',
+            $older->message
+        );
+        self::assertSame(CheckStatus::Pass, $current->status);
+        self::assertSame('Manifest format version 1', $current->message);
     }
 
     private function checker(): ManifestChecker

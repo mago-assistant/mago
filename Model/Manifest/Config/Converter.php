@@ -31,7 +31,7 @@ use Magento\Framework\Config\ConverterInterface;
  * }
  * @phpstan-type ToolDef array{
  *     name: string, acl: string, module: string, title: string, description: string, instructions: string,
- *     actions: array<string, ActionDef>
+ *     schema_version: string, actions: array<string, ActionDef>
  * }
  */
 class Converter implements ConverterInterface
@@ -73,6 +73,9 @@ class Converter implements ConverterInterface
             'title' => $node->getAttribute('title'),
             'description' => $node->getAttribute('description'),
             'instructions' => $this->text($node, 'instructions'),
+            // Stamped by the reader from the file's config@version; a file read outside the reader
+            // (a unit test) carries no stamp and counts as the current format.
+            'schema_version' => $node->hasAttribute('schema') ? $node->getAttribute('schema') : '1',
             'actions' => $actions,
         ];
     }

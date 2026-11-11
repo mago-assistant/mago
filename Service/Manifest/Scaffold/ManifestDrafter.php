@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Service\Manifest\Scaffold;
 use Magento\Framework\Filesystem\Driver\File;
 use Magento\Framework\Module\Dir;
 use Magento\Framework\Module\Dir\Reader as ModuleDirReader;
+use MagoAssistant\Mago\Model\Manifest\Config\Reader;
 use MagoAssistant\Mago\Service\Tool\Scaffold\InvalidScaffoldException;
 
 /**
@@ -58,6 +59,7 @@ class ManifestDrafter
             . 'Reference: vendor/mago-assistant/magento2-mago/docs/manifest-tools.md' . "\n"
         ));
         $config = $document->createElement('config');
+        $config->setAttribute('version', Reader::SCHEMA_VERSION);
         $document->appendChild($config);
 
         foreach ($this->groupByResource($routes) as $resource => $resourceRoutes) {

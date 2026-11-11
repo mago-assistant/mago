@@ -31,11 +31,19 @@ final class ManifestSchemaTest extends TestCase
     {
         $action = '<action name="list" description="d" method="GET" path="x"/>';
         $tool = static fn (string $attributes, ?string $body = null): string =>
-            '<config><tool ' . $attributes . '>' . ($body ?? $action) . '</tool></config>';
+            '<config version="1"><tool ' . $attributes . '>' . ($body ?? $action) . '</tool></config>';
         $get = static fn (string $inner): string =>
             '<action name="a" description="d" method="GET" path="x">' . $inner . '</action>';
         $valid = 'name="faq" acl="Vendor_Module::faq" module="Vendor_Module" description="d"';
 
+        yield 'file without a format version' => [
+            '<config><tool ' . $valid . '>' . $action . '</tool></config>',
+            'version',
+        ];
+        yield 'file with an unknown format version' => [
+            '<config version="2"><tool ' . $valid . '>' . $action . '</tool></config>',
+            '2',
+        ];
         yield 'tool without acl' => [$tool('name="faq" module="Vendor_Module" description="d"'), 'acl'];
         yield 'tool without module' => [$tool('name="faq" acl="V::a" description="d"'), 'module'];
         yield 'module name without vendor' => [$tool('name="faq" acl="V::a" module="Faq" description="d"'), 'module'];
@@ -45,7 +53,7 @@ final class ManifestSchemaTest extends TestCase
         ];
         yield 'tool without actions' => [$tool($valid, ''), 'action'];
         yield 'duplicate tool names' => [
-            '<config>' . substr($tool($valid), 8, -9) . substr($tool($valid), 8, -9) . '</config>',
+            '<config version="1">' . substr($tool($valid), 20, -9) . substr($tool($valid), 20, -9) . '</config>',
             'uniqueToolName',
         ];
         yield 'unknown http method' => [

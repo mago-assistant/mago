@@ -33,7 +33,7 @@ ACL resource on the tool (or on the action, when it differs). Every decision lef
 ## 2. The file
 
 ```xml
-<config>
+<config version="1">
     <tool name="rma" acl="MageOS_RMA::rma_manage" module="MageOS_RMA" title="Returns (RMA)"
           description="Find and handle return requests: look one up, change its status, add a comment.">
         <instructions>Resolve a number to an id with get_by_number before changing anything.</instructions>
@@ -78,7 +78,9 @@ ACL resource on the tool (or on the action, when it differs). Every decision lef
 </config>
 ```
 
-The schema is `etc/mago_tools.xsd` in this module. The complete manifest for the Mage-OS RMA module is
+The schema is `etc/mago_tools.xsd` in this module. `version` on `<config>` is the version of this
+format the file is written in, currently `1`; a later Mago keeps reading older versions or says what
+changed, and `mago:tool:verify` warns when a manifest is behind. The complete manifest for the Mage-OS RMA module is
 in [examples/MageOS_RMA/etc/mago_tools.xml](examples/MageOS_RMA/etc/mago_tools.xml); Magmodules'
 FAQ module ships one in its own `etc/mago_tools.xml`.
 
@@ -118,7 +120,7 @@ with `method` and `path`; a composite action lists `<step>` elements instead.
 | `name`, `type` | Parameter name and JSON type: `string`, `integer`, `number`, `boolean`, `array` (`items` names the element type). |
 | `description`, `required`, `default`, `enum` | As in JSON Schema; `enum` is comma-separated. A default is filled in when the model leaves the parameter out. |
 | `in` | Where it goes: `body` (default; path parameters are in the body too, as Magento wants the id in the entity), `path` (always required, and checked against `type` before the call, so a stray word cannot become a route segment), `query` (as is), `criteria` (a `searchCriteria` filter), `page_size`, `store` (the store code the call runs in, as `/rest/<code>/V1/` would; without one the call runs in the default store view, so a module whose texts live in the default scope gives this parameter `default="all"`), `none`. |
-| `criteria`, `condition`, `wrap` | For `in="criteria"`: the field to filter, the condition type (`eq`, `like`, `in`, ...) and a wrap around the value (`%` for `like`). A list value is joined with commas, for `in`. |
+| `criteria`, `condition`, `wrap` | For `in="criteria"`: the field to filter, the condition type (`eq`, `like`, `in`, ...) and a wrap around the value (`%` for `like`). A list value is joined with commas, for `in`. A parameter that names a `criteria` field is a filter wherever it is declared. |
 
 A `GET` with any `criteria` or `page_size` parameter sends a `searchCriteria` query; without one it
 is a plain `GET`; the page size is capped at 50. An optional parameter is nullable in the schema
@@ -127,7 +129,9 @@ sent to the model, and null or an empty string counts as not given. For a filter
 provider in strict mode makes the model send every property, and those must not become filters. A body field keeps its 0 or false, also against a manifest default; a required boolean or list may
 be false or empty. A zero the model sent for a `criteria` or `query` filter means "do not filter",
 so the default does not step in either; a zero page size falls back to the default. Every given
-value is checked against its `type` before the call. The schema sent to the model lists each parameter once, and the schema of the
+value is checked against its `type` before the call; a whole number sent as `5.0` or `"5"` counts as
+the integer 5. One parameter name carries one type across the tool's actions, since the model is
+shown one schema per tool; `mago:tool:verify` refuses two types under one name. The schema sent to the model lists each parameter once, and the schema of the
 called action is also the allowlist: `execute()` never receives a key the action does not declare.
 
 ### `<step>`
@@ -162,7 +166,8 @@ undeclared scalar is stripped (see [privacy-mode/README.md](privacy-mode/README.
   wrappers of a list route stay public under it, so the named rules reach the rows inside.
 - `<pick field="entity_id"/>` limits the result (each item of a list, or the record) to the fields
   named, so a wide entity does not flood the context. `items` and `total_count` always stay. A route
-  that answers with a bare list is treated as `items` with a `total_count`.
+  that answers with a bare list is treated as `items` with a `total_count`. Links are read from the
+  whole record before `pick` narrows it, so a label may name a field the result itself leaves out.
 - `<link label="Open RMA {increment_id}" route="rma/rma/edit" param="entity_id" from="entity_id"/>` adds
   an admin link per record that carries `from`, rendered as a button in the panel.
 
@@ -175,10 +180,12 @@ bin/magento mago:tool:verify rma '{"action": "search", "number": "000000012"}'
 ```
 
 Next to the checks every tool gets, a manifest tool is checked for: the declaring module being
-enabled, every step's route existing in the store's merged `webapi.xml` (matched as a call would
-be, with a placeholder in each path parameter), the route's ACL resources being declared in an
-`acl.xml`, and the manifest's resource agreeing with the route's (a difference is a warning: both
-apply, so an admin needs both). The manifest is read with the configuration cache, so clean `config` after a change. A manifest
+enabled, the format version, every step's route existing in the store's merged `webapi.xml`
+(matched as a call would be, with a placeholder in each path parameter), every `{placeholder}` in a
+path being a parameter the action declares, the route's ACL resources being declared in an
+`acl.xml`, the manifest's resources agreeing with the route's (a difference is a warning: all
+apply, so an admin needs each), one type per parameter name across the tool's actions, no action
+marked `readonly` that writes, and no `TODO` left over from the draft. The manifest is read with the configuration cache, so clean `config` after a change. A manifest
 that does not validate is logged under `var/log/mago-error.log` (context `ManifestTools`) and its
 tools are left out; the built-in tools keep working, and `mago:tool:verify <tool>` then reports the
 tool as missing from the registry. Tool names merge across modules like other Magento configuration,

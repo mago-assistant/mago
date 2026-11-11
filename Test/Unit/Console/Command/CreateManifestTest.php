@@ -74,6 +74,23 @@ final class CreateManifestTest extends TestCase
     }
 
     #[Test]
+    public function aDirectoryThatCannotBeWrittenIsReportedInsteadOfThrowing(): void
+    {
+        $readOnly = $this->etc . '/nope';
+        $reader = $this->createStub(ModuleDirReader::class);
+        $reader->method('getModuleDir')->willReturn($readOnly);
+        $drafter = $this->createStub(ManifestDrafter::class);
+        $drafter->method('draft')->willReturn(self::DRAFT);
+        $tester = new CommandTester(new CreateManifest($drafter, $reader, new File()));
+
+        $exit = $tester->execute(['module' => 'Vendor_Faq', '--write' => true]);
+
+        self::assertSame(Command::FAILURE, $exit);
+        self::assertStringContainsString('Could not write', $tester->getDisplay());
+        self::assertStringContainsString('without --write', $tester->getDisplay());
+    }
+
+    #[Test]
     public function aDrafterRefusalIsInvalidInput(): void
     {
         $tester = $this->tester(new InvalidScaffoldException('Module must be Vendor_Module, e.g. MageOS_RMA.'));

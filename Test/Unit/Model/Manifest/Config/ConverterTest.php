@@ -42,6 +42,7 @@ final class ConverterTest extends TestCase
             $tool['instructions']
         );
         self::assertSame(['search', 'create', 'approve'], array_keys($tool['actions']));
+        self::assertSame('1', $tool['schema_version'], 'read outside the reader: the current format');
     }
 
     #[Test]
@@ -150,7 +151,7 @@ final class ConverterTest extends TestCase
     {
         $document = new \DOMDocument();
         $document->loadXML(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="save" description="d" method="POST" path="x" readonly="true"/>'
             . '<action name="load" description="d" method="GET" path="x" readonly="true"/>'
             . '<action name="chain" description="d" readonly="true"><step name="a" method="GET" path="x"/>'
@@ -172,7 +173,7 @@ final class ConverterTest extends TestCase
     {
         $document = new \DOMDocument();
         $document->loadXML(
-            '<config><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
             . '<action name="a" description="d"/></tool></config>'
         );
 
@@ -180,5 +181,17 @@ final class ConverterTest extends TestCase
 
         self::assertSame([], $tools['t']['actions']['a']['steps']);
         self::assertSame('', $tools['t']['title']);
+    }
+
+    #[Test]
+    public function theVersionTheReaderStampedOnAToolIsHandedOn(): void
+    {
+        $document = new \DOMDocument();
+        $document->loadXML(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d" schema="1">'
+            . '<action name="a" description="d" method="GET" path="x"/></tool></config>'
+        );
+
+        self::assertSame('1', (new Converter())->convert($document)['t']['schema_version']);
     }
 }

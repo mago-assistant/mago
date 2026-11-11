@@ -52,6 +52,18 @@ class Placeholders
     }
 
     /**
+     * The placeholder paths an expression uses, e.g. ["entity_id", "steps.load.id"].
+     *
+     * @return list<string>
+     */
+    public function names(string $expression): array
+    {
+        preg_match_all(self::PATTERN, $expression, $matches);
+
+        return array_values(array_unique($matches[1]));
+    }
+
+    /**
      * Whether the expression resolves to something non-empty, for a step's `when`.
      *
      * @param array<string, mixed> $params
