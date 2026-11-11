@@ -126,7 +126,9 @@ never change anything.
 named in the input, so a skill needs no extra code. `ChatService` asks the tool before it sends a
 confirmation and adds `irreversible: true` plus the `impacts` to that tool in the `confirm` event;
 the chat panel then shows the "cannot be undone" card with an acknowledgement checkbox instead of
-a plain Allow button. Built-in irreversible actions: `order_manager` `cancel`,
+a plain Allow button. The card's lines carry real values; the copy persisted in the message's
+`tool_calls` has any vaulted value concealed back to its token, like the input (privacy-mode
+decision 1). Built-in irreversible actions: `order_manager` `cancel`,
 `create_invoice`, `create_shipment`, `create_creditmemo` and `resend_confirmation`,
 `url_rewrite_manager` `delete`. An invoice or shipment cannot be deleted once created; when
 `notify_customer` is true the card also names the e-mail.

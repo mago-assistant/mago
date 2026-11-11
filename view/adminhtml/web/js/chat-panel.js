@@ -904,7 +904,17 @@ define([
             // the next row, so they are carried forward until there is a bubble to hang them on.
             var pendingTools = [];
             loaded.forEach(function(m) {
-                var tools = parseToolCalls(m);
+                var tools = parseToolCalls(m).map(function(t) {
+                    // Stored impact and caution lines are tokenised like message content; the
+                    // rebuilt card must show the real values the admin decides over, as text,
+                    // through the same token map as everything else.
+                    if (t.impacts && t.impacts.length) {
+                        t.impacts = t.impacts.map(function(line) {
+                            return vaultTokens.replaceTokens(line, tokens);
+                        });
+                    }
+                    return t;
+                });
                 if (m.role === 'assistant' && tools.length) {
                     pendingTools = pendingTools.concat(tools);
                 }
