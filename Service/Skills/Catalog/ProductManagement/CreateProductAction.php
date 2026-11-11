@@ -7,11 +7,13 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement;
 
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Url\DownloadableLinkUrl;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class CreateProductAction implements ActionInterface
+class CreateProductAction implements ActionInterface, ValidatingActionInterface
 {
     private const TYPES = ['simple', 'virtual', 'downloadable', 'configurable', 'grouped', 'bundle'];
 
@@ -124,7 +126,8 @@ class CreateProductAction implements ActionInterface
                 'type' => 'array',
                 'items' => ['type' => 'object'],
                 'description' => 'Downloadable products only: [{"title": "File", "url": "https://...", "price": 0, '
-                    . '"number_of_downloads": 0}]',
+                    . '"number_of_downloads": 0}]. The url must be https to a hostname listed in the store\'s '
+                    . 'downloadable_domains; http, IP addresses, localhost and credentials in the url are refused.',
             ],
         ];
     }
@@ -172,11 +175,33 @@ and fixed-price bundle products. Grouped products and dynamic bundles derive pri
 child products must exist first (create them with separate create_product calls).
 Configurable parents are created without variants; add them afterwards with add_configurable_variants.
 Downloadable links with type "url" are used; for uploaded files the admin must use the admin panel.
+Link urls must be https to a hostname from the store's downloadable_domains.
 TEXT;
+    }
+
+    public function findRefusal(array $params): ?array
+    {
+        foreach ((array)($params['downloadable_links'] ?? []) as $link) {
+            $url = trim((string)(is_array($link) ? ($link['url'] ?? '') : ''));
+            if ($url === '') {
+                continue;
+            }
+            $reason = (new DownloadableLinkUrl($url))->findRefusalReason();
+            if ($reason !== null) {
+                return ['error' => $reason];
+            }
+        }
+
+        return null;
     }
 
     public function execute(array $params, int $adminUserId): array
     {
+        $refusal = $this->findRefusal($params);
+        if ($refusal !== null) {
+            return $refusal;
+        }
+
         if (!$adminUserId) {
             return ['error' => 'Admin user context is required'];
         }
