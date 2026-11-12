@@ -23,7 +23,7 @@ consolidated spec lives on issue #97.
 
 | # | Decision | As built |
 |---|---|---|
-| 1 | Persist tokenised, not raw, in `mago_message` (storage limitation, erasure win); display sinks rehydrate from the vault | Done: typed message and conversation title stored scrubbed on every ingress path (Stream, WebApi); history view, stream and WebApi responses rehydrate |
+| 1 | Persist tokenised, not raw, in `mago_message` (storage limitation, erasure win); display sinks rehydrate from the vault | Done: typed message and conversation title stored scrubbed on every ingress path (Stream, WebApi); history view, stream and WebApi responses rehydrate. A confirmation's impact and caution lines are built from rehydrated values for the card but concealed back to tokens in the stored `tool_calls`; Load ships their values with the token map and the panel puts them back when it rebuilds the card (audit 2026-11-02 finding 2) |
 | 2 | Fail-closed: a tool that declares nothing has every field stripped | Done in 2.0.0 (V1 shipped lenient for unclassified tools as an interim state) |
 | 3 | Silent input-scrub classes: email, BSN, IBAN, VAT, phone (NL-anchored); non-blocking client-side hint for FP-prone patterns | Done: `PiiHeuristic` with checksums (mod-97, elfproef), hint under the chat input |
 | 4 | Streaming rehydration handles tokens split across chunks; the admin's browser sees cleartext | Done: a server-side carry buffer holds a partial token back, and each text event carries the values of the tokens in it. The panel rehydrates after rendering and sanitizing the markdown, as text, so a stored value (a review) can never become markup |

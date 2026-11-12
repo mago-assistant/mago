@@ -87,6 +87,18 @@ class PrivacyService
     }
 
     /**
+     * Replace any vaulted value occurring in free text with its token before the text is persisted
+     * or egresses. Closes the echo path the heuristic cannot: text built from a rehydrated argument
+     * (a confirmation card's "Order #000000549 is canceled") carries a value the vault knows but no
+     * PII signature. Values shorter than six characters stay as they are (see
+     * ConversationVault::concealKnownValues()).
+     */
+    public function concealText(string $text): string
+    {
+        return $this->vault->concealKnownValues($text);
+    }
+
+    /**
      * A conversation title from already-scrubbed text: truncated without cutting a vault token in
      * half (a partial token can neither rehydrate nor be neutralised on display).
      */
