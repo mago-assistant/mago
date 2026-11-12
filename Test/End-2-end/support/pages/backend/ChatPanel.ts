@@ -35,6 +35,14 @@ interface ListingRecipe {
    * scraped straight out of the rendered grid markup instead.
    */
   legacyEditHrefContains?: string;
+  /**
+   * Set when not every row's link leads to a working page: the first row whose link contains this
+   * substring is borrowed instead of the first row. The design config listing needs it because its
+   * Default-scope row links to a URL without a scope_id, which current Magento (not Mage-OS)
+   * renders as an exception page: DataProvider::getMeta() hands the missing scope_id to
+   * ScopeCodeResolver as null, which dies on a null array offset.
+   */
+  actionHrefContains?: string;
 }
 
 const LISTING_RECIPES: Record<string, ListingRecipe> = {
@@ -77,6 +85,7 @@ const LISTING_RECIPES: Record<string, ListingRecipe> = {
   'theme/design_config': {
     menuHrefContains: '/theme/design_config/',
     listingNamespace: 'design_config_listing',
+    actionHrefContains: '/scope_id/',
   },
   'admin/user': {
     menuHrefContains: '/admin/user/',
@@ -226,7 +235,14 @@ export default class ChatPanel {
     }
 
     if ((action === 'edit' || action === 'view') && recipe.listingNamespace) {
-      return this.resolveEditUrl(page, adminRoute, listingHref, recipe.listingNamespace, recipe.actionKey || 'edit');
+      return this.resolveEditUrl(
+        page,
+        adminRoute,
+        listingHref,
+        recipe.listingNamespace,
+        recipe.actionKey || 'edit',
+        recipe.actionHrefContains
+      );
     }
 
     return listingHref;
@@ -289,7 +305,8 @@ export default class ChatPanel {
     adminRoute: string,
     listingHref: string,
     listingNamespace: string,
-    actionKey: string = 'edit'
+    actionKey: string = 'edit',
+    actionHrefContains?: string
   ): Promise<string> {
     const renderResponse = page.waitForResponse(
       (response) => response.url().includes('mui/index/render') && response.url().includes(listingNamespace)
@@ -298,7 +315,10 @@ export default class ChatPanel {
     await page.goto(listingHref, {waitUntil: 'load'});
 
     const body = await (await renderResponse).json();
-    const sampleHref: string | undefined = body.items?.[0]?.actions?.[actionKey]?.href;
+    const items: any[] = body.items ?? [];
+    const sampleHref: string | undefined = (actionHrefContains
+      ? items.find((item) => (item.actions?.[actionKey]?.href || '').includes(actionHrefContains))
+      : items[0])?.actions?.[actionKey]?.href;
 
     if (!sampleHref) {
       throw new Error('The "' + listingNamespace + '" grid returned no rows to borrow a "' + actionKey + '" link from.');
