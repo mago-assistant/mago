@@ -113,6 +113,7 @@
                 <item name="url_rewrite_manager" xsi:type="object">MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager</item>
                 <item name="review_manager" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ReviewManager</item>
                 <item name="product_management" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement</item>
+                <item name="layered_navigation" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation</item>
                 <item name="order_manager" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager</item>
                 <item name="cron_status" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\CronStatus</item>
                 <item name="product_debug" xsi:type="object">MagoAssistant\Mago\Service\Skills\Debug\ProductDebug</item>
@@ -226,6 +227,20 @@
             <argument name="actions" xsi:type="array">
                 <item name="empty_categories" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\EmptyCategoriesAction</item>
                 <item name="uncategorized_products" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\UncategorizedProductsAction</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!-- Skill Actions: LayeredNavigation -->
+    <type name="MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation">
+        <arguments>
+            <argument name="actions" xsi:type="array">
+                <item name="list_filters" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\ListFiltersAction</item>
+                <item name="audit_filters" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\AuditFiltersAction</item>
+                <item name="update_filter" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\UpdateFilterAction</item>
+                <item name="rename_filter" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\RenameFilterAction</item>
+                <item name="cleanup_options" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\CleanupOptionsAction</item>
+                <item name="delete_options" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\DeleteOptionsAction</item>
             </argument>
         </arguments>
     </type>
