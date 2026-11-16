@@ -145,7 +145,7 @@ all active catalog rules. `review_manager` `approve` says the review goes live o
 page right away; an already approved review gets the plain card.
 `cms_data` `create_page`, `create_block`, `update_page` and `update_block` say the content goes
 live for every storefront visitor as written (Magento does not filter CMS content): a new enabled
-page, a block wherever its identifier is used, new content or title on an enabled page or block,
+page, a block wherever its identifier is used, new content on an enabled page or block or a new title on an enabled page,
 and enabling or disabling one. Content holding scripts, frames, forms or event handlers gets an
 extra line, also on a disabled page. Editing a disabled page that stays disabled gets the plain
 card (#196).

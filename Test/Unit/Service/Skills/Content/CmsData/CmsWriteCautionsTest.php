@@ -91,7 +91,8 @@ class CmsWriteCautionsTest extends TestCase
             CmsWriteCautions::PAGE,
             [
                 'identifier' => 'faq',
-                'content' => '<p>Our online store: description of the scripture, the information form below.</p>',
+                'content' => '<p>Our online store: description of the scripture, the information form below. '
+                    . 'Ordered online = shipped today.</p>',
                 'is_active' => false,
             ],
             'all store views'
@@ -118,13 +119,38 @@ class CmsWriteCautionsTest extends TestCase
         $cautions = (new CmsWriteCautions())->forUpdate(
             CmsWriteCautions::BLOCK,
             ['identifier' => 'footer_links', 'is_active' => true],
-            ['identifier' => 'footer_links', 'title' => 'Footer'],
+            ['identifier' => 'footer_links', 'content' => '<p>Links</p>'],
             null
         );
 
         self::assertCount(1, $cautions);
-        self::assertStringContainsString('live title of block "footer_links"', $cautions[0]);
+        self::assertStringContainsString('live content of block "footer_links"', $cautions[0]);
         self::assertStringContainsString('everywhere the block is used', $cautions[0]);
+    }
+
+    #[Test]
+    public function aNewTitleOnALivePageIsWhatVisitorsSee(): void
+    {
+        $cautions = (new CmsWriteCautions())->forUpdate(
+            CmsWriteCautions::PAGE,
+            self::LIVE_PAGE,
+            ['identifier' => '5', 'title' => 'About'],
+            null
+        );
+
+        self::assertCount(1, $cautions);
+        self::assertStringContainsString('Replaces the live title of page "about-us"', $cautions[0]);
+    }
+
+    #[Test]
+    public function aBlocksTitleIsOnlyShownInTheAdmin(): void
+    {
+        self::assertSame([], (new CmsWriteCautions())->forUpdate(
+            CmsWriteCautions::BLOCK,
+            ['identifier' => 'footer_links', 'is_active' => true],
+            ['identifier' => 'footer_links', 'title' => 'Footer'],
+            null
+        ));
     }
 
     #[Test]

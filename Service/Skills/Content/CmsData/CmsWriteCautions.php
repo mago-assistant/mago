@@ -17,7 +17,7 @@ class CmsWriteCautions
 {
     /** Markup that runs code or loads other pages in a visitor's browser */
     private const ACTIVE_HTML
-        = '~<\s*(script|iframe|object|embed|form|meta|link|base)\b|[\s/"\']on[a-z]+\s*=|javascript\s*:~i';
+        = '~<\s*(script|iframe|object|embed|form|meta|link|base)\b|<[^>]*[\s/"\']on[a-z]+\s*=|javascript\s*:~i';
 
     public const PAGE = 'page';
     public const BLOCK = 'block';
@@ -66,7 +66,8 @@ class CmsWriteCautions
         $identifier = (string)($current['identifier'] ?? $params['identifier'] ?? '');
         $isActive = (bool)($current['is_active'] ?? false);
         $where = $type === self::PAGE ? 'on the storefront' : 'everywhere the block is used on the storefront';
-        $changesContent = !empty($params['content']) || !empty($params['title']);
+        // A block's title is only shown in the admin; a page's is its storefront title.
+        $changesContent = !empty($params['content']) || ($type === self::PAGE && !empty($params['title']));
         $cautions = [];
 
         if ($requestedActive === false && $isActive) {
