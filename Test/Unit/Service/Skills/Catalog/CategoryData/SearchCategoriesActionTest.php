@@ -62,6 +62,16 @@ final class SearchCategoriesActionTest extends TestCase
     }
 
     #[Test]
+    public function aParentCategoryWithoutOwnProductsShowsWhatTheStorefrontLists(): void
+    {
+        $tops = $this->action()->execute(['names' => ['tops'], 'store' => 'default'], 1)['categories'][0];
+
+        self::assertSame('Women > Tops', $tops['path']);
+        self::assertSame(0, $tops['assigned_products']);
+        self::assertSame(40, $tops['live_products']);
+    }
+
+    #[Test]
     public function aCategoryMatchingInSeveralStoreViewsIsListedOnceWithTheStoreViews(): void
     {
         $hoodies = $this->action()->execute(['names' => ['hoodies']], 1)['categories'];
@@ -80,9 +90,19 @@ final class SearchCategoriesActionTest extends TestCase
     }
 
     #[Test]
-    public function aSingleWordAsTextIsAccepted(): void
+    public function wordsAsOneTextAreSplitOnCommas(): void
     {
         self::assertSame(1, $this->action()->execute(['names' => 'bras'], 1)['match_count']);
+        self::assertSame(3, $this->action()->execute(['names' => 'hoodies, bras'], 1)['match_count']);
+    }
+
+    #[Test]
+    public function aWordNoCategoryHasFindsNothing(): void
+    {
+        $result = $this->action()->execute(['names' => ['jackets']], 1);
+
+        self::assertSame(0, $result['match_count']);
+        self::assertSame([], $result['categories']);
     }
 
     #[Test]
@@ -132,9 +152,11 @@ final class SearchCategoriesActionTest extends TestCase
             }
             return $categories;
         });
+        // Tops (21) lists its subcategories' products: anchor counts come from the category index.
+        $tree->method('storefrontProductCounts')->willReturn([21 => 40, 23 => 9]);
 
         $report = $this->createStub(EmptyCategoriesReport::class);
-        $report->method('productCountsForStore')->willReturn(['assigned' => [23 => 12], 'live' => [23 => 9]]);
+        $report->method('assignedCountsUnderRoot')->willReturn([23 => 12]);
 
         $group = $this->createStub(GroupInterface::class);
         $group->method('getRootCategoryId')->willReturn(2);

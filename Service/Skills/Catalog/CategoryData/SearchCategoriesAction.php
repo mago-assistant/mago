@@ -94,18 +94,23 @@ class SearchCategoriesAction implements ActionInterface
     public function getInstructions(): string
     {
         return 'Show the categories as entity cards or a table: path (linked with admin_url), enabled or not, '
-            . 'live_products. Write each admin_url token exactly as it came back. assigned_products counts every '
-            . 'product assigned to the category itself; live_products only the enabled ones visible in the '
-            . 'catalog; an anchor category also shows its subcategories\' products on the storefront. A category '
+            . 'live_products. Write each admin_url token exactly as it came back. live_products is what the '
+            . 'storefront lists there: enabled products visible in the catalog, for an anchor category including '
+            . 'its subcategories\' products. assigned_products counts the products assigned to the category itself, '
+            . 'in any status; a parent category with none of its own is not empty when live_products is above 0. '
+            . 'A category '
             . 'is listed once, with the names of the first store view it matched in; store_codes says where its '
-            . 'name matched. When match_count exceeds shown, say the list is cut.';
+            . 'name matched. When match_count exceeds shown, say the list is cut. When nothing matches, say so and '
+            . 'suggest a shorter part of the name.';
     }
 
     public function execute(array $params, int $adminUserId): array
     {
+        // A list, or one text the model wrote as "hoodies, bras"
+        $given = $params['names'] ?? [];
         $words = array_values(array_filter(array_map(
             static fn ($word) => trim((string)$word),
-            is_array($params['names'] ?? null) ? $params['names'] : [(string)($params['names'] ?? '')]
+            is_array($given) ? $given : explode(',', (string)$given)
         ), static fn (string $word) => $word !== ''));
         if ($words === []) {
             return ['error' => 'search_categories needs "names": one or more words to look for.'];
@@ -128,7 +133,8 @@ class SearchCategoriesAction implements ActionInterface
             if ($found === []) {
                 continue;
             }
-            $counts = $this->report->productCountsForStore($storeId, (int)$store->getWebsiteId(), $rootId);
+            $assigned = $this->report->assignedCountsUnderRoot($rootId);
+            $live = $this->categoryTree->storefrontProductCounts($storeId, array_keys($found));
             foreach ($found as $id => $category) {
                 if (isset($matches[$id])) {
                     $matches[$id]['store_codes'][] = (string)$store->getCode();
@@ -141,8 +147,8 @@ class SearchCategoriesAction implements ActionInterface
                     'level' => $category['level'],
                     'is_active' => $category['is_active'],
                     'is_anchor' => $category['is_anchor'],
-                    'assigned_products' => $counts['assigned'][$id] ?? 0,
-                    'live_products' => $counts['live'][$id] ?? 0,
+                    'assigned_products' => $assigned[$id] ?? 0,
+                    'live_products' => $live[$id] ?? 0,
                     'store_codes' => [(string)$store->getCode()],
                 ];
             }

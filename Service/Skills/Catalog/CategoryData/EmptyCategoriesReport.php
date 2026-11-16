@@ -81,18 +81,13 @@ class EmptyCategoriesReport
     }
 
     /**
-     * Products per category under the root: assigned in any status, and live (enabled, visible in the
-     * catalog, in the store view's website). Direct assignments only; an anchor category also shows
-     * what is assigned to its subcategories.
+     * Products assigned to each category under the root itself, in any status
      *
-     * @return array{assigned:array<int,int>,live:array<int,int>}
+     * @return array<int,int> Category id => product count
      */
-    public function productCountsForStore(int $storeId, int $websiteId, int $rootCategoryId): array
+    public function assignedCountsUnderRoot(int $rootCategoryId): array
     {
-        return [
-            'assigned' => $this->assignedCounts[$rootCategoryId] ??= $this->assignedProductCounts($rootCategoryId),
-            'live' => $this->cachedProductCounts($storeId, $websiteId, $rootCategoryId)['live'],
-        ];
+        return $this->assignedCounts[$rootCategoryId] ??= $this->assignedProductCounts($rootCategoryId);
     }
 
     /**

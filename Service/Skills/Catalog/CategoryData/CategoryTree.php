@@ -8,6 +8,8 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\CategoryData;
 
 use Magento\Catalog\Api\Data\CategoryInterface;
 use Magento\Catalog\Model\Category;
+use Magento\Catalog\Model\Indexer\Category\Product\TableMaintainer;
+use Magento\Catalog\Model\Product\Visibility;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\EntityManager\MetadataPool;
 
@@ -22,7 +24,9 @@ class CategoryTree
     public function __construct(
         private readonly ResourceConnection $resource,
         private readonly MetadataPool $metadataPool,
-        private readonly ScopedAttributeJoin $attributeJoin
+        private readonly ScopedAttributeJoin $attributeJoin,
+        private readonly TableMaintainer $categoryIndexTables,
+        private readonly Visibility $visibility
     ) {
     }
 
@@ -72,5 +76,30 @@ class CategoryTree
         }
 
         return $categories;
+    }
+
+    /**
+     * Products the storefront lists in each category, from the store view's category product index:
+     * enabled, in the website, visible in the catalog, and for an anchor category its subcategories' too
+     *
+     * @param int $storeId
+     * @param int[] $categoryIds
+     * @return array<int, int> Category id => product count
+     */
+    public function storefrontProductCounts(int $storeId, array $categoryIds): array
+    {
+        $connection = $this->resource->getConnection();
+        $table = $this->categoryIndexTables->getMainTable($storeId);
+        if ($categoryIds === [] || !$connection->isTableExists($table)) {
+            return [];
+        }
+
+        return array_map('intval', $connection->fetchPairs(
+            $connection->select()
+                ->from($table, ['category_id', 'products' => new \Zend_Db_Expr('COUNT(DISTINCT product_id)')])
+                ->where('category_id IN (?)', $categoryIds)
+                ->where('visibility IN (?)', $this->visibility->getVisibleInCatalogIds())
+                ->group('category_id')
+        ));
     }
 }
