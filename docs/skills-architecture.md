@@ -20,7 +20,7 @@
 
 ## What is a Skill
 
-A **Skill** is a self-contained capability that the Admin Assistant can invoke during a conversation. Skills give the AI access to Magento data and actions — reading sales figures, updating CMS content, generating product descriptions — while enforcing ACL permissions and requiring user confirmation for write operations.
+A **Skill** is a self-contained capability that Mago Assistant can invoke during a conversation. Skills give the AI access to Magento data and actions — reading sales figures, updating CMS content, generating product descriptions — while enforcing ACL permissions and requiring user confirmation for write operations.
 
 ### Skill vs Tool
 
@@ -610,11 +610,11 @@ Magento_Backend::admin
 | `assistant_read` + `assistant_write` | Read and write tools, under the same Magento resources | Required for write tools |
 | None | Chat only, no tools | N/A |
 
-A tool declaring `Acl::MAGO_PER_USER` runs only for an admin with an explicit row for it under Stores > Admin Assistant > Skills & Permissions, whatever the role holds. Without one it stays in the model's tool list, with its read actions only when it has any (a write-only tool keeps its actions), so the model relays the refusal instead of answering with another tool; it is left out of the slash legend and the command menu. An explicit Disabled row hides it from the model as well. Declare `MAGO_PER_USER` for the whole tool, not for single actions: the legend, the menu and the advertised actions read the tool-level answer.
+A tool declaring `Acl::MAGO_PER_USER` runs only for an admin with an explicit row for it under Stores > Mago Assistant > Skills & Permissions, whatever the role holds. Without one it stays in the model's tool list, with its read actions only when it has any (a write-only tool keeps its actions), so the model relays the refusal instead of answering with another tool; it is left out of the slash legend and the command menu. An explicit Disabled row hides it from the model as well. Declare `MAGO_PER_USER` for the whole tool, not for single actions: the legend, the menu and the advertised actions read the tool-level answer.
 
 ### Per-User Skill Permissions
 
-On top of role ACL, the **Skills** admin screen (Mago Assistant → Skills) stores a per-admin-user permission per skill in the `mago_skill_permission` table: `disabled`, `read`, or `write`. `PermissionChecker` resolves these; when a user has no row for a skill, the role ACL above is the fallback. Unknown values in a row are treated as `disabled` (fail closed).
+On top of role ACL, the **Skills** admin screen (Stores > Mago Assistant > Skills & Permissions) stores a per-admin-user permission per skill in the `mago_skill_permission` table: `disabled`, `read`, or `write`. `PermissionChecker` resolves these; when a user has no row for a skill, the role ACL above is the fallback. Unknown values in a row are treated as `disabled` (fail closed).
 
 Enforcement happens at three points, all keyed on the acting admin user id, which the chat controllers pass through `ChatService` into `ToolRegistry`:
 
@@ -774,7 +774,7 @@ Every tool declares one (see [Access control](#acl--permissions)); a tool whose 
 
 ### Step 4: Add config toggle (optional)
 
-Add a `system.xml` field under the Admin Assistant tools section so store admins can enable/disable your tool independently.
+Add a `system.xml` field under `Stores > Configuration > Mago Assistant > Tools` so store admins can enable/disable your tool independently.
 
 ### Guidelines for Tool Authors
 
@@ -908,7 +908,7 @@ The existing `ToolInterface` methods map 1:1 to MCP tool definitions, making thi
 
 ### Admin UI Location
 
-`Stores > Configuration > MagoAssistant > Admin Assistant`
+`Stores > Configuration > Mago Assistant`
 
 ### Sections
 
