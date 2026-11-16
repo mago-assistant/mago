@@ -42,8 +42,9 @@ class ConfigWriter implements HighImpactToolInterface, ValidatingToolInterface
         return 'Modify Magento store configuration values. Requires merchant confirmation before execution. '
             . 'Credentials, payment config and Mago\'s own settings are blocked, and so are the storefront and admin '
             . 'URLs, the mail server, the store email addresses and every other address customer mail goes to, '
-            . 'two-factor and admin login security and the storefront head and footer scripts: for those, tell the '
-            . 'user to change them under Stores > Configuration.';
+            . 'two-factor and admin login security, the storefront head and footer scripts, and the hosts and URLs '
+            . 'the search engine, shipping carrier and New Relic clients connect to: for those, tell the user to '
+            . 'change them under Stores > Configuration.';
     }
 
     public function getParameterSchema(): array
@@ -229,8 +230,9 @@ class ConfigWriter implements HighImpactToolInterface, ValidatingToolInterface
     private function blockedPathRefusal(string $path): array
     {
         return ['error' => sprintf(
-            'Changing "%s" from the chat is turned off: a wrong value here can hand over the store, its admin '
-                . 'or its mail. Change it under Stores > Configuration, where Magento checks the value.',
+            'Changing "%s" from the chat is turned off: a wrong value here can hand over the store, its admin, '
+                . 'its mail or the credentials of a service it connects to. Change it under '
+                . 'Stores > Configuration, where Magento checks the value.',
             $path
         )];
     }
