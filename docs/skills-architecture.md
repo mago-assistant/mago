@@ -143,6 +143,12 @@ websites, customer groups (guests called out) and dates it applies to; `create_c
 many working codes it creates for which rule; `apply_rules` says it reprices every product from
 all active catalog rules. `review_manager` `approve` says the review goes live on its product
 page right away; an already approved review gets the plain card.
+`cms_data` `create_page`, `create_block`, `update_page` and `update_block` say the content goes
+live for every storefront visitor as written (Magento does not filter CMS content): a new enabled
+page, a block wherever its identifier is used, new content or title on an enabled page or block,
+and enabling or disabling one. Content holding scripts, frames, forms or event handlers gets an
+extra line, also on a disabled page. Editing a disabled page that stays disabled gets the plain
+card (#196).
 `config_writer` uses it for storefront scripts, admin security, URLs, mail routing, developer,
 environment and sensitive settings, with the current and the new value (#245). The ACL still
 decides whether the admin may make the change at all.
@@ -470,7 +476,7 @@ The module ships with these tools, grouped by skill area:
 
 | Tool | Class | Read-only | Description |
 |------|-------|-----------|-------------|
-| `cms_data` | `Service\Skills\Content\CmsData` | Mixed | List, read, create and update CMS pages and blocks. Read actions (list/get) execute automatically; write actions (create/update) require confirmation. New pages and blocks target all store views or one store view via `store_id`. Uses `isReadOnlyAction()` for per-action granularity. |
+| `cms_data` | `Service\Skills\Content\CmsData` | Mixed | List, read, create and update CMS pages and blocks. Read actions (list/get) execute automatically; write actions (create/update) require confirmation, with a caution card when the content reaches the storefront. New pages and blocks target all store views or one store view via `store_id`. Uses `isReadOnlyAction()` for per-action granularity. |
 | `content_generator` | `Service\Skills\Content\ContentGenerator` | No | AI-powered product description, meta, and short description generation. Two-phase: first call returns product context, second call saves confirmed content. Works on the default scope or on one store view via `store_id`. |
 
 ### Navigation

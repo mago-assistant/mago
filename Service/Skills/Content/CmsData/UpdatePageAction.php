@@ -6,17 +6,18 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Content\CmsData;
 
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class UpdatePageAction implements ActionInterface
+class UpdatePageAction implements CautionedActionInterface
 {
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
         private readonly GetPageAction $getPageAction,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly CmsWriteCautions $cautions = new CmsWriteCautions()
     ) {
     }
 
@@ -77,6 +78,24 @@ class UpdatePageAction implements ActionInterface
     public function getInstructions(): string
     {
         return '';
+    }
+
+    public function getCautions(array $params, int $adminUserId): array
+    {
+        if (empty($params['identifier']) || !$adminUserId || !$this->hasRequestedChange($params)) {
+            return [];
+        }
+        $current = $this->getPageAction->execute($params, $adminUserId);
+        if (isset($current['error'])) {
+            return [];
+        }
+
+        return $this->cautions->forUpdate(
+            CmsWriteCautions::PAGE,
+            $current,
+            $params,
+            $this->getRequestedActiveStatus($params)
+        );
     }
 
     public function execute(array $params, int $adminUserId): array
