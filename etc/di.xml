@@ -241,6 +241,7 @@
                 <item name="rename_filter" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\RenameFilterAction</item>
                 <item name="cleanup_options" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\CleanupOptionsAction</item>
                 <item name="delete_options" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\DeleteOptionsAction</item>
+                <item name="merge_options" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\MergeOptionsAction</item>
             </argument>
         </arguments>
     </type>
