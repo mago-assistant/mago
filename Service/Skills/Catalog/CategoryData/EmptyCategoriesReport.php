@@ -81,6 +81,21 @@ class EmptyCategoriesReport
     }
 
     /**
+     * Products per category under the root: assigned in any status, and live (enabled, visible in the
+     * catalog, in the store view's website). Direct assignments only; an anchor category also shows
+     * what is assigned to its subcategories.
+     *
+     * @return array{assigned:array<int,int>,live:array<int,int>}
+     */
+    public function productCountsForStore(int $storeId, int $websiteId, int $rootCategoryId): array
+    {
+        return [
+            'assigned' => $this->assignedCounts[$rootCategoryId] ??= $this->assignedProductCounts($rootCategoryId),
+            'live' => $this->cachedProductCounts($storeId, $websiteId, $rootCategoryId)['live'],
+        ];
+    }
+
+    /**
      * @param array<int,CategoryNode> $categories Category id => node, every category under the root
      * @param array<int,int> $liveCounts Category id => products assigned to it that are enabled, visible
      *        in the catalog and in the website
@@ -186,7 +201,7 @@ class EmptyCategoriesReport
      *
      * @param array<int,CategoryNode> $categories
      */
-    private static function breadcrumb(array $categories, string $path, int $categoryId, int $rootCategoryId): string
+    public static function breadcrumb(array $categories, string $path, int $categoryId, int $rootCategoryId): string
     {
         $names = [];
         foreach ([...self::ancestorIds($path, $categoryId), $categoryId] as $id) {
