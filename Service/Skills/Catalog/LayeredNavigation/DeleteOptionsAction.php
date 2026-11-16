@@ -6,7 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation;
 
-use Magento\Eav\Api\AttributeOptionManagementInterface;
+use Magento\Catalog\Api\ProductAttributeOptionManagementInterface;
 use Magento\Framework\Exception\LocalizedException;
 use MagoAssistant\Mago\Api\Skill\IrreversibleActionInterface;
 use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
@@ -20,7 +20,7 @@ class DeleteOptionsAction implements IrreversibleActionInterface, ValidatingActi
     public function __construct(
         private readonly FilterAttributes $filterAttributes,
         private readonly OptionSelection $optionSelection,
-        private readonly AttributeOptionManagementInterface $optionManagement
+        private readonly ProductAttributeOptionManagementInterface $optionManagement
     ) {
     }
 
@@ -105,11 +105,7 @@ class DeleteOptionsAction implements IrreversibleActionInterface, ValidatingActi
         try {
             [$attribute, $labels] = $this->prepare($params);
             foreach (array_keys($labels) as $optionId) {
-                $this->optionManagement->delete(
-                    FilterAttributes::PRODUCT_ENTITY_TYPE,
-                    $attribute['code'],
-                    $optionId
-                );
+                $this->optionManagement->delete($attribute['code'], (string)$optionId);
             }
         } catch (LocalizedException $e) {
             return ['error' => $e->getMessage()];

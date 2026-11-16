@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation;
 
 use Magento\Catalog\Api\ProductAttributeRepositoryInterface;
 use Magento\Catalog\Model\ResourceModel\Attribute as AttributeResource;
+use Magento\Catalog\Model\ResourceModel\Eav\Attribute as AttributeModel;
 use Magento\Framework\Exception\LocalizedException;
 use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
@@ -88,6 +89,9 @@ class RenameFilterAction implements ValidatingActionInterface
         try {
             [$attribute, $label] = $this->prepare($params);
             $model = $this->attributeRepository->get($attribute['code']);
+            if (!$model instanceof AttributeModel) {
+                throw new LocalizedException(__('Attribute "%1" cannot be saved here.', $attribute['code']));
+            }
             $model->setData('frontend_label', $label);
             $this->attributeResource->save($model);
         } catch (LocalizedException $e) {

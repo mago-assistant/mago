@@ -7,7 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation;
 
 use Magento\Catalog\Model\Product;
-use Magento\Eav\Api\AttributeOptionManagementInterface;
+use Magento\Catalog\Api\ProductAttributeOptionManagementInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Event\ManagerInterface as EventManager;
 use Magento\Framework\Indexer\CacheContext;
@@ -29,7 +29,7 @@ class OptionMerger
     public function __construct(
         private readonly FilterAttributes $filterAttributes,
         private readonly ResourceConnection $resource,
-        private readonly AttributeOptionManagementInterface $optionManagement,
+        private readonly ProductAttributeOptionManagementInterface $optionManagement,
         private readonly IndexerRegistry $indexerRegistry,
         private readonly CacheContext $cacheContext,
         private readonly EventManager $eventManager
@@ -73,7 +73,7 @@ class OptionMerger
         $notDeleted = [];
         foreach ($sourceIds as $sourceId) {
             try {
-                $this->optionManagement->delete(FilterAttributes::PRODUCT_ENTITY_TYPE, $attribute['code'], $sourceId);
+                $this->optionManagement->delete($attribute['code'], (string)$sourceId);
             } catch (\Exception) {
                 $notDeleted[] = $sourceId;
             }

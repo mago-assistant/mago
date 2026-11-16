@@ -8,7 +8,7 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Catalog\LayeredNavigation;
 
 use Magento\Catalog\Api\ProductAttributeRepositoryInterface;
 use Magento\Catalog\Model\ResourceModel\Attribute as AttributeResource;
-use Magento\Eav\Api\AttributeOptionManagementInterface;
+use Magento\Catalog\Api\ProductAttributeOptionManagementInterface;
 use MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\CleanupOptionsAction;
 use MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\DeleteOptionsAction;
 use MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation\FilterAttributes;
@@ -181,7 +181,7 @@ class OptionActionsTest extends TestCase
         return new DeleteOptionsAction(
             $filterAttributes,
             new OptionSelection($filterAttributes),
-            $this->createStub(AttributeOptionManagementInterface::class)
+            $this->createStub(ProductAttributeOptionManagementInterface::class)
         );
     }
 

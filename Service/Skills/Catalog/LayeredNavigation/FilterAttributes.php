@@ -219,10 +219,13 @@ class FilterAttributes
             ->setStoreId($storeId)
             ->addAttributeToSelect('name')
             ->addAttributeToFilter('level', ['gt' => 1])
-            ->addAttributeToFilter($field, $value);
+            ->addAttributeToFilter($field, ['eq' => $value]);
 
         return array_values(array_map(
-            static fn ($category) => ['id' => (int)$category->getId(), 'name' => (string)$category->getName()],
+            static fn ($category) => [
+                'id' => (int)$category->getData('entity_id'),
+                'name' => (string)$category->getData('name'),
+            ],
             $collection->getItems()
         ));
     }
@@ -465,6 +468,9 @@ class FilterAttributes
             return [(string)$value];
         }
 
-        return array_values(array_filter(array_map('trim', explode(',', (string)$value)), 'strlen'));
+        return array_values(array_filter(
+            array_map('trim', explode(',', (string)$value)),
+            static fn (string $id) => $id !== ''
+        ));
     }
 }

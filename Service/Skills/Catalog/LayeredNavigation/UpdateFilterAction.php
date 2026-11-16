@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation;
 
 use Magento\Catalog\Api\ProductAttributeRepositoryInterface;
 use Magento\Catalog\Model\ResourceModel\Attribute as AttributeResource;
+use Magento\Catalog\Model\ResourceModel\Eav\Attribute as AttributeModel;
 use Magento\Framework\Exception\LocalizedException;
 use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
 use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
@@ -49,7 +50,7 @@ class UpdateFilterAction implements ValidatingActionInterface, CautionedActionIn
             ],
             'filterable' => [
                 'type' => 'string',
-                'enum' => array_values(ListFiltersAction::FILTERABLE),
+                'enum' => ListFiltersAction::FILTERABLE,
                 'description' => 'update_filter: filter on category pages. "with_results" shows options that have '
                     . 'products (usual), "no_results" shows every option, "no" removes the filter',
             ],
@@ -110,7 +111,7 @@ class UpdateFilterAction implements ValidatingActionInterface, CautionedActionIn
                     $attribute['label'],
                     $value ? 'turned on' : 'turned off'
                 ),
-                'position' => sprintf(
+                default => sprintf(
                     'Filter "%s" moves from position %d to %d.',
                     $attribute['label'],
                     $attribute['position'],
@@ -138,6 +139,9 @@ class UpdateFilterAction implements ValidatingActionInterface, CautionedActionIn
         try {
             [$attribute, $changes] = $this->changes($params);
             $model = $this->attributeRepository->get($attribute['code']);
+            if (!$model instanceof AttributeModel) {
+                throw new LocalizedException(__('Attribute "%1" cannot be saved here.', $attribute['code']));
+            }
             foreach ($changes as $field => $value) {
                 $model->setData($field, $value);
             }
