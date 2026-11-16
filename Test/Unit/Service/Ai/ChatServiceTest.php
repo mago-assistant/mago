@@ -1629,6 +1629,52 @@ final class ChatServiceTest extends TestCase
         self::assertStringContainsString('masked for privacy', (string)$results['call_1']['error']);
     }
 
+    /**
+     * gpt-4o was seen writing U+007F where a "€" belonged; stored, it shows as a box on the storefront
+     */
+    #[Test]
+    public function itRefusesAWriteCarryingAnInvisibleControlCharacter(): void
+    {
+        $this->grants['cms_data'] = 'write';
+        $service = $this->buildChatService();
+
+        $results = $service->executeConfirmedTools([
+            [
+                'id' => 'call_1',
+                'name' => 'cms_data',
+                'input' => ['action' => 'update_page', 'content' => "over \x7f50"],
+            ],
+            ['id' => 'call_2', 'name' => 'cms_data', 'input' => ['action' => 'update_page', 'content' => "a\tb\r\nc"]],
+        ], self::ADMIN_ID);
+
+        self::assertStringContainsString('control character', (string)($results['call_1']['error'] ?? ''));
+        self::assertStringContainsString('"content"', (string)$results['call_1']['error']);
+        self::assertArrayNotHasKey('error', $results['call_2'], 'tab and line breaks are ordinary text');
+    }
+
+    #[Test]
+    public function aProposedWriteWithAControlCharacterNeverReachesTheCard(): void
+    {
+        $this->grants['cms_data'] = 'write';
+        $service = $this->buildChatService();
+        $this->responses = [
+            ['content' => '', 'tool_calls' => [[
+                'id' => 'call_1',
+                'name' => 'cms_data',
+                'input' => ['action' => 'update_page', 'content' => "over \x7f50"],
+            ]]],
+            ['content' => 'I will write the euro sign out.', 'tool_calls' => []],
+        ];
+        $events = [];
+
+        $service->processMessageStreaming([$this->userMessage()], static function (string $type) use (&$events): void {
+            $events[] = $type;
+        }, null, self::ADMIN_ID);
+
+        self::assertNotContains('confirm', $events);
+        self::assertStringContainsString('invisible control character', (string)json_encode($this->requests[1]));
+    }
+
     #[Test]
     public function itRefusesToCopyCustomerWrittenTextIntoAWrite(): void
     {
