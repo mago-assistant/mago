@@ -9,16 +9,19 @@ namespace MagoAssistant\Mago\Service\Skills\Catalog\LayeredNavigation;
 use Magento\Catalog\Api\ProductAttributeRepositoryInterface;
 use Magento\Catalog\Model\ResourceModel\Attribute as AttributeResource;
 use Magento\Framework\Exception\LocalizedException;
+use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
 use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 
 /**
  * Turns an attribute into a filter or back, or moves it
  *
+ * Only what differs from the current settings is saved, and the card names each change: models send
+ * every field they see, so a call meant to move a filter can carry a filterable "no" along with it.
  * Saves through the attribute resource model, as the attribute form does, without touching the options
  * or the store labels; the attribute's own save marks the indexers that need a rebuild.
  */
-class UpdateFilterAction implements ValidatingActionInterface
+class UpdateFilterAction implements ValidatingActionInterface, CautionedActionInterface
 {
     public function __construct(
         private readonly FilterAttributes $filterAttributes,
@@ -82,6 +85,41 @@ class UpdateFilterAction implements ValidatingActionInterface
         return 'Send only the fields the user asked to change. To put a filter after another, read the positions '
             . 'with list_filters and give it a position between; when several filters share a position, move the '
             . 'ones in the way as well, one call each.';
+    }
+
+    public function getCautions(array $params, int $adminUserId): array
+    {
+        try {
+            [$attribute, $changes] = $this->changes($params);
+        } catch (LocalizedException) {
+            return [];
+        }
+
+        $lines = [];
+        foreach ($changes as $field => $value) {
+            $lines[] = match ($field) {
+                'is_filterable' => sprintf(
+                    'Filter "%s" on category pages: %s becomes %s%s.',
+                    $attribute['label'],
+                    ListFiltersAction::FILTERABLE[$attribute['is_filterable']] ?? 'no',
+                    ListFiltersAction::FILTERABLE[$value],
+                    $value === 0 ? ' (the filter disappears from every category page)' : ''
+                ),
+                'is_filterable_in_search' => sprintf(
+                    'Filter "%s" on search result pages: %s.',
+                    $attribute['label'],
+                    $value ? 'turned on' : 'turned off'
+                ),
+                'position' => sprintf(
+                    'Filter "%s" moves from position %d to %d.',
+                    $attribute['label'],
+                    $attribute['position'],
+                    $value
+                ),
+            };
+        }
+
+        return $lines;
     }
 
     public function findRefusal(array $params): ?array
@@ -154,8 +192,23 @@ class UpdateFilterAction implements ValidatingActionInterface
             }
             $changes['position'] = (int)$params['position'];
         }
+        // Keep only what differs, so a value the model sent along unchanged is not a change.
+        $current = [
+            'is_filterable' => $attribute['is_filterable'],
+            'is_filterable_in_search' => (int)$attribute['is_filterable_in_search'],
+            'position' => $attribute['position'],
+        ];
+        $changes = array_filter(
+            $changes,
+            static fn ($value, string $field) => $value !== $current[$field],
+            ARRAY_FILTER_USE_BOTH
+        );
         if ($changes === []) {
-            throw new LocalizedException(__('Nothing to change: give filterable, filterable_in_search or position.'));
+            throw new LocalizedException(__(
+                'Nothing changes: "%1" already has these settings. Give filterable, filterable_in_search or '
+                . 'position with a new value.',
+                $attribute['code']
+            ));
         }
         $becomesFilter = ($changes['is_filterable'] ?? 0) > 0 || ($changes['is_filterable_in_search'] ?? 0) > 0;
         if ($becomesFilter && !in_array($attribute['input'], FilterAttributes::FILTERABLE_INPUTS, true)) {

@@ -196,15 +196,30 @@ class FilterAttributes
      */
     public function findCategories(string $reference, int $storeId): array
     {
+        // A number is an id first; a category called "2024" is still found by its name.
+        if (ctype_digit($reference)) {
+            $byId = $this->categories($storeId, 'entity_id', (int)$reference);
+            if ($byId !== []) {
+                return $byId;
+            }
+        }
+
+        return $this->categories($storeId, 'name', $reference);
+    }
+
+    /**
+     * @param int $storeId
+     * @param string $field
+     * @param int|string $value
+     * @return list<array{id: int, name: string}>
+     */
+    private function categories(int $storeId, string $field, int|string $value): array
+    {
         $collection = $this->categoryCollectionFactory->create()
             ->setStoreId($storeId)
             ->addAttributeToSelect('name')
-            ->addAttributeToFilter('level', ['gt' => 1]);
-        if (ctype_digit($reference)) {
-            $collection->addAttributeToFilter('entity_id', (int)$reference);
-        } else {
-            $collection->addAttributeToFilter('name', $reference);
-        }
+            ->addAttributeToFilter('level', ['gt' => 1])
+            ->addAttributeToFilter($field, $value);
 
         return array_values(array_map(
             static fn ($category) => ['id' => (int)$category->getId(), 'name' => (string)$category->getName()],

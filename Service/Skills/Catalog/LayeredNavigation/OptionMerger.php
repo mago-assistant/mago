@@ -40,7 +40,8 @@ class OptionMerger
      * @param array $attribute From FilterAttributes::attributes(), an option input
      * @param int $targetId Option the products keep
      * @param int[] $sourceIds Options the products move away from; deleted afterwards
-     * @return int[] Entity ids of the products that changed
+     * @return array{products: int[], not_deleted: int[]} Entity ids of the products that changed; options
+     *     that could not be deleted after their products moved (they are empty now)
      * @throws \Exception When the rewrite fails; nothing is changed then
      */
     public function merge(array $attribute, int $targetId, array $sourceIds): array
@@ -68,8 +69,14 @@ class OptionMerger
             throw $e;
         }
 
+        // The products have moved; an option that will not delete stays behind empty, it does not undo that.
+        $notDeleted = [];
         foreach ($sourceIds as $sourceId) {
-            $this->optionManagement->delete(FilterAttributes::PRODUCT_ENTITY_TYPE, $attribute['code'], $sourceId);
+            try {
+                $this->optionManagement->delete(FilterAttributes::PRODUCT_ENTITY_TYPE, $attribute['code'], $sourceId);
+            } catch (\Exception) {
+                $notDeleted[] = $sourceId;
+            }
         }
         foreach (self::INDEXERS as $indexerId) {
             $this->indexerRegistry->get($indexerId)->invalidate();
@@ -79,7 +86,7 @@ class OptionMerger
             $this->eventManager->dispatch('clean_cache_by_tags', ['object' => $this->cacheContext]);
         }
 
-        return $productIds;
+        return ['products' => $productIds, 'not_deleted' => $notDeleted];
     }
 
     /**

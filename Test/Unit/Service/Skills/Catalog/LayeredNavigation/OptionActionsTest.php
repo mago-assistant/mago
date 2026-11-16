@@ -35,6 +35,14 @@ class OptionActionsTest extends TestCase
         'is_user_defined' => true,
     ];
 
+    /** The resolution filter's current settings, as a model sends them along */
+    private const UNCHANGED = [
+        'attribute' => 'resolution',
+        'filterable' => 'with_results',
+        'filterable_in_search' => false,
+        'position' => 3,
+    ];
+
     private const OPTIONS = [101 => '8 MP', 102 => '8MP', 103 => '8mp', 104 => '12 MP', 105 => '24 MP'];
 
     /** Option id => product count; 24 MP has none */
@@ -112,7 +120,11 @@ class OptionActionsTest extends TestCase
     public static function refusedUpdates(): array
     {
         return [
-            'nothing to change' => [['attribute' => 'resolution'], 'Nothing to change'],
+            'nothing given' => [['attribute' => 'resolution'], 'Nothing changes'],
+            'only current values' => [
+                self::UNCHANGED,
+                'already has these settings',
+            ],
             'unknown attribute' => [['attribute' => 'lens', 'position' => 1], 'no product attribute "lens"'],
             'bad level' => [['attribute' => 'resolution', 'filterable' => 'yes'], 'with_results, no_results or no'],
             'negative position' => [['attribute' => 'resolution', 'position' => -1], 'whole number of 0 or more'],
@@ -134,9 +146,32 @@ class OptionActionsTest extends TestCase
     }
 
     #[Test]
-    public function turningOffAFilterOnATextFieldIsAllowed(): void
+    public function valuesSentAlongUnchangedAreNotChangesOnTheCard(): void
     {
-        self::assertNull($this->updateAction()->findRefusal(['attribute' => 'description', 'filterable' => 'no']));
+        $cautions = $this->updateAction()->getCautions(
+            ['position' => 5] + self::UNCHANGED,
+            1
+        );
+
+        self::assertSame(['Filter "Resolution" moves from position 3 to 5.'], $cautions);
+    }
+
+    #[Test]
+    public function theCardSaysWhenAFilterDisappears(): void
+    {
+        $cautions = $this->updateAction()->getCautions(
+            ['attribute' => 'resolution', 'filterable' => 'no', 'filterable_in_search' => true, 'position' => 3],
+            1
+        );
+
+        self::assertSame(
+            [
+                'Filter "Resolution" on category pages: with_results becomes no (the filter disappears from every '
+                . 'category page).',
+                'Filter "Resolution" on search result pages: turned on.',
+            ],
+            $cautions
+        );
     }
 
     private function deleteAction(): DeleteOptionsAction
@@ -161,8 +196,13 @@ class OptionActionsTest extends TestCase
 
     private function filterAttributes(): FilterAttributes
     {
-        $description = ['attribute_id' => 10, 'code' => 'description', 'label' => 'Description', 'input' => 'textarea']
-            + self::RESOLUTION;
+        $description = [
+            'attribute_id' => 10,
+            'code' => 'description',
+            'label' => 'Description',
+            'input' => 'textarea',
+            'is_filterable' => 0,
+        ] + self::RESOLUTION;
         $filterAttributes = $this->createStub(FilterAttributes::class);
         $filterAttributes->method('attribute')->willReturnCallback(
             static fn (string $code) => ['resolution' => self::RESOLUTION, 'description' => $description][$code] ?? null

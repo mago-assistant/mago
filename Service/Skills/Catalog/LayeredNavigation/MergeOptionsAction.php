@@ -128,22 +128,29 @@ class MergeOptionsAction implements IrreversibleActionInterface, ValidatingActio
     {
         try {
             [$attribute, $target, $sources] = $this->prepare($params);
-            $changed = $this->optionMerger->merge($attribute, (int)$params['target_option_id'], array_keys($sources));
+            $merged = $this->optionMerger->merge($attribute, (int)$params['target_option_id'], array_keys($sources));
         } catch (LocalizedException $e) {
             return ['error' => $e->getMessage()];
         } catch (\Exception) {
             return ['error' => 'The merge failed and was rolled back; no product changed.'];
         }
 
-        return [
+        $result = [
             'success' => true,
             'attribute' => $attribute['code'],
             'kept' => $target,
             'merged' => array_values($sources),
-            'products_changed' => count($changed),
+            'products_changed' => count($merged['products']),
             'message' => 'Merged. The storefront shows it after a reindex of catalog_product_attribute and '
                 . 'catalogsearch_fulltext and a cache flush.',
         ];
+        if ($merged['not_deleted'] !== []) {
+            $result['not_deleted'] = array_values(array_intersect_key($sources, array_flip($merged['not_deleted'])));
+            $result['message'] .= ' The products moved, but these options could not be deleted and are now empty: '
+                . 'delete them with delete_options.';
+        }
+
+        return $result;
     }
 
     /**
