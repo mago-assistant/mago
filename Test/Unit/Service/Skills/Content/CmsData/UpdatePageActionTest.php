@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Content\CmsData;
 
+use MagoAssistant\Mago\Service\Skills\Content\CmsData\CmsWriteCautions;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\GetPageAction;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\UpdatePageAction;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
@@ -36,7 +37,8 @@ class UpdatePageActionTest extends TestCase
         return new UpdatePageAction(
             $this->apiClient,
             new GetPageAction($this->apiClient),
-            new SecureAdminUrl(new FakeBackendUrl())
+            new SecureAdminUrl(new FakeBackendUrl()),
+            new CmsWriteCautions()
         );
     }
 

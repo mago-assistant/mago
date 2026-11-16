@@ -18,7 +18,7 @@ class CreateBlockAction implements CautionedActionInterface
         private readonly InternalApiClientInterface $apiClient,
         private readonly StoreScopeContext $scopeContext,
         private readonly SecureAdminUrl $secureAdminUrl,
-        private readonly CmsWriteCautions $cautions = new CmsWriteCautions()
+        private readonly CmsWriteCautions $cautions
     ) {
     }
 

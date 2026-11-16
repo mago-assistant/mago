@@ -17,7 +17,7 @@ class UpdatePageAction implements CautionedActionInterface
         private readonly InternalApiClientInterface $apiClient,
         private readonly GetPageAction $getPageAction,
         private readonly SecureAdminUrl $secureAdminUrl,
-        private readonly CmsWriteCautions $cautions = new CmsWriteCautions()
+        private readonly CmsWriteCautions $cautions
     ) {
     }
 
