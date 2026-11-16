@@ -67,6 +67,11 @@ The methods, and what goes wrong with each:
   that no action of the tool declares is logged as a warning ("Tool Arguments Never Declared") in
   Mago's error log, debug mode or not; with debug logging on, every dropped key shows up as "Tool
   Arguments Dropped".
+  `required` is a list of property names on the object that holds them (`'required' => ['sku']`), never
+  a flag on a property (`'required' => true`): OpenAI rejects the whole tool for that ("True is not of
+  type 'array'"). Say in the description that a parameter is needed, and check it in `execute()`.
+  `mago:tool:verify` fails on a flag, also one that a skill's combined schema hides behind another
+  action's declaration of the same parameter.
 - `getMagentoAcl(array $input = [])`: an empty `$input` must return the most restrictive resource
   the tool can reach (fail closed). A tool that touches no Magento data returns
   `Acl::MAGO_PER_USER`, which gates it by the per-user skill permission alone. Never `''`: an

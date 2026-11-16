@@ -37,17 +37,14 @@ class CreatePageAction implements ActionInterface
             'identifier' => [
                 'type' => 'string',
                 'description' => 'URL key for the page (e.g. "about-us")',
-                'required' => true,
             ],
             'title' => [
                 'type' => 'string',
                 'description' => 'Page title',
-                'required' => true,
             ],
             'content' => [
                 'type' => 'string',
                 'description' => 'Page content (HTML)',
-                'required' => true,
             ],
             'content_heading' => [
                 'type' => 'string',
