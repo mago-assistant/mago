@@ -263,6 +263,18 @@ $starterIcons = [
         aria-autocomplete="list"
         enterkeyhint="send"
     >
+    <?php /* Voice input (#141): hidden until voice-input.js finds speech recognition and the setting is on */ ?>
+    <button
+        type="button"
+        id="mago-dock-mic"
+        class="mago-dock-btn mago-dock-mic"
+        hidden
+        title="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>"
+        aria-label="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>"
+        aria-pressed="false"
+    >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
+    </button>
     <button
         type="submit"
         class="mago-dock-btn mago-dock-send"

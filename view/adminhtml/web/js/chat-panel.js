@@ -526,6 +526,29 @@ define([
         dockInput.addEventListener('keydown', (e) => {
             if (slashField === dockInput) handleSlashKey(e, () => dock.requestSubmit());
         });
+
+        // Voice input in the bar, when it is on (#141). The consent card and any error need the panel,
+        // so those open it; without consent yet, recording then starts from the panel's own microphone.
+        if (config.voiceInput) {
+            createVoiceInput({
+                input: dockInput,
+                button: qs('#mago-dock-mic'),
+                lang: config.voiceLocale,
+                t: t,
+                requireConsent: (start) => {
+                    if (hasVoiceConsent()) {
+                        start();
+                        return;
+                    }
+                    openFromDock();
+                    requireVoiceConsent(() => qs('#mago-mic').click());
+                },
+                onError: (sentence) => {
+                    openFromDock();
+                    addTextMsg('assistant', sentence);
+                }
+            });
+        }
         dock.hidden = false;
     }
 

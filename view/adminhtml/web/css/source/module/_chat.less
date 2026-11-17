@@ -1225,6 +1225,23 @@ body.mago-active.mago-fullsize .page-wrapper {
         outline: @mago-size__2 solid var(--mago-accent, #E8710A);
         outline-offset: @mago-size__1;
     }
+
+    // display: flex above would otherwise keep a hidden button (the microphone) on screen
+    &[hidden] {
+        display: none;
+    }
+}
+
+// Recording: the same red pulse as the panel's microphone (.mago-mic-btn.is-listening)
+.mago-dock-mic.is-listening {
+    background: #D92D20;
+    color: #FFFFFF;
+    animation: mago-mic-pulse 1.2s ease-out infinite;
+
+    &:hover {
+        background: #D92D20;
+        color: #FFFFFF;
+    }
 }
 
 .mago-dock-divider {
@@ -1237,6 +1254,10 @@ body.mago-active.mago-fullsize .page-wrapper {
 @media (prefers-reduced-motion: reduce) {
     .mago-dock-btn {
         transition: none;
+    }
+
+    .mago-dock-mic.is-listening {
+        animation: none;
     }
 }
 
