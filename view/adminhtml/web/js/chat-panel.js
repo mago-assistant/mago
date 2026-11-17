@@ -307,9 +307,9 @@ define([
     var inputArea = qs('#mago-input-area');
     var slashMenu = qs('#mago-slash-menu');
 
-    // A theme without the header container renders the panel without its
-    // toggle, so bail out before anything binds to a missing element.
-    if (!toggle || !chat) {
+    // The header toggle and the chat bar are each optional (Chat Settings > Display Mode), and a theme
+    // without the header container renders no toggle. With neither there is no way in, so bail out.
+    if (!chat || (!toggle && !qs('#mago-dock'))) {
         return;
     }
 
@@ -407,6 +407,9 @@ define([
     // The header icon is the only way in or out of the panel, so its tooltip,
     // aria state and active style all have to follow whatever it will do next.
     function syncToggleLabel() {
+        if (!toggle) {
+            return;
+        }
         var open = chat.classList.contains('is-open');
         var label = open ? toggle.getAttribute('data-label-close') : toggle.getAttribute('data-label-open');
         if (label) {
@@ -477,7 +480,8 @@ define([
         saveState();
         // Off screen but still in the DOM, the closed panel would otherwise stay in the tab order.
         chat.inert = true;
-        if (hadFocus) (returnFocusTo || toggle).focus();
+        const focusTarget = returnFocusTo || toggle || qs('#mago-dock-input');
+        if (hadFocus && focusTarget) focusTarget.focus();
         returnFocusTo = null;
     }
 
@@ -509,13 +513,15 @@ define([
         dock.hidden = false;
     }
 
-    toggle.onclick = function() {
-        if (chat.classList.contains('is-open')) {
-            closePanel();
-        } else {
-            openPanel();
-        }
-    };
+    if (toggle) {
+        toggle.onclick = function() {
+            if (chat.classList.contains('is-open')) {
+                closePanel();
+            } else {
+                openPanel();
+            }
+        };
+    }
     qs('#mago-close').onclick = closePanel;
     qs('#mago-expand').onclick = function() {
         setFullsize(!chat.classList.contains('is-fullsize'));

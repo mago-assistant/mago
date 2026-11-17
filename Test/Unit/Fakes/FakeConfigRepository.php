@@ -16,7 +16,7 @@ class FakeConfigRepository implements RepositoryInterface
     private int $customerNotificationInterval = 0;
     private bool $answerWidgets = false;
     private bool $voiceInput = false;
-    private bool $chatBar = true;
+    private string $displayMode = RepositoryInterface::DISPLAY_MODE_BOTH;
     private int $maxResponseTokens = 0;
     private bool $reindexAllowed = false;
     private bool $isDebugEnabled = false;
@@ -70,15 +70,15 @@ class FakeConfigRepository implements RepositoryInterface
         return $this->answerWidgets;
     }
 
-    public function withChatBar(bool $enabled): self
+    public function withDisplayMode(string $mode): self
     {
-        $this->chatBar = $enabled;
+        $this->displayMode = $mode;
         return $this;
     }
 
-    public function isChatBarEnabled(): bool
+    public function getDisplayMode(): string
     {
-        return $this->chatBar;
+        return $this->displayMode;
     }
 
     public function withVoiceInput(bool $enabled): self
