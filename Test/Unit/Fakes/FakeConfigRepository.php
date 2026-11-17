@@ -16,6 +16,7 @@ class FakeConfigRepository implements RepositoryInterface
     private int $customerNotificationInterval = 0;
     private bool $answerWidgets = false;
     private bool $voiceInput = false;
+    private bool $chatBar = true;
     private int $maxResponseTokens = 0;
     private bool $reindexAllowed = false;
     private bool $isDebugEnabled = false;
@@ -67,6 +68,17 @@ class FakeConfigRepository implements RepositoryInterface
     public function isAnswerWidgetsEnabled(): bool
     {
         return $this->answerWidgets;
+    }
+
+    public function withChatBar(bool $enabled): self
+    {
+        $this->chatBar = $enabled;
+        return $this;
+    }
+
+    public function isChatBarEnabled(): bool
+    {
+        return $this->chatBar;
     }
 
     public function withVoiceInput(bool $enabled): self

@@ -32,6 +32,7 @@ interface RepositoryInterface
     public const XML_PATH_ASSISTANT_NAME = 'mago/chat/assistant_name';
     public const XML_PATH_LANGUAGE = 'mago/chat/language';
     public const XML_PATH_ANSWER_WIDGETS = 'mago/chat/answer_widgets';
+    public const XML_PATH_CHAT_BAR = 'mago/chat/chat_bar';
     public const XML_PATH_VOICE_INPUT = 'mago/voice/enabled';
     public const XML_PATH_ADDONS_ENABLED = 'mago/addons/enabled';
     public const XML_PATH_DOCS_ENABLED = 'mago/docs/enabled';
@@ -162,6 +163,13 @@ interface RepositoryInterface
      * @return bool
      */
     public function isAnswerWidgetsEnabled(): bool;
+
+    /**
+     * Whether admin pages show the chat bar at the bottom, a field that sends straight to the panel
+     *
+     * @return bool
+     */
+    public function isChatBarEnabled(): bool;
 
     /**
      * Whether the chat panel offers a microphone button (browser speech recognition)

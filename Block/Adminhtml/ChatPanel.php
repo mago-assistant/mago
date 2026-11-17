@@ -309,6 +309,14 @@ class ChatPanel extends Template
         return $user->getFirstName() ?: $user->getUserName();
     }
 
+    /**
+     * Whether to show the chat bar at the bottom of admin pages (Chat Settings > Chat Bar)
+     */
+    public function isChatBarEnabled(): bool
+    {
+        return $this->configRepository->isChatBarEnabled();
+    }
+
     public function getAccentColor(): string
     {
         return $this->configRepository->getAccentColor();

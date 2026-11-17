@@ -191,6 +191,11 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return $this->isSetFlag(self::XML_PATH_ANSWER_WIDGETS);
     }
 
+    public function isChatBarEnabled(): bool
+    {
+        return $this->isSetFlag(self::XML_PATH_CHAT_BAR, null, ScopeConfigInterface::SCOPE_TYPE_DEFAULT);
+    }
+
     public function isVoiceInputEnabled(): bool
     {
         return $this->isSetFlag(self::XML_PATH_VOICE_INPUT, null, ScopeConfigInterface::SCOPE_TYPE_DEFAULT);
