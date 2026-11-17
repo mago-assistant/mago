@@ -38,6 +38,32 @@
     color: var(--mago-ink-muted, #736B65);
 }
 
+// Slim, warm scrollbars for everything inside the element: the panel, and the chat bar's slash menu
+.mago-scrollbars() {
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(55, 51, 48, 0.18) transparent;
+    }
+
+    ::-webkit-scrollbar {
+        width: @mago-size__8;
+        height: @mago-size__8;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: rgba(55, 51, 48, 0.14);
+        border-radius: @mago-size__4;
+
+        &:hover {
+            background: rgba(55, 51, 48, 0.26);
+        }
+    }
+}
+
 .mago-sr-only {
     position: absolute;
     width: @mago-size__1;
@@ -159,28 +185,7 @@ html:has(body.mago-active) {
     }
 
     // Slim, warm scrollbars so the panel keeps its light, airy feel
-    * {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(55, 51, 48, 0.18) transparent;
-    }
-
-    ::-webkit-scrollbar {
-        width: @mago-size__8;
-        height: @mago-size__8;
-    }
-
-    ::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: rgba(55, 51, 48, 0.14);
-        border-radius: @mago-size__4;
-
-        &:hover {
-            background: rgba(55, 51, 48, 0.26);
-        }
-    }
+    .mago-scrollbars();
 
     button {
         font-family: var(--mago-font);
@@ -1167,11 +1172,13 @@ body.mago-active.mago-fullsize .page-wrapper {
     }
 }
 
-// The menu itself limits its height and scrolls; the wrapper only places it above the bar.
+// The menu itself limits its height and scrolls; the wrapper only places it above the bar, with the
+// panel's scrollbars.
 .mago-dock .mago-dock-slash-menu {
     left: 0;
     right: 0;
     bottom: ~"calc(100% + @{mago-size__8})";
+    .mago-scrollbars();
 }
 
 .mago-dock-mark {
