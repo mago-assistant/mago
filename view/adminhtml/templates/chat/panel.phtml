@@ -237,7 +237,12 @@ $starterIcons = [
        Hidden until chat-panel.js wires it, so it never submits as a plain form, and hidden by CSS while
        the panel is open. */ ?>
 <?php if ($block->isChatBarEnabled()): ?>
-<form id="mago-dock" class="mago-dock" hidden>
+<form
+    id="mago-dock"
+    class="mago-dock"
+    aria-label="<?= $escaper->escapeHtmlAttr(__('Ask %1', $assistantName)) ?>"
+    hidden
+>
     <span class="mago-dock-mark" aria-hidden="true">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="34 30 188 188" fill="currentColor">
             <polygon points="128,40 160,72 128,104 96,72" opacity="0.55"/>

@@ -449,7 +449,11 @@ define([
         }
     }
 
+    // Where the focus goes when the panel closes: the chat bar when it was opened from there.
+    let returnFocusTo = null;
+
     function openPanel() {
+        returnFocusTo = null;
         chat.inert = false;
         chat.classList.add('is-open');
         document.body.classList.add('mago-active');
@@ -473,25 +477,35 @@ define([
         saveState();
         // Off screen but still in the DOM, the closed panel would otherwise stay in the tab order.
         chat.inert = true;
-        if (hadFocus) toggle.focus();
+        if (hadFocus) (returnFocusTo || toggle).focus();
+        returnFocusTo = null;
     }
 
     // Chat bar at the bottom of the page: what is typed there is sent from the panel, as if typed in it.
     const dock = qs('#mago-dock');
     if (dock) {
         const dockInput = qs('#mago-dock-input');
+        const openFromDock = () => {
+            openPanel();
+            returnFocusTo = dockInput;
+        };
         dock.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = dockInput.value.trim();
-            openPanel();
-            if (!text || busy) {
+            openFromDock();
+            if (!text) {
                 return;
             }
             dockInput.value = '';
             input.value = text;
+            // While a reply is still coming in, the text waits in the panel's field instead of going lost.
+            if (busy) {
+                input.dispatchEvent(new Event('input'));
+                return;
+            }
             send();
         });
-        qs('#mago-dock-open').addEventListener('click', openPanel);
+        qs('#mago-dock-open').addEventListener('click', openFromDock);
         dock.hidden = false;
     }
 
