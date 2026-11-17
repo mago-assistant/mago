@@ -1129,6 +1129,113 @@ body.mago-active.mago-fullsize .page-wrapper {
     display: none !important;
 }
 
+// Chat bar: a pill fixed at the bottom of every admin page. Typing there opens the panel and sends the
+// message from it, so the bar itself holds no conversation. Hidden while the panel is open.
+.mago-dock {
+    position: fixed;
+    left: 50%;
+    bottom: @mago-size__20;
+    z-index: 900;
+    transform: translateX(-50%);
+    width: ~"min(@{mago-size__320} * 1.75, calc(100vw - @{mago-size__32}))";
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: @mago-size__4;
+    padding: @mago-size__6 @mago-size__6 @mago-size__6 @mago-size__14;
+    background: var(--mago-panel, #FFFFFF);
+    color: var(--mago-ink, #373330);
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    border-radius: @mago-size__30;
+    box-shadow: 0 @mago-size__8 @mago-size__24 rgba(55, 51, 48, 0.12);
+    font-family: var(--mago-font);
+    font-size: @mago-font-size__13;
+    letter-spacing: var(--mago-tracking, -0.01em);
+
+    &[hidden],
+    body.mago-active & {
+        display: none;
+    }
+
+    &:focus-within {
+        border-color: var(--mago-control-border, #928983);
+        box-shadow:
+            0 @mago-size__8 @mago-size__24 rgba(55, 51, 48, 0.16),
+            0 0 0 @mago-size__2 rgba(var(--mago-accent-rgb), 0.35);
+    }
+}
+
+.mago-dock-mark {
+    display: flex;
+    flex-shrink: 0;
+    color: var(--mago-accent, #E8710A);
+}
+
+.mago-dock-input {
+    flex: 1;
+    min-width: 0;
+    height: @mago-size__34;
+    padding: 0 @mago-size__6;
+    background: transparent;
+    color: inherit;
+    border: 0;
+    font: inherit;
+
+    &::placeholder {
+        color: var(--mago-ink-muted, #736B65);
+    }
+
+    // The bar's own ring shows focus; a second one on the field would sit inside it.
+    &:focus {
+        outline: none;
+        box-shadow: none;
+    }
+}
+
+.mago-dock-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: @mago-size__34;
+    height: @mago-size__34;
+    padding: 0;
+    background: transparent;
+    color: var(--mago-ink-soft, #6B645F);
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+
+    &:hover {
+        background: var(--mago-surface, #F7F5F3);
+        color: var(--mago-ink, #373330);
+    }
+
+    &:focus-visible {
+        outline: @mago-size__2 solid var(--mago-accent, #E8710A);
+        outline-offset: @mago-size__1;
+    }
+}
+
+.mago-dock-divider {
+    flex-shrink: 0;
+    width: @mago-size__1;
+    height: @mago-size__18;
+    background: var(--mago-hairline, #E9E5E1);
+}
+
+// Room below the page content, so the bar never covers a grid's last row or the pager.
+body:has(.mago-dock:not([hidden])) .page-wrapper {
+    padding-bottom: @mago-size__88;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mago-dock-btn {
+        transition: none;
+    }
+}
+
 // Responsive - full width on small screens
 @media (max-width: @screen__m) {
     .mago-chat-panel {

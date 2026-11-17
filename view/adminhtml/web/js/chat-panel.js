@@ -476,6 +476,25 @@ define([
         if (hadFocus) toggle.focus();
     }
 
+    // Chat bar at the bottom of the page: what is typed there is sent from the panel, as if typed in it.
+    const dock = qs('#mago-dock');
+    if (dock) {
+        const dockInput = qs('#mago-dock-input');
+        dock.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = dockInput.value.trim();
+            openPanel();
+            if (!text || busy) {
+                return;
+            }
+            dockInput.value = '';
+            input.value = text;
+            send();
+        });
+        qs('#mago-dock-open').addEventListener('click', openPanel);
+        dock.hidden = false;
+    }
+
     toggle.onclick = function() {
         if (chat.classList.contains('is-open')) {
             closePanel();
