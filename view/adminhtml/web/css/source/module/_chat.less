@@ -1167,6 +1167,13 @@ body.mago-active.mago-fullsize .page-wrapper {
     }
 }
 
+// The menu itself limits its height and scrolls; the wrapper only places it above the bar.
+.mago-dock .mago-dock-slash-menu {
+    left: 0;
+    right: 0;
+    bottom: ~"calc(100% + @{mago-size__8})";
+}
+
 .mago-dock-mark {
     display: flex;
     flex-shrink: 0;

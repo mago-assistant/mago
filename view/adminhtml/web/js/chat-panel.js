@@ -306,6 +306,10 @@ define([
     var histList = qs('#mago-history-list');
     var inputArea = qs('#mago-input-area');
     var slashMenu = qs('#mago-slash-menu');
+    // The slash menu serves the panel's input and the chat bar's: the field it was opened from, and
+    // the container it renders in next to that field.
+    var slashField = input;
+    var slashHost = slashMenu;
 
     // The header toggle and the chat bar are each optional (Chat Settings > Display Mode), and a theme
     // without the header container renders no toggle. With neither there is no way in, so bail out.
@@ -495,6 +499,7 @@ define([
         };
         dock.addEventListener('submit', (e) => {
             e.preventDefault();
+            if (slashField === dockInput) hideSlashMenu();
             const text = dockInput.value.trim();
             openFromDock();
             if (!text) {
@@ -510,6 +515,17 @@ define([
             send();
         });
         qs('#mago-dock-open').addEventListener('click', openFromDock);
+        dockInput.addEventListener('input', () => {
+            const value = dockInput.value;
+            if (value.charAt(0) === '/') {
+                showSlashMenu(value.substring(1), dockInput);
+            } else if (slashField === dockInput) {
+                hideSlashMenu();
+            }
+        });
+        dockInput.addEventListener('keydown', (e) => {
+            if (slashField === dockInput) handleSlashKey(e, () => dock.requestSubmit());
+        });
         dock.hidden = false;
     }
 
@@ -585,7 +601,10 @@ define([
         return item.full.indexOf(q) !== -1 || item.description.toLowerCase().indexOf(q) !== -1;
     }
 
-    function showSlashMenu(filter) {
+    function showSlashMenu(filter, field) {
+        if (slashActive && field !== slashField) hideSlashMenu();
+        slashField = field || input;
+        slashHost = slashField === input ? slashMenu : qs('#mago-dock-slash-menu');
         var q = (filter || '').toLowerCase();
         filteredItems = slashItems.filter(function(item) { return matchesSlashItem(item, q); });
         if (!filteredItems.length) {
@@ -594,7 +613,7 @@ define([
         }
         slashIndex = 0;
         slashActive = true;
-        slashMenu.innerHTML = '';
+        slashHost.innerHTML = '';
         // S14 skill menu: one row per entry with its risk colour. Commands and skills
         // get a group heading inside the one menu when both kinds survive the filter.
         var hasCommands = filteredItems.some(function(i) { return i.type === 'command'; });
@@ -613,10 +632,10 @@ define([
             }),
             onSelect: function(entry, i) { selectSlashItem(filteredItems[i]); }
         });
-        slashMenu.appendChild(slashMenuNode);
-        slashMenu.classList.add('is-visible');
-        input.setAttribute('aria-controls', slashMenuNode.magoListId);
-        input.setAttribute('aria-activedescendant', slashMenuNode.magoItems[0].id);
+        slashHost.appendChild(slashMenuNode);
+        slashHost.classList.add('is-visible');
+        slashField.setAttribute('aria-controls', slashMenuNode.magoListId);
+        slashField.setAttribute('aria-activedescendant', slashMenuNode.magoItems[0].id);
         if (filteredItems.length !== announcedSlashCount) {
             announcedSlashCount = filteredItems.length;
             announce(filteredItems.length === 1
@@ -669,33 +688,34 @@ define([
         slashActive = false;
         slashMenuNode = null;
         announcedSlashCount = null;
-        slashMenu.classList.remove('is-visible');
-        slashMenu.innerHTML = '';
-        input.removeAttribute('aria-controls');
-        input.removeAttribute('aria-activedescendant');
+        slashHost.classList.remove('is-visible');
+        slashHost.innerHTML = '';
+        slashField.removeAttribute('aria-controls');
+        slashField.removeAttribute('aria-activedescendant');
     }
 
     function selectSlashItem(item) {
-        input.value = item.type === 'command'
+        var field = slashField;
+        field.value = item.type === 'command'
             ? '/' + item.full + ' '
             : 'Use the ' + item.skill.name + ' skill to ';
-        autoGrow();
+        if (field === input) autoGrow();
         hideSlashMenu();
-        input.focus();
+        field.focus();
     }
 
     // The input already holds a complete command ("/cache flush") or a bare command name
     // ("/cache", which the backend answers with its usage), so Enter should send, not complete.
     function isTypedCommand(item) {
         if (!item || item.type !== 'command') return false;
-        var typed = input.value.trim().toLowerCase();
+        var typed = slashField.value.trim().toLowerCase();
         return typed === '/' + item.full || typed === '/' + item.command;
     }
 
     function updateSlashHighlight() {
         if (!slashMenuNode) return;
         slashMenuNode.magoSetActive(slashIndex);
-        input.setAttribute('aria-activedescendant', slashMenuNode.magoItems[slashIndex].id);
+        slashField.setAttribute('aria-activedescendant', slashMenuNode.magoItems[slashIndex].id);
     }
 
     function autoGrow() {
@@ -732,43 +752,51 @@ define([
         updatePrivacyHint(v);
         if (v.charAt(0) === '/') {
             var filter = v.substring(1);
-            showSlashMenu(filter);
+            showSlashMenu(filter, input);
         } else {
             hideSlashMenu();
         }
     });
 
-    input.onkeydown = function(e) {
-        if (slashActive) {
-            if (e.keyCode === 38) { // up
-                e.preventDefault();
-                slashIndex = Math.max(0, slashIndex - 1);
-                updateSlashHighlight();
-                return;
-            }
-            if (e.keyCode === 40) { // down
-                e.preventDefault();
-                slashIndex = Math.min(filteredItems.length - 1, slashIndex + 1);
-                updateSlashHighlight();
-                return;
-            }
-            if (e.keyCode === 13 && isTypedCommand(filteredItems[slashIndex])) { // enter on a complete command runs it
-                e.preventDefault();
-                hideSlashMenu();
-                send();
-                return;
-            }
-            if (e.keyCode === 13 || e.keyCode === 9) { // enter or tab
-                e.preventDefault();
-                if (filteredItems[slashIndex]) selectSlashItem(filteredItems[slashIndex]);
-                return;
-            }
-            if (e.keyCode === 27) { // escape
-                e.preventDefault();
-                hideSlashMenu();
-                return;
-            }
+    /**
+     * Arrow keys, Enter, Tab and Escape while the slash menu is open, for whichever field it serves.
+     * Returns true when the key was the menu's; run() sends a complete command as typed.
+     */
+    function handleSlashKey(e, run) {
+        if (!slashActive) return false;
+        if (e.keyCode === 38) { // up
+            e.preventDefault();
+            slashIndex = Math.max(0, slashIndex - 1);
+            updateSlashHighlight();
+            return true;
         }
+        if (e.keyCode === 40) { // down
+            e.preventDefault();
+            slashIndex = Math.min(filteredItems.length - 1, slashIndex + 1);
+            updateSlashHighlight();
+            return true;
+        }
+        if (e.keyCode === 13 && isTypedCommand(filteredItems[slashIndex])) { // enter on a complete command runs it
+            e.preventDefault();
+            hideSlashMenu();
+            run();
+            return true;
+        }
+        if (e.keyCode === 13 || e.keyCode === 9) { // enter or tab
+            e.preventDefault();
+            if (filteredItems[slashIndex]) selectSlashItem(filteredItems[slashIndex]);
+            return true;
+        }
+        if (e.keyCode === 27) { // escape
+            e.preventDefault();
+            hideSlashMenu();
+            return true;
+        }
+        return false;
+    }
+
+    input.onkeydown = function(e) {
+        if (handleSlashKey(e, send)) return;
         if (e.keyCode === 13 && !e.shiftKey) { e.preventDefault(); send(); }
     };
     sendBtn.onclick = send;

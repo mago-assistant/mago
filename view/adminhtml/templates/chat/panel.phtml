@@ -239,10 +239,12 @@ $starterIcons = [
 <?php if ($block->isChatBarEnabled()): ?>
 <form
     id="mago-dock"
-    class="mago-dock"
+    class="mago-dock mago-kit"
     aria-label="<?= $escaper->escapeHtmlAttr(__('Ask %1', $assistantName)) ?>"
     hidden
 >
+    <?php /* The slash menu (commands and skills) opens here, above the bar, when the field starts with "/" */ ?>
+    <div id="mago-dock-slash-menu" class="mago-slash-menu mago-dock-slash-menu"></div>
     <span class="mago-dock-mark" aria-hidden="true">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="34 30 188 188" fill="currentColor">
             <polygon points="128,40 160,72 128,104 96,72" opacity="0.55"/>
@@ -258,6 +260,7 @@ $starterIcons = [
         class="mago-dock-input"
         placeholder="<?= $escaper->escapeHtmlAttr(__('Ask %1', $assistantName)) ?>"
         autocomplete="off"
+        aria-autocomplete="list"
         enterkeyhint="send"
     >
     <button
