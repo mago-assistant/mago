@@ -87,12 +87,14 @@ class CreateProductAction implements ActionInterface
             'category_ids' => [
                 'type' => 'array',
                 'items' => ['type' => 'integer'],
-                'description' => 'Category IDs to assign the product to. ONLY if the user named categories; omit otherwise.',
+                'description' => 'Category IDs to assign the product to. ONLY if the user named categories; omit '
+                    . 'otherwise. Resolve names to IDs with "list_categories"; never ask the user for an ID.',
             ],
             'website_ids' => [
                 'type' => 'array',
                 'items' => ['type' => 'integer'],
-                'description' => 'Website IDs (default: [1])',
+                'description' => 'Website IDs (default: [1]). Match a named website against the [Store scope] '
+                    . 'section already in the system prompt; never ask the user for an ID.',
             ],
             'custom_attributes' => [
                 'type' => 'object',
@@ -166,12 +168,15 @@ class CreateProductAction implements ActionInterface
 Only pass values the user actually gave. Never invent qty, weight, descriptions, categories or
 other attributes to make the product look complete; leave them out and the store's defaults apply.
 Deriving a SKU from the name (uppercase, dashes) and assuming product_type "simple" is fine, say so.
-The result lists what was left empty under "missing" — repeat that to the user so they can follow up.
-Required: sku, name, product_type. Price is required for simple, virtual, downloadable, configurable
-and fixed-price bundle products. Grouped products and dynamic bundles derive price from children —
-child products must exist first (create them with separate create_product calls).
+Required before calling: sku, name, product_type, and price (for simple, virtual, downloadable,
+configurable and fixed-price bundle products). If any of these is truly missing from what the user
+gave, ask for all of them together in one message — never ask one field at a time, and never go back
+for a second round once the user has answered. Grouped products and dynamic bundles derive price from
+children — child products must exist first (create them with separate create_product calls).
 Configurable parents are created without variants; add them afterwards with add_configurable_variants.
 Downloadable links with type "url" are used; for uploaded files the admin must use the admin panel.
+The result reports everything that was left empty under "missing" AFTER the product is created — this
+is an FYI for the user to fill in later via the admin edit link, not something to ask about beforehand.
 TEXT;
     }
 

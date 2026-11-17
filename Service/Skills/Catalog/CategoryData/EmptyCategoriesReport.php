@@ -36,8 +36,6 @@ class EmptyCategoriesReport
     public const REASON_STATIC_BLOCK = 'static_block_only';
     public const REASON_OUT_OF_STOCK = 'out_of_stock_only';
 
-    private const PATH_SEPARATOR = ' > ';
-
     /** @var array<int,array<int,int>> Root category id => assigned product counts, the same for every store view */
     private array $assignedCounts = [];
 
@@ -101,7 +99,7 @@ class EmptyCategoriesReport
         $shownFromBelow = self::reachedFromBelow($categories, $shownCounts);
         $subcategories = [];
         foreach ($categories as $id => $category) {
-            $ancestors = self::ancestorIds($category['path'], $id);
+            $ancestors = CategoryTree::ancestorIds($category['path'], $id);
             $parentId = end($ancestors);
             if ($category['is_active'] && $parentId !== false) {
                 $subcategories[$parentId] = ($subcategories[$parentId] ?? 0) + 1;
@@ -123,7 +121,7 @@ class EmptyCategoriesReport
             $rows[] = [
                 'category_id' => $id,
                 'name' => $category['name'],
-                'path' => self::breadcrumb($categories, $category['path'], $id, $rootCategoryId),
+                'path' => CategoryTree::breadcrumb($categories, $category['path'], $id, $rootCategoryId),
                 'level' => $category['level'],
                 'is_anchor' => $category['is_anchor'],
                 'display_mode' => $category['display_mode'],
@@ -148,7 +146,7 @@ class EmptyCategoriesReport
         $reached = [];
         foreach ($categories as $id => $category) {
             if ($category['is_active'] && ($counts[$id] ?? 0) > 0) {
-                foreach (self::ancestorIds($category['path'], $id) as $ancestorId) {
+                foreach (CategoryTree::ancestorIds($category['path'], $id) as $ancestorId) {
                     $reached[$ancestorId] = true;
                 }
             }
@@ -167,35 +165,6 @@ class EmptyCategoriesReport
         }
 
         return $assigned > 0 ? self::REASON_NONE_LIVE : self::REASON_NONE_ASSIGNED;
-    }
-
-    /**
-     * Ids in a category path above the category itself, root first.
-     *
-     * @return list<int>
-     */
-    private static function ancestorIds(string $path, int $categoryId): array
-    {
-        $ids = array_map('intval', explode('/', $path));
-
-        return array_values(array_filter($ids, static fn (int $id): bool => $id !== $categoryId));
-    }
-
-    /**
-     * Names from below the store root down to the category, e.g. "Men > Shoes > Sale".
-     *
-     * @param array<int,CategoryNode> $categories
-     */
-    private static function breadcrumb(array $categories, string $path, int $categoryId, int $rootCategoryId): string
-    {
-        $names = [];
-        foreach ([...self::ancestorIds($path, $categoryId), $categoryId] as $id) {
-            if (isset($categories[$id]) && $id !== $rootCategoryId) {
-                $names[] = $categories[$id]['name'];
-            }
-        }
-
-        return implode(self::PATH_SEPARATOR, $names);
     }
 
     /**
