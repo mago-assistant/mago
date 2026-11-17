@@ -497,9 +497,12 @@ define([
             openPanel();
             returnFocusTo = dockInput;
         };
+        let dockVoice = null;
         dock.addEventListener('submit', (e) => {
             e.preventDefault();
             if (slashField === dockInput) hideSlashMenu();
+            // A recording still running would keep writing into the bar after its text was sent
+            if (dockVoice) dockVoice.cancel();
             const text = dockInput.value.trim();
             openFromDock();
             if (!text) {
@@ -530,7 +533,7 @@ define([
         // Voice input in the bar, when it is on (#141). The consent card and any error need the panel,
         // so those open it; without consent yet, recording then starts from the panel's own microphone.
         if (config.voiceInput) {
-            createVoiceInput({
+            dockVoice = createVoiceInput({
                 input: dockInput,
                 button: qs('#mago-dock-mic'),
                 lang: config.voiceLocale,
@@ -879,7 +882,11 @@ define([
                 removeCard();
                 proceed();
             },
-            onLater: removeCard
+            onLater: function () {
+                removeCard();
+                // The card had the focus; without this it is lost and Escape no longer closes the panel
+                input.focus();
+            }
         });
         card.classList.add('mago-voice-consent');
         holder.querySelector('.mago-message-content').appendChild(card);
