@@ -1137,7 +1137,7 @@ body.mago-active.mago-fullsize .page-wrapper {
     bottom: @mago-size__20;
     z-index: 900;
     transform: translateX(-50%);
-    width: ~"min(@{mago-size__320} * 1.75, calc(100vw - @{mago-size__32}))";
+    width: ~"min(@{mago-size__320} + @{mago-size__100}, calc(100vw - @{mago-size__32}))";
     box-sizing: border-box;
     display: flex;
     align-items: center;
@@ -1223,11 +1223,6 @@ body.mago-active.mago-fullsize .page-wrapper {
     width: @mago-size__1;
     height: @mago-size__18;
     background: var(--mago-hairline, #E9E5E1);
-}
-
-// Room below the page content, so the bar never covers a grid's last row or the pager.
-body:has(.mago-dock:not([hidden])) .page-wrapper {
-    padding-bottom: @mago-size__88;
 }
 
 @media (prefers-reduced-motion: reduce) {

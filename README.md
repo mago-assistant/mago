@@ -131,7 +131,7 @@ URL` and `Verify TLS Certificate` settings are removed, along with their saved v
 
 ### Chat bar (on by default)
 
-Every admin page shows a message field at the bottom centre. What you type there opens the chat
+Every admin page shows an "Ask Mago" field at the bottom centre. What you type there opens the chat
 panel and is sent from it; the button next to it opens the panel without a message. The bar hides
 while the panel is open. Turn it off under
 `Stores > Configuration > Mago Assistant > Chat Settings > Chat Bar`.
