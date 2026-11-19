@@ -19,6 +19,8 @@ use Magento\Framework\EntityManager\MetadataPool;
  */
 class CategoryTree
 {
+    private const PATH_SEPARATOR = ' > ';
+
     public function __construct(
         private readonly ResourceConnection $resource,
         private readonly MetadataPool $metadataPool,
@@ -72,5 +74,34 @@ class CategoryTree
         }
 
         return $categories;
+    }
+
+    /**
+     * Ids in a category path above the category itself, root first.
+     *
+     * @return list<int>
+     */
+    public static function ancestorIds(string $path, int $categoryId): array
+    {
+        $ids = array_map('intval', explode('/', $path));
+
+        return array_values(array_filter($ids, static fn (int $id): bool => $id !== $categoryId));
+    }
+
+    /**
+     * Names from below the store root down to the category, e.g. "Men > Shoes > Sale".
+     *
+     * @param array<int,CategoryNode> $categories
+     */
+    public static function breadcrumb(array $categories, string $path, int $categoryId, int $rootCategoryId): string
+    {
+        $names = [];
+        foreach ([...self::ancestorIds($path, $categoryId), $categoryId] as $id) {
+            if (isset($categories[$id]) && $id !== $rootCategoryId) {
+                $names[] = $categories[$id]['name'];
+            }
+        }
+
+        return implode(self::PATH_SEPARATOR, $names);
     }
 }
