@@ -6,8 +6,6 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Catalog\CategoryData;
 
-use Magento\Store\Api\Data\StoreInterface;
-use Magento\Store\Model\StoreManagerInterface;
 use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\ResultLimit;
@@ -19,7 +17,7 @@ class EmptyCategoriesAction implements ActionInterface
 
     public function __construct(
         private readonly EmptyCategoriesReport $report,
-        private readonly StoreManagerInterface $storeManager,
+        private readonly ActiveStores $activeStores,
         private readonly SecureAdminUrl $secureAdminUrl
     ) {
     }
@@ -43,13 +41,13 @@ class EmptyCategoriesAction implements ActionInterface
         return [
             'store' => [
                 'type' => 'string',
-                'description' => 'empty_categories: store view code to check. Omit for every active store view.',
+                'description' => 'Store view code to check. Omit for every active store view.',
             ],
             'limit' => [
                 'type' => 'integer',
                 'minimum' => 1,
                 'maximum' => ResultLimit::MAX,
-                'description' => 'Maximum number of categories to list. Default 50.',
+                'description' => 'Maximum number of rows to list. Default 50.',
             ],
         ];
     }
@@ -104,7 +102,7 @@ class EmptyCategoriesAction implements ActionInterface
 
     public function execute(array $params, int $adminUserId): array
     {
-        $stores = $this->stores(trim((string)($params['store'] ?? '')));
+        $stores = $this->activeStores->select(trim((string)($params['store'] ?? '')));
         if ($stores === null) {
             return ['error' => 'Unknown store view: ' . trim((string)($params['store'] ?? ''))];
         }
@@ -113,11 +111,10 @@ class EmptyCategoriesAction implements ActionInterface
         $storeTotals = [];
         $byCategory = [];
         foreach ($stores as $store) {
-            $group = $this->storeManager->getGroup((string)$store->getStoreGroupId());
             $result = $this->report->forStore(
                 (int)$store->getId(),
                 (int)$store->getWebsiteId(),
-                (int)$group->getRootCategoryId()
+                $this->activeStores->rootCategoryId($store)
             );
 
             $storeTotals[] = [
@@ -147,28 +144,5 @@ class EmptyCategoriesAction implements ActionInterface
             'shown' => count($shown),
             'categories' => $shown,
         ];
-    }
-
-    /**
-     * The active store views to check, null when the requested code is not one of them.
-     *
-     * @return list<StoreInterface>|null
-     */
-    private function stores(string $code): ?array
-    {
-        $stores = array_values(array_filter(
-            $this->storeManager->getStores(),
-            static fn (StoreInterface $store): bool => (bool)$store->getIsActive()
-        ));
-        if ($code === '') {
-            return $stores;
-        }
-
-        $matching = array_values(array_filter(
-            $stores,
-            static fn (StoreInterface $store): bool => strcasecmp((string)$store->getCode(), $code) === 0
-        ));
-
-        return $matching === [] ? null : $matching;
     }
 }

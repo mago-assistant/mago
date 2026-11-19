@@ -25,8 +25,10 @@ use Magento\Framework\EntityManager\MetadataPool;
 use Magento\Framework\Module\Manager as ModuleManager;
 use Magento\Framework\ObjectManagerInterface;
 use Magento\Store\Model\StoreManagerInterface;
+use MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\CategoryTree;
 use MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\EmptyCategoriesReport;
 use MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\SalableProducts;
+use MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\ScopedAttributeJoin;
 use MagoAssistant\Mago\Service\Skills\Inventory\MsiAvailability;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -375,9 +377,16 @@ final class EmptyCategoriesReportTest extends TestCase
             $this->createStub(ObjectManagerInterface::class)
         );
 
-        return new EmptyCategoriesReport($resource, $eavConfig, $metadataPool, new Visibility(
-            $this->createStub(\Magento\Eav\Model\ResourceModel\Entity\Attribute::class)
-        ), $salableProducts);
+        $attributeJoin = new ScopedAttributeJoin($resource, $eavConfig);
+
+        return new EmptyCategoriesReport(
+            $resource,
+            $metadataPool,
+            new Visibility($this->createStub(\Magento\Eav\Model\ResourceModel\Entity\Attribute::class)),
+            $salableProducts,
+            new CategoryTree($resource, $metadataPool, $attributeJoin),
+            $attributeJoin
+        );
     }
 
     private function selectRenderer(): SelectRenderer

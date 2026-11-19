@@ -9,6 +9,7 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Catalog\CategoryData;
 use Magento\Store\Api\Data\GroupInterface;
 use Magento\Store\Model\Store;
 use Magento\Store\Model\StoreManagerInterface;
+use MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\ActiveStores;
 use MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\EmptyCategoriesAction;
 use MagoAssistant\Mago\Service\Skills\Catalog\CategoryData\EmptyCategoriesReport;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
@@ -138,7 +139,7 @@ final class EmptyCategoriesActionTest extends TestCase
             static fn (string $route, array $params): string => $route . '/id/' . $params['id']
         );
 
-        return new EmptyCategoriesAction($report, $storeManager, $secureAdminUrl);
+        return new EmptyCategoriesAction($report, new ActiveStores($storeManager), $secureAdminUrl);
     }
 
     private function store(int $id, string $code, bool $active): Store

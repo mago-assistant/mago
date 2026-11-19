@@ -446,7 +446,7 @@ export default class ChatPanel {
   }
 
   toolTags(page: Page): Locator {
-    return page.locator('#mago-messages .mago-tool-tag');
+    return page.locator('#mago-messages .mago-tool-tag:not(.mago-tool-more)');
   }
 
   /**

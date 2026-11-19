@@ -20,7 +20,7 @@
 
 ## What is a Skill
 
-A **Skill** is a self-contained capability that the Admin Assistant can invoke during a conversation. Skills give the AI access to Magento data and actions — reading sales figures, updating CMS content, generating product descriptions — while enforcing ACL permissions and requiring user confirmation for write operations.
+A **Skill** is a self-contained capability that Mago Assistant can invoke during a conversation. Skills give the AI access to Magento data and actions — reading sales figures, updating CMS content, generating product descriptions — while enforcing ACL permissions and requiring user confirmation for write operations.
 
 ### Skill vs Tool
 
@@ -148,11 +148,15 @@ environment and sensitive settings, with the current and the new value (#245). T
 decides whether the admin may make the change at all.
 
 Some settings are not offered at all: `BlockedConfigPaths` lists those where one wrong value hands
-over the store, its admin or its mail (storefront and admin base URLs, the SMTP host, port and
-bounce address, every `copy_to` of order mail, the contact form recipient, the store email
-addresses `trans_email/ident_*/email`, which receive customer replies and the payment-failed mail,
-error report addresses, `twofactorauth/*`, `admin/security/*`, `admin/captcha/*`,
-`design/head/includes` and `design/footer/absolute_footer`). `config_writer` refuses them before the confirmation card and
+over the store, its admin, its mail or the credentials of a service it connects to (storefront and
+admin base URLs, the SMTP host, port and bounce address, every `copy_to` of order mail, the
+contact form recipient, the store email addresses `trans_email/ident_*/email`, which receive
+customer replies and the payment-failed mail, error report addresses, `twofactorauth/*`,
+`admin/security/*`, `admin/captcha/*`, `design/head/includes`, `design/footer/absolute_footer`,
+the search engine host and port `catalog/search/*_server_hostname` and `*_server_port`, the
+shipping carrier gateway, tracking and web-services URLs under `carriers/*`, and the New Relic
+API URLs `newrelicreporting/general/*_url`, since the matching clients send their requests, and
+with HTTP auth their stored credentials, to whatever host those settings name). `config_writer` refuses them before the confirmation card and
 again on execution, and points the admin to Stores > Configuration. A module blocks settings of
 its own by adding glob patterns (`*`, `?`) to the `additionalPatterns` argument in di.xml; the
 defaults cannot be removed that way.
@@ -441,7 +445,7 @@ The module ships with these tools, grouped by skill area:
 
 | Tool | Class | Read-only | Description |
 |------|-------|-----------|-------------|
-| `category_data` | `Service\Skills\Catalog\CategoryData` | Yes | `empty_categories`: enabled categories that show no products, per active store view or one store view (`store`). A product counts when it is enabled and visible in the catalog in that store view, assigned to its website and, when the store hides out-of-stock products, salable in the website's stock (legacy stock status, or the MSI stock index of the website's stock); an anchor category also counts the products of its enabled subcategories, as Magento's category product indexer does. Each row gives the reason (`no_products_assigned`, `no_live_products`, `out_of_stock_only`, `static_block_only`) and the store views it is empty in. Gated by the Categories screen resource (`Magento_Catalog::categories`). |
+| `category_data` | `Service\Skills\Catalog\CategoryData` | Yes | `empty_categories`: enabled categories that show no products, per active store view or one store view (`store`). A product counts when it is enabled and visible in the catalog in that store view, assigned to its website and, when the store hides out-of-stock products, salable in the website's stock (legacy stock status, or the MSI stock index of the website's stock); an anchor category also counts the products of its enabled subcategories, as Magento's category product indexer does. Each row gives the reason (`no_products_assigned`, `no_live_products`, `out_of_stock_only`, `static_block_only`) and the store views it is empty in. `uncategorized_products`: products no enabled category below the store's root leads to, with the reason `no_category`, `root_only` (only the root, or categories of another root) or `disabled_categories_only`; by default only live products (enabled, in the website, visible in the catalog), `only_live: false` checks every product, and the answer flags `is_partial` when the list is cut. Gated by the Categories screen resource (`Magento_Catalog::categories`); `uncategorized_products` also needs `Magento_Catalog::products`. |
 
 ### Inventory
 
@@ -606,11 +610,11 @@ Magento_Backend::admin
 | `assistant_read` + `assistant_write` | Read and write tools, under the same Magento resources | Required for write tools |
 | None | Chat only, no tools | N/A |
 
-A tool declaring `Acl::MAGO_PER_USER` runs only for an admin with an explicit row for it under Stores > Admin Assistant > Skills & Permissions, whatever the role holds. Without one it stays in the model's tool list, with its read actions only when it has any (a write-only tool keeps its actions), so the model relays the refusal instead of answering with another tool; it is left out of the slash legend and the command menu. An explicit Disabled row hides it from the model as well. Declare `MAGO_PER_USER` for the whole tool, not for single actions: the legend, the menu and the advertised actions read the tool-level answer.
+A tool declaring `Acl::MAGO_PER_USER` runs only for an admin with an explicit row for it under Stores > Mago Assistant > Skills & Permissions, whatever the role holds. Without one it stays in the model's tool list, with its read actions only when it has any (a write-only tool keeps its actions), so the model relays the refusal instead of answering with another tool; it is left out of the slash legend and the command menu. An explicit Disabled row hides it from the model as well. Declare `MAGO_PER_USER` for the whole tool, not for single actions: the legend, the menu and the advertised actions read the tool-level answer.
 
 ### Per-User Skill Permissions
 
-On top of role ACL, the **Skills** admin screen (Mago Assistant → Skills) stores a per-admin-user permission per skill in the `mago_skill_permission` table: `disabled`, `read`, or `write`. `PermissionChecker` resolves these; when a user has no row for a skill, the role ACL above is the fallback. Unknown values in a row are treated as `disabled` (fail closed).
+On top of role ACL, the **Skills** admin screen (Stores > Mago Assistant > Skills & Permissions) stores a per-admin-user permission per skill in the `mago_skill_permission` table: `disabled`, `read`, or `write`. `PermissionChecker` resolves these; when a user has no row for a skill, the role ACL above is the fallback. Unknown values in a row are treated as `disabled` (fail closed).
 
 Enforcement happens at three points, all keyed on the acting admin user id, which the chat controllers pass through `ChatService` into `ToolRegistry`:
 
@@ -776,7 +780,7 @@ Every tool declares one (see [Access control](#acl--permissions)); a tool whose 
 
 ### Step 4: Add config toggle (optional)
 
-Add a `system.xml` field under the Admin Assistant tools section so store admins can enable/disable your tool independently.
+Add a `system.xml` field under `Stores > Configuration > Mago Assistant > Tools` so store admins can enable/disable your tool independently.
 
 ### Guidelines for Tool Authors
 
@@ -910,7 +914,7 @@ The existing `ToolInterface` methods map 1:1 to MCP tool definitions, making thi
 
 ### Admin UI Location
 
-`Stores > Configuration > MagoAssistant > Admin Assistant`
+`Stores > Configuration > Mago Assistant`
 
 ### Sections
 

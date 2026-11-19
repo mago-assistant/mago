@@ -110,6 +110,9 @@ Then, under `Stores > Configuration > Mago Assistant`:
 2. **Pick the AI Service** the assistant runs on (API Settings). Leave it on *Automatic* to use
    the first usable one, which is what a single-provider store wants.
 
+Everything else lives in the admin menu under `Stores > Mago Assistant`: Statistics, Conversations,
+Answer Feedback, Skills & Permissions, and a shortcut to Configuration.
+
 ### New add-ons in the chat panel (off by default)
 
 `Stores > Configuration > Mago Assistant > Add-ons > Show new add-ons` puts the newest Mago
@@ -148,7 +151,7 @@ only appears in browsers with built-in speech recognition, such as Chrome, Edge 
 | Skill area | Tools | Access |
 |------------|-------|--------|
 | Store Analytics | `sales_data`, `product_data`, `customer_data` | Read |
-| Catalog | `category_data` (enabled categories without live products) | Read |
+| Catalog | `category_data` (enabled categories without live products, products without a category) | Read |
 | Inventory | `dead_stock` (obsolete and slow-moving inventory) | Read |
 | Store Configuration | `config_reader`, `config_writer`, `cache_manager`, `indexer_manager` | Read / Write |
 | Content Management | `cms_data`, `content_generator` | Read / Write |
@@ -259,7 +262,7 @@ and how to add scenarios.
 
 | ACL Resource | Grants |
 |---|---|
-| `MagoAssistant_Mago::config` | Module configuration (Stores > Configuration > Mago) |
+| `MagoAssistant_Mago::config` | Module configuration (Stores > Configuration > Mago Assistant) |
 | `MagoAssistant_Mago::assistant_read` | Read-only tools (analytics, config reading, navigation) |
 | `MagoAssistant_Mago::assistant_write` | Write tools (config changes, CMS, content generation) |
 | `MagoAssistant_Mago::conversations` | Conversations grid and transcripts of every admin, continue a conversation |

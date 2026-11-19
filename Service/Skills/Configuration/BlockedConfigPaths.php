@@ -11,13 +11,15 @@ namespace MagoAssistant\Mago\Service\Skills\Configuration;
  *
  * A caution card asks the admin to tick that they understand a change, but a tick is all a write
  * proposed from text the assistant read (a prompt injection) needs. For these settings one wrong
- * value hands the store, its admin or its mail to someone else, and there is no everyday reason
- * to change them from a chat: the storefront and admin URLs, the mail server, every address mail
- * with customer data goes to (copies, bounces, contact form, error reports, and the store email
- * addresses, which receive customer replies and the payment-failed mail with the customer's name
- * and addresses), two-factor and admin login security, and the scripts every storefront page
- * loads. The admin changes them under Stores > Configuration, where Magento's own validation and
- * warnings apply.
+ * value hands the store, its admin, its mail or the credentials of a connected service to someone
+ * else, and there is no everyday reason to change them from a chat: the storefront and admin URLs,
+ * the mail server, every address mail with customer data goes to (copies, bounces, contact form,
+ * error reports, and the store email addresses, which receive customer replies and the
+ * payment-failed mail with the customer's name and addresses), two-factor and admin login
+ * security, the scripts every storefront page loads, and the hosts the search engine, the
+ * shipping carrier and the New Relic clients send their requests, and with HTTP auth their stored
+ * credentials, to. The admin changes them under Stores > Configuration, where Magento's own
+ * validation and warnings apply.
  *
  * Patterns are globs matched against the lowercased config path: "*" stands for any run of
  * characters, slashes included, and "?" for one character. $additionalPatterns
@@ -49,6 +51,12 @@ class BlockedConfigPaths
         'admin/captcha/*',
         'design/head/includes',
         'design/footer/absolute_footer',
+        'catalog/search/*_server_hostname',
+        'catalog/search/*_server_port',
+        'carriers/*/gateway*url',
+        'carriers/*/tracking*url',
+        'carriers/*/*webservices_url',
+        'newrelicreporting/general/*_url',
     ];
 
     /**

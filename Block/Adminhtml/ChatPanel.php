@@ -215,6 +215,9 @@ class ChatPanel extends Template
             'All %1 rows',
             'The 1 row',
             'The first %1 of %2 rows',
+            '+%1',
+            '…and %1 more tool calls',
+            'Show less',
         ];
 
         return array_combine($sentences, array_map(static fn (string $sentence): string => (string)__($sentence), $sentences));

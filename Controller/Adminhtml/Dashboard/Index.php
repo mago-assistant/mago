@@ -27,7 +27,7 @@ class Index extends Action implements HttpGetActionInterface
     {
         $page = $this->pageFactory->create();
         $page->setActiveMenu('MagoAssistant_Mago::statistics');
-        $page->getConfig()->getTitle()->prepend((string)__('Admin Assistant Dashboard'));
+        $page->getConfig()->getTitle()->prepend((string)__('Mago Assistant Dashboard'));
         return $page;
     }
 }

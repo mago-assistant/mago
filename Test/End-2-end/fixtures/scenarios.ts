@@ -610,3 +610,26 @@ export const lowStockRead = (
         },
     ],
 });
+
+/* A turn that runs the same read many times (#312); failAt marks one call as failed */
+export const manyReads = (count: number, failAt?: number): ChatScenario => ({
+    stream: [
+        { event: 'conversation', data: { conversation_id: CONVERSATION_ID, admin_user: 'Tester' } },
+        ...Array.from({ length: count }, (_, i) => {
+            const id = `toolu_sales_${i + 1}`;
+            const failed = i + 1 === failAt;
+            return [
+                { event: 'tool_call', data: { id, name: 'sales_data', input: { action: 'revenue' } } },
+                { event: 'tool_status', data: { name: 'sales_data', tool_call_id: id, status: 'running', message: 'Calculating revenue...' } },
+                {
+                    event: 'tool_status',
+                    data: failed
+                        ? { name: 'sales_data', tool_call_id: id, status: 'failed', message: 'Lookup failed' }
+                        : { name: 'sales_data', tool_call_id: id, status: 'done', duration_ms: 5, done_message: `Revenue for month ${i + 1}` },
+                },
+            ];
+        }).flat(),
+        ...textDeltas('Revenue was highest in March.'),
+        { event: 'done', data: { message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: false } },
+    ],
+});
