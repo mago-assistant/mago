@@ -47,8 +47,9 @@ class Converter implements ConverterInterface
         if ($root === null) {
             return [];
         }
+        $version = $root->getAttribute('version');
         foreach ($this->children($root, 'tool') as $toolNode) {
-            $tool = $this->tool($toolNode);
+            $tool = $this->tool($toolNode, $version === '' ? Reader::SCHEMA_VERSION : $version);
             $tools[$tool['name']] = $tool;
         }
 
@@ -58,7 +59,7 @@ class Converter implements ConverterInterface
     /**
      * @return ToolDef
      */
-    private function tool(\DOMElement $node): array
+    private function tool(\DOMElement $node, string $version): array
     {
         $actions = [];
         foreach ($this->children($node, 'action') as $actionNode) {
@@ -73,9 +74,8 @@ class Converter implements ConverterInterface
             'title' => $node->getAttribute('title'),
             'description' => $node->getAttribute('description'),
             'instructions' => $this->text($node, 'instructions'),
-            // Stamped by the reader from the file's config@version; a file read outside the reader
-            // (a unit test) carries no stamp and counts as the current format.
-            'schema_version' => $node->hasAttribute('schema') ? $node->getAttribute('schema') : '1',
+            // The format version the declaring file is written in (config@version)
+            'schema_version' => $version,
             'actions' => $actions,
         ];
     }
@@ -95,9 +95,9 @@ class Converter implements ConverterInterface
         foreach ($this->children($node, 'step') as $stepNode) {
             $steps[] = $this->step($stepNode);
         }
-        // An action without steps is its own single step.
-        if ($steps === [] && $node->hasAttribute('method') && $node->hasAttribute('path')) {
-            $steps[] = [
+        // The action's own method and path are its first step; <step> elements follow it.
+        if ($node->hasAttribute('method') && $node->hasAttribute('path')) {
+            array_unshift($steps, [
                 'name' => 'main',
                 'method' => $node->getAttribute('method'),
                 'path' => $node->getAttribute('path'),
@@ -105,7 +105,7 @@ class Converter implements ConverterInterface
                 'when' => null,
                 'sort' => $this->optional($node, 'sort'),
                 'fields' => [],
-            ];
+            ]);
         }
 
         $fields = [];
@@ -173,18 +173,21 @@ class Converter implements ConverterInterface
     private function param(\DOMElement $node): array
     {
         $enum = $this->optional($node, 'enum');
+        $in = $node->hasAttribute('in') ? $node->getAttribute('in') : 'body';
 
         return [
             'name' => $node->getAttribute('name'),
             'type' => $node->getAttribute('type'),
             'description' => $node->getAttribute('description'),
             'required' => $this->flag($node, 'required'),
-            'in' => $node->hasAttribute('in') ? $node->getAttribute('in') : 'body',
-            'criteria' => $this->optional($node, 'criteria'),
+            'in' => $in,
+            // A criteria parameter filters on the field of its own name unless it names another
+            'criteria' => $this->optional($node, 'criteria')
+                ?? ($in === 'criteria' ? $node->getAttribute('name') : null),
             'condition' => $this->optional($node, 'condition'),
             'wrap' => $this->optional($node, 'wrap'),
             'items' => $this->optional($node, 'items'),
-            'enum' => $enum === null ? [] : array_values(array_filter(array_map('trim', explode(',', $enum)))),
+            'enum' => $enum === null ? [] : $this->listOf($enum),
             'default' => $this->optional($node, 'default'),
         ];
     }
@@ -256,8 +259,24 @@ class Converter implements ConverterInterface
         return $node->hasAttribute($attribute) ? $node->getAttribute($attribute) : null;
     }
 
+    /**
+     * As xs:boolean reads it: surrounding whitespace does not count.
+     */
     private function flag(\DOMElement $node, string $attribute): bool
     {
-        return in_array(strtolower($node->getAttribute($attribute)), ['1', 'true'], true);
+        return in_array(strtolower(trim($node->getAttribute($attribute))), ['1', 'true'], true);
+    }
+
+    /**
+     * A comma-separated attribute as a list; "0" is a value, an empty entry is not.
+     *
+     * @return list<string>
+     */
+    private function listOf(string $value): array
+    {
+        return array_values(array_filter(
+            array_map('trim', explode(',', $value)),
+            static fn (string $entry): bool => $entry !== ''
+        ));
     }
 }

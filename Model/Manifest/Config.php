@@ -15,7 +15,11 @@ use Magento\Framework\Config\Data;
  */
 class Config extends Data
 {
-    public const CACHE_ID = 'mago_tools_config';
+    /**
+     * Carries the shape the converter writes: bump the suffix when that shape changes, so a tool
+     * never reads a definition an older converter cached.
+     */
+    public const CACHE_ID = 'mago_tools_config_2';
 
     /**
      * @return array<string, ToolDef> Tool definitions keyed by tool name

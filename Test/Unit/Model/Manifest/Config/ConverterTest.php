@@ -42,7 +42,7 @@ final class ConverterTest extends TestCase
             $tool['instructions']
         );
         self::assertSame(['search', 'create', 'approve'], array_keys($tool['actions']));
-        self::assertSame('1', $tool['schema_version'], 'read outside the reader: the current format');
+        self::assertSame('1', $tool['schema_version']);
     }
 
     #[Test]
@@ -184,14 +184,24 @@ final class ConverterTest extends TestCase
     }
 
     #[Test]
-    public function theVersionTheReaderStampedOnAToolIsHandedOn(): void
+    public function anActionsOwnRouteIsItsFirstStepAndItsStepsFollow(): void
     {
         $document = new \DOMDocument();
         $document->loadXML(
-            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d" schema="1">'
-            . '<action name="a" description="d" method="GET" path="x"/></tool></config>'
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="save" description="d" method="POST" path="rma" readonly=" true ">'
+            . '<param name="status" type="string" in="criteria"/>'
+            . '<param name="flags" type="array" enum="0, 1,,2"/>'
+            . '<step name="load" method="GET" path="rma/1"/></action></tool></config>'
         );
 
-        self::assertSame('1', (new Converter())->convert($document)['t']['schema_version']);
+        $action = (new Converter())->convert($document)['t']['actions']['save'];
+
+        self::assertSame(['main', 'load'], array_column($action['steps'], 'name'));
+        self::assertSame(['POST', 'GET'], array_column($action['steps'], 'method'));
+        self::assertTrue($action['readonly_declared'], 'whitespace around a boolean does not count');
+        self::assertFalse($action['readonly']);
+        self::assertSame('status', $action['params']['status']['criteria'], 'filters on its own name');
+        self::assertSame(['0', '1', '2'], $action['params']['flags']['enum'], '"0" is a value');
     }
 }

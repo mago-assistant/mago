@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © Mago Assistant
+ */
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Webapi:etc/webapi.xsd">
+    <route url="/V1/rma/increment-id/:incrementId" method="GET">
+        <service class="Vendor\Mixed\Api\RmaRepositoryInterface" method="getByIncrementId"/>
+        <resources><resource ref="Vendor_Mixed::rma"/></resources>
+    </route>
+    <route url="/V1/rma/:orderId/invoice" method="POST">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="invoice"/>
+        <resources><resource ref="Vendor_Mixed::rma"/></resources>
+    </route>
+    <route url="/V1/rma/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/:id" method="GET">
+        <service class="Vendor\Mixed\Api\RmaRepositoryInterface" method="get"/>
+        <resources><resource ref="Vendor_Mixed::rma"/></resources>
+    </route>
+    <route url="/V1/rma/:id/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" method="GET">
+        <service class="Vendor\Mixed\Api\RmaRepositoryInterface" method="get"/>
+        <resources><resource ref="Vendor_Mixed::rma"/></resources>
+    </route>
+    <route url="/V1/rma/reasons" method="GET">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="byStore"/>
+        <resources><resource ref="Vendor_Mixed::rma"/></resources>
+    </route>
+    <route url="/V1/rma/:rmaId/comments" method="POST">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="comment"/>
+        <resources><resource ref="Vendor_Mixed::rma"/></resources>
+    </route>
+    <route url="/V1/rma-lines" method="GET">
+        <service class="Vendor\Mixed\Api\LineRepositoryInterface" method="getList"/>
+        <resources><resource ref="Vendor_Mixed::rma"/></resources>
+    </route>
+    <route url="/V1/rma_lines/:id" method="GET">
+        <service class="Vendor\Mixed\Api\LineRepositoryInterface" method="get"/>
+        <resources><resource ref="Vendor_Mixed::rma"/></resources>
+    </route>
+    <route url="/V1/carts/mine" method="GET">
+        <service class="Vendor\Mixed\Api\CartInterface" method="get"/>
+        <resources><resource ref="self"/></resources>
+        <data><parameter name="cartId" force="true">%cart_id%</parameter></data>
+    </route>
+    <route url="/V1/stores" method="GET">
+        <service class="Vendor\Mixed\Api\StoreInterface" method="getList"/>
+        <resources><resource ref="anonymous"/></resources>
+    </route>
+</routes>

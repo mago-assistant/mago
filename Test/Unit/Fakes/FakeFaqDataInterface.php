@@ -23,6 +23,10 @@ interface FakeFaqDataInterface
 
     public function getCreatedAt(): ?string;
 
+    public function getVatId(): string;
+
+    public function get3dSecure(): bool;
+
     public function getExtensionAttributes(): ?object;
 
     public function getStoreIds(int $websiteId): array;

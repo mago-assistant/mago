@@ -23,6 +23,9 @@ use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
  * route's own ACL applies on top of the resource the manifest names. Nothing here knows what the
  * module is about; the manifest carries every word the model and the panel see.
  *
+ * The model is not trusted: what it sends is checked against the declared type, enum and item
+ * type before any call, and nothing it sends can name a route the manifest does not.
+ *
  * @phpstan-import-type ToolDef from \MagoAssistant\Mago\Model\Manifest\Config\Converter
  * @phpstan-import-type ActionDef from \MagoAssistant\Mago\Model\Manifest\Config\Converter
  * @phpstan-import-type ParamDef from \MagoAssistant\Mago\Model\Manifest\Config\Converter
@@ -36,19 +39,12 @@ class ManifestTool implements
     AvailabilityAwareToolInterface
 {
     private const DEFAULT_PAGE_SIZE = 20;
-    private const LIST_WRAPPERS = ['items', 'total_count'];
+    private const ERROR_KEY = 'error';
 
     /**
-     * Where a parameter is a filter rather than a value: a zero there is a provider filling in a
-     * schema property it has no value for, not a request to filter on zero.
+     * The largest whole number a float still represents exactly; beyond it a cast to int is a guess.
      */
-    private const FILTER_LOCATIONS = ['criteria', 'page_size', 'store', 'query'];
-
-    /**
-     * The locations where a zero means "do not filter", so the manifest default must not step in
-     * and filter on the opposite.
-     */
-    private const DECLINABLE_LOCATIONS = ['criteria', 'query'];
+    private const MAX_SAFE_INTEGER = 9007199254740992;
 
     /**
      * @param ToolDef $definition
@@ -131,11 +127,11 @@ class ManifestTool implements
     }
 
     /**
-     * The manifest's field rules. The privacy filter matches keys at every depth and applies the
-     * catch-all to a wrapper key too, so a catch-all of strip would drop a search result's whole
-     * `items` list; the list wrappers a route answers with are therefore public unless the
-     * manifest says otherwise. What is inside them still answers to the named rules. An action
-     * with links also classifies the links it adds itself.
+     * The manifest's field rules, plus the rules for the structure this tool adds itself: its own
+     * error message, the `items` / `total_count` wrapper of a list and the `_links` it builds. The
+     * privacy filter matches keys by name at every depth, so those structure rules would also open
+     * a route's own field of the same name; guardStructure() takes such a field out of the result
+     * before the filter sees it.
      */
     public function getFieldClassification(string $action = ''): array
     {
@@ -147,20 +143,60 @@ class ManifestTool implements
         foreach ($definition['fields'] as $field => $rule) {
             $classification[$field === '*' ? PiiClass::ANY : $field] = $rule;
         }
-        if (isset($classification[PiiClass::ANY])) {
-            foreach (self::LIST_WRAPPERS as $wrapper) {
-                $classification[$wrapper] ??= [PiiClass::PUBLIC];
-            }
-        }
-        if ($definition['links'] !== []) {
-            // The admin links the action adds, classified as the built-in tools classify theirs: the
-            // signed url holds the admin secret key, so the model sees a token and the admin the url.
-            $classification['_links'] ??= [PiiClass::PUBLIC];
-            $classification['label'] ??= [PiiClass::PUBLIC];
-            $classification['url'] ??= [PiiClass::TOKENISE, 'url'];
+
+        return $this->forcedRules($definition) + $classification + $this->gapRules($definition);
+    }
+
+    /**
+     * Rules the manifest cannot change. The error message is this tool's own: under a catch-all of
+     * strip the filter would drop it, and a failed write would read as done. The url of a link is
+     * signed with the admin secret key, so the model only ever sees a token for it.
+     *
+     * @param ActionDef $action
+     * @return array<string, array{0: string, 1?: string}>
+     */
+    private function forcedRules(array $action): array
+    {
+        $rules = [self::ERROR_KEY => [PiiClass::PUBLIC]];
+        if ($action['links'] !== []) {
+            $rules['url'] = [PiiClass::TOKENISE, 'url'];
         }
 
-        return $classification;
+        return $rules;
+    }
+
+    /**
+     * Rules for the rest of the structure this tool adds, where the manifest gave none: a catch-all
+     * of strip would otherwise drop the whole `items` list, and a link needs its label.
+     *
+     * @param ActionDef $action
+     * @return array<string, array{0: string, 1?: string}>
+     */
+    private function gapRules(array $action): array
+    {
+        $rules = [];
+        if (isset($action['fields']['*'])) {
+            $rules['items'] = [PiiClass::PUBLIC];
+            $rules['total_count'] = [PiiClass::PUBLIC];
+        }
+        if ($action['links'] !== []) {
+            $rules['_links'] = [PiiClass::PUBLIC];
+            $rules['label'] = [PiiClass::PUBLIC];
+        }
+
+        return array_diff_key($rules, $action['fields']);
+    }
+
+    /**
+     * Whether the manifest lets a field of this name reach the model as text.
+     *
+     * @param ActionDef $action
+     */
+    private function isPublicField(array $action, string $field): bool
+    {
+        $rule = $action['fields'][$field] ?? $action['fields']['*'] ?? null;
+
+        return ($rule[0] ?? null) === PiiClass::PUBLIC;
     }
 
     /**
@@ -192,7 +228,7 @@ class ManifestTool implements
 
         return $impact === ''
             ? ['This cannot be undone.']
-            : [$this->placeholders->render($impact, $this->paramsOf($action, $input), [])];
+            : [$this->placeholders->render($impact, $this->shown($action, $input), [])];
     }
 
     public function getDisplayName(): string
@@ -209,7 +245,7 @@ class ManifestTool implements
             return null;
         }
 
-        return $this->placeholders->render((string)$definition['status'], $this->paramsOf($definition, $input), []);
+        return $this->placeholders->render((string)$definition['status'], $this->shown($definition, $input), []);
     }
 
     public function isAvailable(): bool
@@ -221,44 +257,49 @@ class ManifestTool implements
     {
         $action = $this->action($params);
         if ($action === null) {
-            return ['error' => 'Unknown action: ' . (string)($params['action'] ?? '')];
+            $name = $params['action'] ?? '';
+
+            return $this->failed('Unknown action: ' . (is_scalar($name) ? (string)$name : ''));
+        }
+        if ($action['steps'] === []) {
+            return $this->failed('The action ' . $action['name'] . ' has no route to call.');
         }
 
-        $values = $this->paramsOf($action, $params);
-        foreach ($action['params'] as $name => $param) {
-            // A path parameter is always required: an empty one would leave a hole in the route. A
-            // required value is any value paramsOf() kept, so false and an empty list count.
-            if (($param['required'] || $param['in'] === 'path') && !array_key_exists($name, $values)) {
-                return ['error' => 'Parameter "' . $name . '" is required for ' . $action['name']];
-            }
-            if (array_key_exists($name, $values)) {
-                $typed = $this->typed($values[$name], $param['type']);
-                if ($typed === null) {
-                    return ['error' => 'Parameter "' . $name . '" must be of type ' . $param['type']];
-                }
-                $values[$name] = $typed;
-            }
+        [$values, $refusal] = $this->resolve($action, $params);
+        if ($refusal !== null) {
+            return $this->failed($refusal);
         }
 
         $adminUserId = (int)($params['_admin_user_id'] ?? 0);
         $storeCode = $this->storeCode($action, $values);
         $steps = [];
-        $last = [];
+        $written = [];
+        $ran = [];
+        $last = null;
         foreach ($action['steps'] as $step) {
             if ($step['when'] !== null && !$this->placeholders->isSet($step['when'], $values, $steps)) {
                 $steps[$step['name']] = [];
                 continue;
             }
             $response = $this->call($action, $step, $values, $steps, $adminUserId, $storeCode);
-            if (isset($response['error'])) {
-                return ['error' => $response['error']];
+            if ($this->isFailure($response)) {
+                return $this->failed($this->afterEarlierSteps($response[self::ERROR_KEY], $step, $written));
             }
             $steps[$step['name']] = $response;
+            $ran[] = $step['name'];
             $last = $response;
+            if ($step['method'] !== 'GET') {
+                $written[] = $step['name'];
+            }
+        }
+        if ($last === null) {
+            return $this->failed('Nothing was done: no step of ' . $action['name'] . ' applies to what was sent.');
         }
 
         $result = $last;
-        if ($action['result'] !== null) {
+        // A result that names a step `when` skipped falls back to the last step that ran
+        $named = explode('.', trim((string)$action['result'], '{}'))[1] ?? '';
+        if ($action['result'] !== null && in_array($named, $ran, true)) {
             $picked = $this->placeholders->value($action['result'], $values, $steps);
             $result = is_array($picked) ? $picked : ['value' => $picked];
         }
@@ -267,10 +308,12 @@ class ManifestTool implements
         if ($result !== [] && array_is_list($result)) {
             $result = ['items' => $result, 'total_count' => count($result)];
         }
+        $isList = $this->isList($result);
+
         // The links are read from the whole record, before pick narrows it: a label may name a
-        // field the admin does not need to see in the result itself.
-        $links = $this->links($action, $result);
-        $result = $this->pick($result, $action['pick']);
+        // public field the result itself leaves out.
+        $links = $this->links($action, $result, $isList);
+        $result = $this->guardStructure($action, $this->pick($result, $action['pick'], $isList), $isList);
         if ($links !== []) {
             $result['_links'] = $links;
         }
@@ -279,11 +322,63 @@ class ManifestTool implements
     }
 
     /**
+     * @return array{error: string}
+     */
+    private function failed(string $message): array
+    {
+        return [self::ERROR_KEY => $message];
+    }
+
+    /**
+     * A failed call is exactly ['error' => message], the shape the API client hands back. A record
+     * that merely has a field called `error` (a log entry, a sync job) is a result, not a failure.
+     *
+     * @param array<array-key, mixed> $response
+     */
+    private function isFailure(array $response): bool
+    {
+        return count($response) === 1
+            && is_string($response[self::ERROR_KEY] ?? null)
+            && $response[self::ERROR_KEY] !== '';
+    }
+
+    /**
+     * A later step that fails does not undo the steps before it. The model has to know which ones
+     * were carried out, or it reports the whole action as failed and repeats them.
+     *
+     * @param StepDef $step
+     * @param list<string> $written
+     */
+    private function afterEarlierSteps(string $message, array $step, array $written): string
+    {
+        if ($written === []) {
+            return $message;
+        }
+        $several = count($written) > 1;
+
+        return 'Step ' . $step['name'] . ' failed: ' . $message . ' The earlier step' . ($several ? 's ' : ' ')
+            . implode(', ', $written) . ($several ? ' were' : ' was')
+            . ' already carried out and not undone; do not repeat ' . ($several ? 'them' : 'it') . '.';
+    }
+
+    /**
+     * A search result (`items` next to `total_count`, as Magento's getList answers, or the wrapper
+     * this tool puts around a bare list). A single record that has an `items` field of its own, such
+     * as an order or a return with its lines, is a record.
+     *
+     * @param array<array-key, mixed> $result
+     */
+    private function isList(array $result): bool
+    {
+        return is_array($result['items'] ?? null) && array_key_exists('total_count', $result);
+    }
+
+    /**
      * @param ActionDef $action
      * @param StepDef $step
      * @param array<string, mixed> $values
-     * @param array<string, array<string, mixed>> $steps
-     * @return array<string, mixed>
+     * @param array<string, array<array-key, mixed>> $steps
+     * @return array<array-key, mixed>
      */
     private function call(
         array $action,
@@ -293,11 +388,12 @@ class ManifestTool implements
         int $adminUserId,
         ?string $storeCode
     ): array {
-        // A placeholder in the path that resolves to nothing would leave a hole in the route and
-        // could match another one (rma/{id}/items with an empty id is rma//items).
+        // A placeholder in the path that resolves to nothing, or to a list, would leave a hole in
+        // the route and could match another one (rma/{id}/items with an empty id is rma//items).
         foreach ($this->placeholders->names($step['path']) as $name) {
-            if (!$this->placeholders->isSet('{' . $name . '}', $values, $steps)) {
-                return ['error' => 'No value for {' . $name . '} in the route of ' . $action['name']];
+            $segment = $this->placeholders->value('{' . $name . '}', $values, $steps);
+            if (!is_int($segment) && !is_float($segment) && (!is_string($segment) || $segment === '')) {
+                return $this->failed('No value for {' . $name . '} in the route of ' . $action['name']);
             }
         }
         $path = $this->placeholders->render($step['path'], $values, $steps, true);
@@ -334,16 +430,16 @@ class ManifestTool implements
         $query = [];
         $pageSize = self::DEFAULT_PAGE_SIZE;
         foreach ($action['params'] as $name => $param) {
-            $value = $values[$name] ?? null;
-            if ($value === null || $value === '' || $value === []) {
+            if (!array_key_exists($name, $values) || $values[$name] === []) {
                 continue;
             }
+            $value = $values[$name];
             if ($param['in'] === 'page_size') {
                 $pageSize = min(max(1, (int)$value), ResultLimit::MAX);
             } elseif ($param['in'] === 'query') {
                 $query[$name] = $value;
             } elseif ($param['criteria'] !== null) {
-                $text = is_scalar($value) ? (string)$value : implode(',', array_map('strval', (array)$value));
+                $text = implode(',', array_map($this->asText(...), is_array($value) ? $value : [$value]));
                 $filter = [
                     'field' => $param['criteria'],
                     'value' => $param['wrap'] !== null ? $param['wrap'] . $text . $param['wrap'] : $text,
@@ -358,7 +454,7 @@ class ManifestTool implements
         $sortOrders = null;
         if ($step['sort'] !== null && $step['sort'] !== '') {
             [$field, $direction] = array_pad(explode(':', $step['sort'], 2), 2, 'ASC');
-            $sortOrders = [['field' => $field, 'direction' => strtoupper($direction)]];
+            $sortOrders = [['field' => $field, 'direction' => strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC']];
         }
 
         $declaresCriteria = array_filter(
@@ -373,13 +469,25 @@ class ManifestTool implements
     }
 
     /**
+     * A typed value as a filter reads it: false is 0, not the empty string PHP makes of it.
+     */
+    private function asText(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        return is_scalar($value) ? (string)$value : '';
+    }
+
+    /**
      * Body of a writing step: the declared fields when the step lists them, else every body
      * parameter the call carries (path parameters included, as Magento expects the id in the entity).
      *
      * @param ActionDef $action
      * @param StepDef $step
      * @param array<string, mixed> $values
-     * @param array<string, array<string, mixed>> $steps
+     * @param array<string, array<array-key, mixed>> $steps
      * @return array<string, mixed>
      */
     private function body(array $action, array $step, array $values, array $steps): array
@@ -392,7 +500,10 @@ class ManifestTool implements
                 if ($value === '') {
                     continue;
                 }
-                $body[$field['name']] = $this->cast($value, $field['as']);
+                $cast = $this->cast($value, $field['as']);
+                if ($cast !== null) {
+                    $body[$field['name']] = $cast;
+                }
             }
 
             return $body;
@@ -409,96 +520,234 @@ class ManifestTool implements
         return $body;
     }
 
+    /**
+     * The value as the step field asks for it, or null when it cannot be read that way: a field
+     * that would otherwise be sent as a made-up 0 or an empty text is left out of the body.
+     */
     private function cast(mixed $value, string $as): mixed
     {
         return match ($as) {
-            'int' => (int)(is_scalar($value) ? $value : 0),
-            'string' => is_scalar($value) ? (string)$value : '',
+            'int' => is_bool($value) ? (int)$value : (is_numeric($value) ? (int)$value : null),
+            'string' => is_scalar($value) ? $this->asText($value) : null,
             'list' => is_array($value) ? array_values($value) : [$value],
             default => $value,
         };
     }
 
     /**
-     * The call's parameters with the manifest defaults filled in; only the ones the action declares.
+     * What the model sent for the action, checked and typed, with the manifest defaults filled in.
      *
-     * Some providers make the model fill in every parameter of the schema, with 0, "" or false for
-     * the ones it has no value for. Null and an empty string always count as "not given". A zero
-     * value (0, false, an empty list) counts as not given only where the parameter is a filter
-     * (FILTER_LOCATIONS): a filter on zero is never meant, while a body field set to 0 or false is a
-     * value the model chose, also against a manifest default. A zero the model did send for a
-     * criteria or query filter means "do not filter", so the manifest default does not step in
-     * either; a page size or store code of zero falls back to the default, since there is nothing
-     * to decline there.
+     * Null and an empty string mean "not given": an optional parameter is nullable in the schema,
+     * so a model that has to send every property sends null. Anything else is a value, 0 and false
+     * included, and it replaces the default. A value that is not of the declared type, not one of
+     * the declared enum values, or a list whose items are not of the declared item type is refused
+     * before any call.
      *
      * @param ActionDef $action
      * @param array<string, mixed> $input
-     * @return array<string, mixed>
+     * @return array{0: array<string, mixed>, 1: ?string} The values and, when refused, why
      */
-    private function paramsOf(array $action, array $input): array
+    private function resolve(array $action, array $input): array
     {
         $values = [];
         foreach ($action['params'] as $name => $param) {
-            $value = $input[$name] ?? null;
-            $sent = $value !== null && $value !== '';
-            $zero = $sent && $this->isFilter($param) && $this->isZeroValue($value);
-            $declined = $zero && ($param['criteria'] !== null
-                || in_array($param['in'], self::DECLINABLE_LOCATIONS, true));
-            if ($sent && !$zero) {
-                $values[$name] = $value;
-            } elseif ($param['default'] !== null && !$declined) {
-                $values[$name] = $param['default'];
+            $raw = $input[$name] ?? null;
+            if ($raw === null || $raw === '') {
+                $raw = $this->defaultOf($param);
             }
+            if ($raw === null) {
+                // A path parameter is always required: an empty one would leave a hole in the route
+                if ($param['required'] || $param['in'] === 'path') {
+                    return [[], 'Parameter "' . $name . '" is required for ' . $action['name']];
+                }
+                continue;
+            }
+
+            $value = $this->typed($raw, $param['type'], $param['items'] ?? 'string');
+            if ($value === null) {
+                return [[], 'Parameter "' . $name . '" must be ' . $this->typeName($param)];
+            }
+            if ($param['enum'] !== [] && !$this->isOneOf($value, $param)) {
+                return [[], 'Parameter "' . $name . '" must be one of: ' . implode(', ', $param['enum'])];
+            }
+            if ($param['in'] === 'page_size' && $value < 1) {
+                // A page size below one is no page size: the manifest default, or the tool's own
+                $value = $this->integer($this->defaultOf($param));
+                if ($value === null || $value < 1) {
+                    continue;
+                }
+            }
+            $values[$name] = $value;
         }
 
-        return $values;
+        return [$values, null];
     }
 
     /**
-     * A parameter that narrows a call rather than carrying a value. A criteria field counts wherever
-     * it is declared, since query() turns it into a searchCriteria filter either way.
+     * The manifest default as the model would have sent it: a list for an array parameter.
      *
      * @param ParamDef $param
      */
-    private function isFilter(array $param): bool
+    private function defaultOf(array $param): mixed
     {
-        return $param['criteria'] !== null || in_array($param['in'], self::FILTER_LOCATIONS, true);
+        if ($param['default'] === null || $param['default'] === '') {
+            return null;
+        }
+        if ($param['type'] !== 'array') {
+            return $param['default'];
+        }
+
+        return array_values(array_filter(
+            array_map('trim', explode(',', $param['default'])),
+            static fn (string $entry): bool => $entry !== ''
+        ));
     }
 
-    private function isZeroValue(mixed $value): bool
+    /**
+     * Defaults the manifest declares that the tool would refuse itself: every call that leaves the
+     * parameter out would fail. For mago:tool:verify.
+     *
+     * @return list<string>
+     */
+    public function invalidDefaults(string $action): array
     {
-        return $value === 0 || $value === 0.0 || $value === false || $value === [] || $value === '0';
+        $problems = [];
+        foreach ($this->definition['actions'][$action]['params'] ?? [] as $name => $param) {
+            $type = $param['type'] === 'array' ? ($param['items'] ?? 'string') : $param['type'];
+            foreach ($param['enum'] as $entry) {
+                if ($this->typed($entry, $type) === null) {
+                    $problems[] = 'enum value "' . $entry . '" of parameter "' . $name . '" is not a value of type '
+                        . $type . ', so it can never be sent';
+                }
+            }
+            $default = $this->defaultOf($param);
+            if ($default === null) {
+                continue;
+            }
+            $value = $this->typed($default, $param['type'], $param['items'] ?? 'string');
+            if ($value === null) {
+                $problems[] = 'default="' . $param['default'] . '" of parameter "' . $name . '" is not '
+                    . ($param['type'] === 'array' ? $this->typeName($param) : 'a value ' . $this->typeName($param));
+            } elseif ($param['enum'] !== [] && !$this->isOneOf($value, $param)) {
+                $problems[] = 'default="' . $param['default'] . '" of parameter "' . $name
+                    . '" is not one of its enum values';
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
+     * @param ParamDef $param
+     */
+    private function typeName(array $param): string
+    {
+        return $param['type'] === 'array'
+            ? 'a list of ' . ($param['items'] ?? 'string') . ' values'
+            : 'of type ' . $param['type'];
+    }
+
+    /**
+     * Compared as the declared type, so enum="1.0" allows the number 1.
+     *
+     * @param ParamDef $param
+     */
+    private function isOneOf(mixed $value, array $param): bool
+    {
+        $type = $param['type'] === 'array' ? ($param['items'] ?? 'string') : $param['type'];
+        $allowed = array_map($this->asText(...), $this->enumOf($param['enum'], $type));
+        foreach (is_array($value) ? $value : [$value] as $entry) {
+            if (!in_array($this->asText($entry), $allowed, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
      * The value as the declared type, or null when it cannot be read as one: a path parameter typed
      * integer must not carry "search" into the route, and a wrong type must not reach a service.
      */
-    private function typed(mixed $value, string $type): mixed
+    private function typed(mixed $value, string $type, string $items = 'string'): mixed
     {
         switch ($type) {
             case 'integer':
-                if (is_int($value)) {
+                return $this->integer($value);
+            case 'number':
+                if (is_int($value) || (is_float($value) && is_finite($value))) {
                     return $value;
                 }
-                // A model may answer with 5.0 or "5" where the schema asks for an integer
-                if (is_float($value) && floor($value) === $value && !is_nan($value) && !is_infinite($value)) {
-                    return (int)$value;
-                }
-                return is_string($value) && preg_match('/^-?\d+$/', $value) === 1 ? (int)$value : null;
-            case 'number':
-                return is_int($value) || is_float($value) ? $value : (is_numeric($value) ? (float)$value : null);
+                return is_string($value) && is_numeric($value) && is_finite((float)$value) ? (float)$value : null;
             case 'boolean':
                 if (is_bool($value)) {
                     return $value;
                 }
                 $map = ['true' => true, 'false' => false, '1' => true, '0' => false];
-                return is_scalar($value) && array_key_exists((string)$value, $map) ? $map[(string)$value] : null;
+                return (is_int($value) || is_string($value)) && array_key_exists((string)$value, $map)
+                    ? $map[(string)$value]
+                    : null;
             case 'array':
-                return is_array($value) ? $value : null;
+                if (!is_array($value) || !array_is_list($value)) {
+                    return null;
+                }
+                $list = [];
+                foreach ($value as $entry) {
+                    $typed = is_array($entry) ? null : $this->typed($entry, $items);
+                    if ($typed === null) {
+                        return null;
+                    }
+                    $list[] = $typed;
+                }
+                return $list;
             default:
-                return is_scalar($value) ? (string)$value : null;
+                return is_string($value) || is_int($value) || is_float($value) ? (string)$value : null;
         }
+    }
+
+    /**
+     * A model may answer with 5.0 or "5" where the schema asks for an integer; anything that is not
+     * a whole number PHP can hold exactly is refused rather than rounded.
+     */
+    private function integer(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+        if (is_float($value)) {
+            return is_finite($value) && floor($value) === $value && abs($value) <= self::MAX_SAFE_INTEGER
+                ? (int)$value
+                : null;
+        }
+
+        return is_string($value) && preg_match('/^-?\d{1,18}\z/', $value) === 1 ? (int)$value : null;
+    }
+
+    /**
+     * The declared parameters as sent, for the status line and the impact text the admin reads.
+     * Nothing is called with these, so they are shown as they came in.
+     *
+     * @param ActionDef $action
+     * @param array<string, mixed> $input
+     * @return array<string, mixed>
+     */
+    private function shown(array $action, array $input): array
+    {
+        $values = [];
+        foreach ($action['params'] as $name => $param) {
+            $value = $input[$name] ?? null;
+            if (is_bool($value)) {
+                $values[$name] = $value ? 'yes' : 'no';
+            } elseif (is_scalar($value) && $value !== '') {
+                $values[$name] = $value;
+            } elseif (is_array($value) && $value !== []) {
+                $values[$name] = implode(', ', array_map($this->asText(...), $value));
+            } elseif ($param['default'] !== null) {
+                $values[$name] = $param['default'];
+            }
+        }
+
+        return $values;
     }
 
     /**
@@ -508,8 +757,8 @@ class ManifestTool implements
     private function storeCode(array $action, array $values): ?string
     {
         foreach ($action['params'] as $name => $param) {
-            if ($param['in'] === 'store' && isset($values[$name]) && is_scalar($values[$name])) {
-                return (string)$values[$name];
+            if ($param['in'] === 'store' && is_string($values[$name] ?? null) && $values[$name] !== '') {
+                return $values[$name];
             }
         }
 
@@ -517,52 +766,174 @@ class ManifestTool implements
     }
 
     /**
-     * @param array<string, mixed> $result
+     * @param array<array-key, mixed> $result
      * @param list<string> $pick
-     * @return array<string, mixed>
+     * @return array<array-key, mixed>
      */
-    private function pick(array $result, array $pick): array
+    private function pick(array $result, array $pick, bool $isList): array
     {
         if ($pick === []) {
             return $result;
         }
         $keys = array_flip($pick);
-        if (isset($result['items']) && is_array($result['items'])) {
-            $result['items'] = array_map(
-                fn($item) => is_array($item) ? array_intersect_key($item, $keys) : $item,
-                $result['items']
-            );
-            return array_intersect_key($result, $keys + ['items' => true, 'total_count' => true]);
+        if (!$isList) {
+            return array_intersect_key($result, $keys);
         }
+        $result['items'] = array_map(
+            static fn (mixed $item): mixed => is_array($item) ? array_intersect_key($item, $keys) : $item,
+            $result['items']
+        );
 
-        return array_intersect_key($result, $keys);
+        return array_intersect_key($result, $keys + ['items' => true, 'total_count' => true]);
     }
 
     /**
-     * Admin links for the record, or one per item of a list, where the record carries the id field.
+     * Keeps the structure rules to the structure. A field of the route that is called like something
+     * this tool adds (`error`, and `items`, `total_count`, `label`, `url` or `_links` where the
+     * manifest gave the name no rule of its own) is left out at every depth, and the list this tool
+     * wraps keeps named fields only, so bare strings in it do not pass as public text. Runs before
+     * the tool adds its own `_links`.
      *
      * @param ActionDef $action
-     * @param array<string, mixed> $result
+     * @param array<array-key, mixed> $result
+     * @return array<array-key, mixed>
+     */
+    private function guardStructure(array $action, array $result, bool $isList): array
+    {
+        $reserved = $this->reservedKeys($action);
+        $wrapsItems = $isList && in_array('items', $reserved, true);
+
+        $guarded = [];
+        foreach ($result as $key => $value) {
+            if ($wrapsItems && $key === 'items') {
+                $guarded[$key] = $this->rows((array)$value, $reserved);
+            } elseif ($wrapsItems && $key === 'total_count') {
+                if (is_int($value)) {
+                    $guarded[$key] = $value;
+                }
+            } elseif (!is_string($key) || !in_array($key, $reserved, true)) {
+                $guarded[$key] = is_array($value) ? $this->withoutKeys($value, $reserved) : $value;
+            }
+        }
+
+        return $guarded;
+    }
+
+    /**
+     * The names a route's own field may not have without a rule of its own in the manifest.
+     *
+     * @param ActionDef $action
+     * @return list<string>
+     */
+    private function reservedKeys(array $action): array
+    {
+        $reserved = [self::ERROR_KEY];
+        if ($this->isPublicField($action, PiiClass::ANY)) {
+            return $reserved;
+        }
+        $reserved = [...$reserved, ...array_keys($this->gapRules($action))];
+        if ($action['links'] !== [] && !isset($action['fields']['url'])) {
+            $reserved[] = 'url';
+        }
+
+        return $reserved;
+    }
+
+    /**
+     * The rows of the list this tool wraps. A row is a record with named fields; anything without a
+     * name (a bare value, or a value in a list within the list) would inherit the wrapper's rule in
+     * the filter, so it is left out.
+     *
+     * @param array<array-key, mixed> $list
+     * @param list<string> $reserved
+     * @return list<array<array-key, mixed>>
+     */
+    private function rows(array $list, array $reserved): array
+    {
+        $rows = [];
+        foreach ($list as $row) {
+            if (is_array($row)) {
+                $rows[] = $this->row($row, $reserved);
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param array<array-key, mixed> $row
+     * @param list<string> $reserved
+     * @return array<array-key, mixed>
+     */
+    private function row(array $row, array $reserved): array
+    {
+        $kept = [];
+        foreach ($row as $key => $value) {
+            if (is_int($key)) {
+                if (is_array($value)) {
+                    $kept[] = $this->row($value, $reserved);
+                }
+                continue;
+            }
+            if (!in_array($key, $reserved, true)) {
+                $kept[$key] = is_array($value) ? $this->withoutKeys($value, $reserved) : $value;
+            }
+        }
+
+        return $kept;
+    }
+
+    /**
+     * @param array<array-key, mixed> $node
+     * @param list<string> $keys
+     * @return array<array-key, mixed>
+     */
+    private function withoutKeys(array $node, array $keys): array
+    {
+        $kept = [];
+        foreach ($node as $key => $value) {
+            if (is_string($key) && in_array($key, $keys, true)) {
+                continue;
+            }
+            $kept[$key] = is_array($value) ? $this->withoutKeys($value, $keys) : $value;
+        }
+
+        return $kept;
+    }
+
+    /**
+     * Admin links: one for the record, or one per row of a list, where it carries the id field. A
+     * label reaches the model as text, so it is rendered from the record's public fields only: a
+     * placeholder naming a tokenised, stripped or undeclared field stays empty (and fails verify),
+     * or the label would carry a name past the rule the manifest gave it.
+     *
+     * @param ActionDef $action
+     * @param array<array-key, mixed> $result
      * @return list<array{label: string, url: string}>
      */
-    private function links(array $action, array $result): array
+    private function links(array $action, array $result, bool $isList): array
     {
         if ($action['links'] === []) {
             return [];
         }
-        $records = isset($result['items']) && is_array($result['items']) ? $result['items'] : [$result];
         $links = [];
-        foreach ($records as $record) {
+        foreach ($isList ? $result['items'] : [$result] as $record) {
             if (!is_array($record)) {
                 continue;
             }
+            $public = array_filter(
+                $record,
+                fn (mixed $value, int|string $field): bool => is_scalar($value)
+                    && $this->isPublicField($action, (string)$field),
+                ARRAY_FILTER_USE_BOTH
+            );
             foreach ($action['links'] as $link) {
                 $id = $record[$link['from']] ?? null;
-                if ($id === null || $id === '') {
+                if ((!is_int($id) && !is_string($id)) || $id === '') {
                     continue;
                 }
                 $links[] = [
-                    'label' => $this->placeholders->render($link['label'], $record, []),
+                    'label' => $this->placeholders->render($link['label'], $public, []),
                     'url' => $this->adminUrl->getUrl($link['route'], [$link['param'] => $id]),
                 ];
             }
@@ -585,19 +956,33 @@ class ManifestTool implements
     }
 
     /**
+     * One schema for the given actions. A parameter several actions share is described once: the
+     * model is told which action means what, and it may leave the parameter out (null) unless every
+     * one of the actions requires it, because it has to send the same properties for each of them.
+     *
      * @param array<string, ActionDef> $actions
      * @return array<string, mixed>
      */
     private function schema(array $actions): array
     {
-        $properties = [];
+        $declared = [];
         foreach ($actions as $action) {
             foreach ($action['params'] as $name => $param) {
-                if (isset($properties[$name])) {
-                    continue;
-                }
-                $properties[$name] = $this->paramSchema($param);
+                $declared[$name][$action['name']] = $param;
             }
+        }
+
+        $properties = [];
+        foreach ($declared as $name => $perAction) {
+            $requiredByAll = count($perAction) === count($actions) && array_filter(
+                $perAction,
+                static fn (array $param): bool => !$param['required'] && $param['in'] !== 'path'
+            ) === [];
+            $properties[$name] = $this->paramSchema(
+                reset($perAction),
+                !$requiredByAll,
+                $this->describeParam($perAction)
+            );
         }
 
         return [
@@ -605,7 +990,7 @@ class ManifestTool implements
             'properties' => [
                 'action' => [
                     'type' => 'string',
-                    'enum' => array_values(array_map(fn(array $action) => $action['name'], $actions)),
+                    'enum' => array_values(array_map(static fn (array $action) => $action['name'], $actions)),
                     'description' => 'The action to perform',
                 ],
             ] + $properties,
@@ -614,25 +999,67 @@ class ManifestTool implements
     }
 
     /**
+     * @param array<string, ParamDef> $perAction The declarations of one parameter name, by action
+     */
+    private function describeParam(array $perAction): string
+    {
+        $descriptions = array_filter(
+            array_map(static fn (array $param): string => $param['description'], $perAction)
+        );
+        if (count(array_unique($descriptions)) <= 1) {
+            return (string)reset($descriptions);
+        }
+        $parts = [];
+        foreach ($descriptions as $action => $description) {
+            $parts[] = $action . ': ' . $description;
+        }
+
+        return implode('; ', $parts);
+    }
+
+    /**
      * @param ParamDef $param
      * @return array<string, mixed>
      */
-    private function paramSchema(array $param): array
+    private function paramSchema(array $param, bool $nullable, string $description): array
     {
-        // A provider in strict mode makes the model send every property; null is the one value an
-        // optional parameter can carry that cannot be mistaken for a filter or a field.
-        $schema = ['type' => $param['required'] ? $param['type'] : [$param['type'], 'null']];
-        if ($param['description'] !== '') {
-            $schema['description'] = $param['description'];
-        }
-        if ($param['enum'] !== []) {
-            $schema['enum'] = $param['enum'];
+        $schema = ['type' => $nullable ? [$param['type'], 'null'] : $param['type']];
+        if ($description !== '') {
+            $schema['description'] = $description;
         }
         if ($param['type'] === 'array') {
-            $schema['items'] = ['type' => $param['items'] ?? 'string'];
+            $itemType = $param['items'] ?? 'string';
+            $schema['items'] = ['type' => $itemType];
+            if ($param['enum'] !== []) {
+                $schema['items']['enum'] = $this->enumOf($param['enum'], $itemType);
+            }
+
+            return $schema;
+        }
+        if ($param['enum'] !== []) {
+            $schema['enum'] = $this->enumOf($param['enum'], $param['type']);
+            if ($nullable) {
+                $schema['enum'][] = null;
+            }
         }
 
         return $schema;
+    }
+
+    /**
+     * The enum in the type the model has to send, or no value of that type could match it.
+     *
+     * @param list<string> $enum
+     * @return list<mixed>
+     */
+    private function enumOf(array $enum, string $type): array
+    {
+        $values = [];
+        foreach ($enum as $entry) {
+            $values[] = $this->typed($entry, $type) ?? $entry;
+        }
+
+        return $values;
     }
 
     /**

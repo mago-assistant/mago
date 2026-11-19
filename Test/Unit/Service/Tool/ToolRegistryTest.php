@@ -375,6 +375,28 @@ final class ToolRegistryTest extends TestCase
         self::assertSame([$this->cacheManager], array_values($registry->getAllTools()));
     }
 
+    #[Test]
+    public function aProviderThatThrowsOrReturnsSomethingElseLosesOnlyItsOwnTools(): void
+    {
+        $throwing = new class implements ToolProviderInterface {
+            public function getTools(): array
+            {
+                throw new \RuntimeException('log directory not writable');
+            }
+        };
+        $sloppy = new class implements ToolProviderInterface {
+            public function getTools(): array
+            {
+                return ['not a tool', null];
+            }
+        };
+        $good = new FakeTool('rma_manager', ['list'], ['list']);
+
+        $registry = new ToolRegistry(null, [$this->cacheManager], [$throwing, $sloppy, $this->provider($good)]);
+
+        self::assertSame(['cache_manager', 'rma_manager'], array_keys($registry->getEnabledTools(self::ADMIN_USER_ID)));
+    }
+
     private function provider(\MagoAssistant\Mago\Api\Tool\ToolInterface ...$tools): ToolProviderInterface
     {
         return new class ($tools) implements ToolProviderInterface {

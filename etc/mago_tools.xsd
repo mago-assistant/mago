@@ -12,7 +12,12 @@
     <xs:element name="config">
         <xs:complexType>
             <xs:sequence>
-                <xs:element name="tool" type="toolType" minOccurs="0" maxOccurs="unbounded"/>
+                <xs:element name="tool" type="toolType" minOccurs="0" maxOccurs="unbounded">
+                    <xs:unique name="uniqueActionName">
+                        <xs:selector xpath="action"/>
+                        <xs:field xpath="@name"/>
+                    </xs:unique>
+                </xs:element>
             </xs:sequence>
             <!-- The version of this format the file is written in, so a later format can still
                  read, or warn about, manifests shipped under an earlier one -->
@@ -27,15 +32,26 @@
     <xs:complexType name="toolType">
         <xs:sequence>
             <xs:element name="instructions" type="xs:string" minOccurs="0"/>
-            <xs:element name="action" type="actionType" minOccurs="1" maxOccurs="unbounded"/>
+            <xs:element name="action" type="actionType" minOccurs="1" maxOccurs="unbounded">
+                <xs:unique name="uniqueParamName">
+                    <xs:selector xpath="param"/>
+                    <xs:field xpath="@name"/>
+                </xs:unique>
+                <xs:unique name="uniqueStepName">
+                    <xs:selector xpath="step"/>
+                    <xs:field xpath="@name"/>
+                </xs:unique>
+                <xs:unique name="uniqueFieldName">
+                    <xs:selector xpath="field"/>
+                    <xs:field xpath="@name"/>
+                </xs:unique>
+            </xs:element>
         </xs:sequence>
         <xs:attribute name="name" type="toolName" use="required"/>
-        <xs:attribute name="acl" type="xs:string" use="required"/>
+        <xs:attribute name="acl" type="nonEmpty" use="required"/>
         <xs:attribute name="module" type="moduleName" use="required"/>
-        <xs:attribute name="description" type="xs:string" use="required"/>
+        <xs:attribute name="description" type="nonEmpty" use="required"/>
         <xs:attribute name="title" type="xs:string"/>
-        <!-- Set by the reader from the file's version before the files are merged; not for authors -->
-        <xs:attribute name="schema" type="schemaVersion"/>
     </xs:complexType>
 
     <xs:complexType name="actionType">
@@ -49,9 +65,9 @@
             <xs:element name="link" type="linkType" minOccurs="0" maxOccurs="unbounded"/>
         </xs:sequence>
         <xs:attribute name="name" type="actionName" use="required"/>
-        <xs:attribute name="description" type="xs:string" use="required"/>
+        <xs:attribute name="description" type="nonEmpty" use="required"/>
         <xs:attribute name="method" type="httpMethod"/>
-        <xs:attribute name="path" type="xs:string"/>
+        <xs:attribute name="path" type="nonEmpty"/>
         <xs:attribute name="body" type="xs:string"/>
         <xs:attribute name="readonly" type="xs:boolean" default="false"/>
         <xs:attribute name="irreversible" type="xs:boolean" default="false"/>
@@ -82,7 +98,7 @@
         </xs:sequence>
         <xs:attribute name="name" type="paramName" use="required"/>
         <xs:attribute name="method" type="httpMethod" use="required"/>
-        <xs:attribute name="path" type="xs:string" use="required"/>
+        <xs:attribute name="path" type="nonEmpty" use="required"/>
         <xs:attribute name="body" type="xs:string"/>
         <xs:attribute name="when" type="xs:string"/>
         <xs:attribute name="sort" type="xs:string"/>
@@ -115,6 +131,13 @@
         <xs:attribute name="param" type="xs:string" use="required"/>
         <xs:attribute name="from" type="xs:string" use="required"/>
     </xs:complexType>
+
+    <xs:simpleType name="nonEmpty">
+        <xs:restriction base="xs:string">
+            <xs:minLength value="1"/>
+            <xs:pattern value=".*\S.*"/>
+        </xs:restriction>
+    </xs:simpleType>
 
     <xs:simpleType name="schemaVersion">
         <xs:restriction base="xs:string">

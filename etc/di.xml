@@ -133,7 +133,7 @@
     <!-- Tool manifests: every module's etc/mago_tools.xml, merged and cached with the configuration -->
     <type name="MagoAssistant\Mago\Model\Manifest\Config\Reader">
         <arguments>
-            <argument name="converter" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\Converter</argument>
+            <argument name="manifestConverter" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\Converter</argument>
             <argument name="schemaLocator" xsi:type="object">MagoAssistant\Mago\Model\Manifest\Config\SchemaLocator</argument>
             <argument name="fileName" xsi:type="string">mago_tools.xml</argument>
         </arguments>

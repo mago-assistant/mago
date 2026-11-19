@@ -107,13 +107,19 @@ final class ManifestDrafterTest extends TestCase
 
         $create = $actions['create_questions'];
         self::assertSame('entity', $create['steps'][0]['body']);
-        self::assertSame(['faq_id', 'question', 'answer', 'is_active', 'product_skus'], array_keys($create['params']));
+        self::assertSame(
+            ['faq_id', 'question', 'answer', 'is_active', 'product_skus', 'vat_id'],
+            array_keys($create['params'])
+        );
         self::assertSame('boolean', $create['params']['is_active']['type']);
         self::assertSame('array', $create['params']['product_skus']['type']);
         self::assertFalse($create['params']['question']['required']);
 
         $update = $actions['update_questions'];
-        self::assertSame(['faq_id', 'question', 'answer', 'is_active', 'product_skus'], array_keys($update['params']));
+        self::assertSame(
+            ['faq_id', 'question', 'answer', 'is_active', 'product_skus', 'vat_id'],
+            array_keys($update['params'])
+        );
         self::assertSame('path', $update['params']['faq_id']['in'], 'the path parameter is declared once');
     }
 
@@ -138,7 +144,8 @@ final class ManifestDrafterTest extends TestCase
 
         self::assertSame(['faq_id' => ['public'], '*' => ['strip']], $get['fields']);
         self::assertStringContainsString(
-            'TODO: classify question, answer, is_active, product_skus, created_at as public, tokenise (personal data) '
+            'TODO: classify question, answer, is_active, product_skus, created_at, vat_id as public, tokenise '
+            . '(personal data) '
             . 'or strip',
             $xml
         );
@@ -157,6 +164,98 @@ final class ManifestDrafterTest extends TestCase
             . 'by hand',
             $xml
         );
+    }
+
+    /**
+     * A chat tool is an admin's tool: the storefront's and the customer's own routes are no part of
+     * a draft, and the draft says how many it left out.
+     */
+    #[Test]
+    public function routesForCustomersAndGuestsAreLeftOut(): void
+    {
+        $xml = $this->drafter()->draft('Vendor_Mixed');
+
+        self::assertStringContainsString('2 route(s) for customers or guests', $xml);
+        self::assertStringNotContainsString('carts', $xml);
+        self::assertStringNotContainsString('stores', $xml);
+        self::assertStringNotContainsString('acl="anonymous"', $xml);
+        self::assertStringNotContainsString('acl="self"', $xml);
+    }
+
+    #[Test]
+    public function aModuleWithOnlyStorefrontRoutesIsRefused(): void
+    {
+        $this->expectException(InvalidScaffoldException::class);
+        $this->expectExceptionMessage('only declares REST routes for customers and guests');
+
+        $this->drafter()->draft('Vendor_Shop');
+    }
+
+    #[Test]
+    public function namesStayWithinTheSchemaAndOneToolNameIsOneTool(): void
+    {
+        $xml = $this->drafter()->draft('Vendor_Mixed');
+        $tools = $this->tools('Vendor_Mixed');
+
+        self::assertTrue($this->validates($xml), 'long and colliding names must not break the schema');
+        self::assertSame(['rma', 'rma_lines'], array_keys($tools), 'rma-lines and rma_lines are one tool');
+        self::assertSame(['list', 'get'], array_keys($tools['rma_lines']['actions']));
+        foreach (array_keys($tools['rma']['actions']) as $name) {
+            self::assertLessThanOrEqual(64, strlen((string)$name));
+        }
+        self::assertCount(6, $tools['rma']['actions'], 'the two long names stay apart');
+    }
+
+    /**
+     * An increment id is text: typed integer, "000000012" would be sent as 12.
+     */
+    #[Test]
+    public function aPathParameterIsTypedByTheContractAndAnIncrementIdIsText(): void
+    {
+        $actions = $this->tools('Vendor_Mixed')['rma']['actions'];
+
+        self::assertSame('string', $actions['get_increment_id']['params']['increment_id']['type']);
+        self::assertSame('integer', $actions['create_invoice']['params']['order_id']['type']);
+    }
+
+    /**
+     * Guessing how several arguments nest would send the scalars inside the wrong wrapper.
+     */
+    #[Test]
+    public function aMixedSignatureGetsItsScalarsAndATodoInsteadOfAGuessedWrapper(): void
+    {
+        $xml = $this->drafter()->draft('Vendor_Mixed');
+        $invoice = $this->tools('Vendor_Mixed')['rma']['actions']['create_invoice'];
+
+        self::assertNull($invoice['steps'][0]['body']);
+        self::assertSame(['order_id', 'capture'], array_keys($invoice['params']));
+        self::assertStringContainsString('also takes $entity, $items, $comment, which could not be drafted', $xml);
+    }
+
+    /**
+     * What the draft cannot know it must not decide: a text id is not public, a read's arguments
+     * travel in the query, and a body the route may refuse is pointed out.
+     */
+    #[Test]
+    public function theDraftDoesNotDecideWhatItCannotKnow(): void
+    {
+        $xml = $this->drafter()->draft('Vendor_Mixed');
+        $actions = $this->tools('Vendor_Mixed')['rma']['actions'];
+
+        $reasons = $actions['get_reasons'];
+        self::assertSame('query', $reasons['params']['store_id']['in']);
+        self::assertTrue($reasons['params']['store_id']['required']);
+        self::assertSame('query', $reasons['params']['code']['in']);
+        self::assertSame(['public'], $reasons['fields']['faq_id'], 'a numeric id');
+        self::assertArrayNotHasKey('vat_id', $reasons['fields'], 'a text id waits for the author');
+        self::assertStringContainsString('reads $storeId from the query under that exact name', $xml);
+
+        $comment = $actions['create_comments'];
+        self::assertSame('comment', $comment['steps'][0]['body']);
+        self::assertArrayNotHasKey('3d_secure', $comment['params'], 'no name the schema refuses');
+        self::assertStringContainsString('rma_id is in the path but is no field of $comment', $xml);
+        self::assertStringContainsString('product_skus are lists, drafted as lists of text', $xml);
+        self::assertTrue($this->validates($xml));
     }
 
     #[Test]
@@ -189,12 +288,24 @@ final class ManifestDrafterTest extends TestCase
     /**
      * @return array<string, array<string, mixed>>
      */
-    private function tools(): array
+    private function tools(string $module = 'Vendor_Faq'): array
     {
         $document = new \DOMDocument();
-        $document->loadXML($this->drafter()->draft('Vendor_Faq'));
+        $document->loadXML($this->drafter()->draft($module));
 
         return (new Converter())->convert($document);
+    }
+
+    private function validates(string $xml): bool
+    {
+        $document = new \DOMDocument();
+        $document->loadXML($xml);
+        $previous = libxml_use_internal_errors(true);
+        $valid = $document->schemaValidate(self::SCHEMA);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        return $valid;
     }
 
     private function drafter(): ManifestDrafter

@@ -18,7 +18,9 @@ use MagoAssistant\Mago\Service\Tool\Scaffold\InvalidScaffoldException;
  * and the body fields read from the service contract when its interface is loadable. Everything
  * the author still has to decide is marked TODO; the draft validates against the schema as is.
  *
- * @phpstan-type RouteDef array{method: string, path: string, class: string, serviceMethod: string, acl: list<string>}
+ * @phpstan-type RouteDef array{
+ *     storefront: bool, method: string, path: string, class: string, serviceMethod: string, acl: list<string>
+ * }
  */
 class ManifestDrafter
 {
@@ -28,6 +30,13 @@ class ManifestDrafter
     private const MODULE_PATTERN = '/^[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9]*$/';
     private const TYPE_MAP = ['int' => 'integer', 'string' => 'string', 'bool' => 'boolean', 'float' => 'number'];
     private const SERVER_MANAGED = ['created_at', 'updated_at'];
+    private const MAX_NAME_LENGTH = 64;
+
+    /**
+     * Route resources that are not for an admin: `anonymous` is the storefront's, `self` the
+     * customer's own data. A chat tool is an admin's tool, so those routes are left out of a draft.
+     */
+    private const STOREFRONT_RESOURCES = ['anonymous', 'self'];
 
     public function __construct(
         private readonly ModuleDirReader $moduleDirReader,
@@ -43,12 +52,20 @@ class ManifestDrafter
         if (preg_match(self::MODULE_PATTERN, $module) !== 1) {
             throw new InvalidScaffoldException('Module must be Vendor_Module, e.g. MageOS_RMA.');
         }
-        $routes = $this->routes($module);
-        if ($routes === []) {
+        $all = $this->routes($module);
+        if ($all === []) {
             throw new InvalidScaffoldException(
                 $module . ' declares no REST routes in etc/webapi.xml; a manifest needs routes to call.'
             );
         }
+        $routes = array_values(array_filter($all, static fn (array $route): bool => !$route['storefront']));
+        if ($routes === []) {
+            throw new InvalidScaffoldException(
+                $module . ' only declares REST routes for customers and guests (resource "self" or "anonymous"); '
+                . 'a chat tool needs a route with an admin ACL resource.'
+            );
+        }
+        $leftOut = count($all) - count($routes);
 
         $document = new \DOMDocument('1.0', 'UTF-8');
         $document->formatOutput = true;
@@ -57,6 +74,9 @@ class ManifestDrafter
             . "\n"
             . 'Resolve every TODO, then run bin/magento mago:tool:verify <tool> \'{"action": "..."}\'.' . "\n"
             . 'Reference: vendor/mago-assistant/magento2-mago/docs/manifest-tools.md' . "\n"
+            . ($leftOut > 0
+                ? $leftOut . ' route(s) for customers or guests ("self", "anonymous") were left out.' . "\n"
+                : '')
         ));
         $config = $document->createElement('config');
         $config->setAttribute('version', Reader::SCHEMA_VERSION);
@@ -111,7 +131,14 @@ class ManifestDrafter
                     $acl[] = $resource->getAttribute('ref');
                 }
             }
+            $forced = false;
+            foreach ($node->getElementsByTagName('parameter') as $parameter) {
+                $forced = $forced || ($parameter instanceof \DOMElement
+                    && strtolower($parameter->getAttribute('force')) === 'true');
+            }
             $routes[] = [
+                // A value forced from the session (%customer_id%) makes it a customer's route too
+                'storefront' => $forced || array_intersect($acl, self::STOREFRONT_RESOURCES) !== [],
                 'method' => strtoupper($node->getAttribute('method')),
                 'path' => substr($path, strlen(self::PATH_PREFIX)),
                 'class' => $service instanceof \DOMElement ? ltrim($service->getAttribute('class'), '\\') : '',
@@ -133,7 +160,8 @@ class ManifestDrafter
         $groups = [];
         foreach ($routes as $route) {
             $segments = explode('/', trim($route['path'], '/'));
-            $groups[$segments[0]][] = $route;
+            // By the name the tool will get, so rma-items and rma_items do not become two tools of one name
+            $groups[$this->identifier($segments[0])][] = $route;
         }
 
         return $groups;
@@ -221,7 +249,9 @@ class ManifestDrafter
         }
 
         foreach ($pathParams as $param) {
-            $action->appendChild($this->param($document, $this->snake($param), $this->idType($param), 'path', true));
+            $action->appendChild(
+                $this->param($document, $this->snake($param), $this->pathType($route, $param), 'path', true)
+            );
         }
         if ($isList) {
             $query = $this->param($document, 'query', 'string', 'criteria', false);
@@ -236,6 +266,8 @@ class ManifestDrafter
         }
         if ($route['method'] === 'POST' || $route['method'] === 'PUT') {
             $this->bodyParams($document, $action, $route, $pathParams);
+        } else {
+            $this->queryParams($document, $action, $route, $pathParams);
         }
         $this->privacy($document, $action, $route);
 
@@ -263,31 +295,125 @@ class ManifestDrafter
         }
 
         $pathSnake = array_map($this->snake(...), $pathParams);
+        $scalars = [];
+        $scalarTypes = [];
+        $entities = [];
+        $unreadable = [];
         foreach ($method->getParameters() as $parameter) {
             $type = $parameter->getType();
             $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : null;
             if ($typeName !== null && isset(self::TYPE_MAP[$typeName])) {
-                $name = $this->snake($parameter->getName());
-                if (!in_array($name, $pathSnake, true)) {
-                    $action->appendChild($this->param(
-                        $document,
-                        $name,
-                        self::TYPE_MAP[$typeName],
-                        'body',
-                        !$parameter->isOptional() && !$parameter->allowsNull()
-                    ));
+                $scalars[] = $parameter;
+                $scalarTypes[$parameter->getName()] = self::TYPE_MAP[$typeName];
+            } elseif ($typeName !== null && $typeName !== 'array' && $this->exists($typeName)) {
+                /** @var class-string $typeName */
+                $entities[$parameter->getName()] = $typeName;
+            } else {
+                $unreadable[] = '$' . $parameter->getName();
+            }
+        }
+
+        foreach ($scalars as $parameter) {
+            $name = $this->snake($parameter->getName());
+            if (!in_array($name, $pathSnake, true)) {
+                $action->appendChild($this->param(
+                    $document,
+                    $name,
+                    $scalarTypes[$parameter->getName()],
+                    'body',
+                    !$parameter->isOptional() && !$parameter->allowsNull()
+                ));
+            }
+        }
+
+        // One entity and nothing beside it: its fields are the body, under the argument's name.
+        // Anything else cannot be drafted without guessing how the arguments nest.
+        if (count($entities) === 1 && $unreadable === [] && array_diff(
+            array_map(fn (\ReflectionParameter $p): string => $this->snake($p->getName()), $scalars),
+            $pathSnake
+        ) === []) {
+            $argument = (string)array_key_first($entities);
+            $getters = $this->getters(new \ReflectionClass(reset($entities)));
+            $action->setAttribute('body', $argument);
+            $foreign = array_values(array_diff($pathSnake, array_keys($getters)));
+            if ($foreign !== []) {
+                $action->appendChild($document->createComment(
+                    ' TODO: ' . implode(', ', $foreign) . ' is in the path but is no field of $' . $argument
+                    . ', and a body="' . $argument . '" carries the path parameters too. If the call is refused, '
+                    . 'replace method/path/body by a <step> that lists the body with <field> elements '
+                ));
+            }
+            $lists = [];
+            foreach ($getters as $field => $fieldType) {
+                if (in_array($field, $pathSnake, true) || in_array($field, self::SERVER_MANAGED, true)) {
+                    continue;
                 }
+                if ($fieldType === 'array') {
+                    $lists[] = $field;
+                }
+                $action->appendChild($this->param($document, $field, $fieldType, 'body', false));
+            }
+            if ($lists !== []) {
+                $action->appendChild($document->createComment(
+                    ' TODO: ' . implode(', ', $lists) . ' are lists, drafted as lists of text: set items="integer" '
+                    . 'or items="number" where that is what they hold, and remove a list of objects '
+                ));
+            }
+
+            return;
+        }
+        $byHand = [
+            ...array_map(static fn (string $name): string => '$' . $name, array_keys($entities)),
+            ...$unreadable,
+        ];
+        if ($byHand !== []) {
+            $action->appendChild($document->createComment(
+                ' TODO: ' . $route['class'] . '::' . $route['serviceMethod'] . '() also takes '
+                . implode(', ', $byHand) . ', which could not be drafted (an entity next to other arguments, a '
+                . 'list, or an argument typed in its docblock only). Declare those body fields by hand; a nested '
+                . 'argument needs a <step> with <field> elements or body="<argument name>" '
+            ));
+        }
+    }
+
+    /**
+     * The scalar arguments of a GET or DELETE that are no part of the path travel in the query.
+     *
+     * @param RouteDef $route
+     * @param list<string> $pathParams
+     */
+    private function queryParams(\DOMDocument $document, \DOMElement $action, array $route, array $pathParams): void
+    {
+        $pathSnake = array_map($this->snake(...), $pathParams);
+        foreach ($this->reflect($route['class'], $route['serviceMethod'])?->getParameters() ?? [] as $parameter) {
+            $type = $parameter->getType();
+            $name = $this->snake($parameter->getName());
+            if (!$type instanceof \ReflectionNamedType || !isset(self::TYPE_MAP[$type->getName()])
+                || in_array($name, $pathSnake, true)) {
                 continue;
             }
-            if ($typeName !== null && (interface_exists($typeName) || class_exists($typeName))) {
-                $action->setAttribute('body', $parameter->getName());
-                foreach ($this->getters(new \ReflectionClass($typeName)) as $field => $fieldType) {
-                    if (in_array($field, $pathSnake, true) || in_array($field, self::SERVER_MANAGED, true)) {
-                        continue;
-                    }
-                    $action->appendChild($this->param($document, $field, $fieldType, 'body', false));
-                }
+            if ($name !== $parameter->getName()) {
+                $action->appendChild($document->createComment(
+                    ' TODO: the route reads $' . $parameter->getName() . ' from the query under that exact name; '
+                    . 'a parameter is sent under its own name, so rename "' . $name . '" if the call fails '
+                ));
             }
+            $action->appendChild($this->param(
+                $document,
+                $name,
+                self::TYPE_MAP[$type->getName()],
+                'query',
+                !$parameter->isOptional() && !$parameter->allowsNull()
+            ));
+        }
+    }
+
+    private function exists(string $class): bool
+    {
+        try {
+            return interface_exists($class) || class_exists($class);
+        } catch (\Throwable) {
+            return false;
         }
     }
 
@@ -299,14 +425,20 @@ class ManifestDrafter
     private function privacy(\DOMDocument $document, \DOMElement $action, array $route): void
     {
         $fields = [];
+        $typed = [];
         $method = $this->reflect($route['class'], $route['serviceMethod']);
         $returnType = $method?->getReturnType();
         if ($returnType instanceof \ReflectionNamedType && !$returnType->isBuiltin()
             && (interface_exists($returnType->getName()) || class_exists($returnType->getName()))) {
-            $fields = array_keys($this->getters(new \ReflectionClass($returnType->getName())));
+            $typed = $this->getters(new \ReflectionClass($returnType->getName()));
+            $fields = array_keys($typed);
         }
 
-        $ids = array_values(array_filter($fields, static fn (string $f): bool => str_ends_with($f, '_id')));
+        // Only a numeric id is public by itself: a vat_id or session_id is text, and not for the model
+        $ids = array_values(array_filter(
+            $fields,
+            static fn (string $f): bool => ($f === 'id' || str_ends_with($f, '_id')) && $typed[$f] === 'integer'
+        ));
         foreach ($ids as $id) {
             $field = $document->createElement('field');
             $field->setAttribute('name', $id);
@@ -359,8 +491,10 @@ class ManifestDrafter
                 continue;
             }
             $manifestType = self::TYPE_MAP[$type->getName()] ?? ($type->getName() === 'array' ? 'array' : null);
-            if ($manifestType !== null) {
-                $fields[$this->snake(substr($name, 3))] = $manifestType;
+            $field = $this->snake(substr($name, 3));
+            // get3dSecure would be 3d_secure, which is no parameter name the schema accepts
+            if ($manifestType !== null && preg_match('/^[a-z][a-z0-9_]*$/', $field) === 1) {
+                $fields[$field] = $manifestType;
             }
         }
 
@@ -369,12 +503,14 @@ class ManifestDrafter
 
     private function reflect(string $class, string $method): ?\ReflectionMethod
     {
-        if ($class === '' || $method === '' || !(interface_exists($class) || class_exists($class))) {
-            return null;
-        }
         try {
+            if ($class === '' || $method === '' || !(interface_exists($class) || class_exists($class))) {
+                return null;
+            }
+
             return new \ReflectionMethod($class, $method);
-        } catch (\ReflectionException) {
+        } catch (\Throwable) {
+            // A contract whose parent cannot be autoloaded raises an Error, not a ReflectionException
             return null;
         }
     }
@@ -405,7 +541,8 @@ class ManifestDrafter
     {
         $candidate = $name;
         for ($i = 2; isset($names[$candidate]); $i++) {
-            $candidate = $name . '_' . $i;
+            $suffix = '_' . $i;
+            $candidate = substr($name, 0, self::MAX_NAME_LENGTH - strlen($suffix)) . $suffix;
         }
         $names[$candidate] = true;
 
@@ -423,9 +560,24 @@ class ManifestDrafter
         };
     }
 
-    private function idType(string $param): string
+    /**
+     * The type the service contract gives the path parameter. Without one, only a plain id is taken
+     * for a number: an increment id ("000000012") is text, and typing it integer would turn it into 12.
+     *
+     * @param RouteDef $route
+     */
+    private function pathType(array $route, string $param): string
     {
-        return preg_match('/(^|_)id$|Id$/', $param) === 1 ? 'integer' : 'string';
+        foreach ($this->reflect($route['class'], $route['serviceMethod'])?->getParameters() ?? [] as $parameter) {
+            $type = $parameter->getType();
+            if ($parameter->getName() === $param && $type instanceof \ReflectionNamedType) {
+                return self::TYPE_MAP[$type->getName()] ?? 'string';
+            }
+        }
+
+        return preg_match('/^(id|[a-z]+Id|[a-z]+_id)$/', $param) === 1 && !str_contains(strtolower($param), 'increment')
+            ? 'integer'
+            : 'string';
     }
 
     private function identifier(string $text): string
@@ -436,7 +588,7 @@ class ManifestDrafter
             $identifier = 'x_' . $identifier;
         }
 
-        return substr($identifier, 0, 64);
+        return substr($identifier, 0, self::MAX_NAME_LENGTH);
     }
 
     private function snake(string $camel): string

@@ -42,7 +42,7 @@ class ToolRegistry
             $registered[$tool->getName()] = $tool;
         }
         foreach ($providers as $provider) {
-            foreach ($provider->getTools() as $tool) {
+            foreach ($this->provided($provider) as $tool) {
                 if (!isset($registered[$tool->getName()])) {
                     $registered[$tool->getName()] = $tool;
                 }
@@ -54,6 +54,24 @@ class ToolRegistry
             static fn (ToolInterface $tool): bool => !$tool instanceof AvailabilityAwareToolInterface
                 || $tool->isAvailable()
         ));
+    }
+
+    /**
+     * What a provider offers. The registry is built for every chat request, the Skills grid and
+     * the panel, and a provider is code from elsewhere: one that throws, or hands back something
+     * that is not a tool, loses its own tools and nothing else. The provider logs its own failures.
+     *
+     * @return ToolInterface[]
+     */
+    private function provided(ToolProviderInterface $provider): array
+    {
+        try {
+            $tools = $provider->getTools();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return array_filter($tools, static fn (mixed $tool): bool => $tool instanceof ToolInterface);
     }
 
     /**

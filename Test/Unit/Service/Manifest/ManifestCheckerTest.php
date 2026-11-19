@@ -22,9 +22,20 @@ use MagoAssistant\Mago\Test\Unit\Fakes\FakeAclResourceProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * mago:tool:verify is what a manifest author runs before shipping. It must fail on what would go
+ * wrong in the chat, and it must not fail or warn on a manifest that is right.
+ */
 final class ManifestCheckerTest extends TestCase
 {
     private const ACL = ['MageOS_RMA::rma', 'MageOS_RMA::rma_manage', 'MageOS_RMA::rma_status'];
+    private const TOOL = '<config version="1">'
+        . '<tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">';
+    private const END = '</tool></config>';
+    private const ID = '<field name="entity_id" class="public"/>';
+    private const UNSENT = 'a body parameter needs a POST or PUT step without <field> elements or a '
+        . '<field value="{name}"> of its own, a criteria, query or page_size parameter a GET step. The admin would '
+        . 'confirm a value that is not used';
 
     /** @var array<string, ResolvedRoute> "METHOD path" => route */
     private array $routes = [];
@@ -42,140 +53,354 @@ final class ManifestCheckerTest extends TestCase
             'GET rma/1' => $this->route('/V1/rma/:entityId', 'get', ['MageOS_RMA::rma']),
             'PUT rma/1' => $this->route('/V1/rma/:entityId', 'save', ['MageOS_RMA::rma_status']),
             'POST rma/1/comments' => $this->route('/V1/rma/:rmaId/comments', 'save', []),
+            'GET stores' => $this->route('/V1/stores', 'getList', ['anonymous']),
+            'GET carts/mine' => $this->route('/V1/carts/mine', 'get', ['self']),
         ];
     }
 
     #[Test]
-    public function everyStepOfEveryActionIsMatchedWithPlaceholdersFilledIn(): void
+    public function theReferenceFixtureResolvesEveryStepAndRaisesNothingButTheAclNote(): void
     {
         $checks = $this->checker()->check($this->tool(), []);
 
         self::assertSame(
             ['GET rma/search', 'POST rma', 'GET rma/1', 'PUT rma/1', 'POST rma/1/comments'],
-            $this->resolved
+            $this->resolved,
+            'every step is matched, with a stand-in in each placeholder'
         );
-        self::assertSame(CheckStatus::Pass, $checks[0]->status);
-        self::assertSame('Declaring module MageOS_RMA is enabled', $checks[0]->message);
-        self::assertSame(
+        self::assertSame([], $this->messages($checks, CheckStatus::Failure));
+        self::assertContains('Declaring module MageOS_RMA is enabled', $this->messages($checks, CheckStatus::Pass));
+        self::assertContains('Manifest format version 1', $this->messages($checks, CheckStatus::Pass));
+        self::assertContains(
             'Action "search": GET /V1/rma/search -> MageOS\RMA\Api\RMARepositoryInterface::getList()',
-            $checks[2]->message
+            $this->messages($checks, CheckStatus::Pass)
         );
-        self::assertSame(CheckStatus::Pass, $checks[3]->status, 'create names the route\'s own resource');
-        self::assertSame(CheckStatus::Pass, $checks[4]->status);
-        self::assertStringStartsWith('Action "approve" step "load":', $checks[4]->message);
-    }
-
-    #[Test]
-    public function aResourceThatDiffersFromTheRoutesIsAWarningNotAFailure(): void
-    {
-        $checks = $this->checker()->check($this->tool(), []);
-
-        $save = $checks[5];
-        self::assertSame(CheckStatus::Warning, $save->status);
-        self::assertSame(
+        self::assertContains(
             'Action "approve" step "save": the manifest gates it by MageOS_RMA::rma, the route /V1/rma/:entityId '
             . 'by MageOS_RMA::rma_status; all apply, so an admin needs each of them',
-            $save->message
+            $this->messages($checks, CheckStatus::Warning)
         );
-        self::assertSame(CheckStatus::Pass, $checks[6]->status, 'a route without resources cannot disagree');
     }
 
     #[Test]
-    public function namingAnActionChecksOnlyThatAction(): void
+    public function namingAnActionChecksThatActionAndAnUnknownNameFails(): void
     {
-        $checks = $this->checker()->check($this->tool(), ['action' => 'create', 'order_id' => 7]);
-
+        $one = $this->checker()->check($this->tool(), ['action' => 'create', 'order_id' => 7]);
         self::assertSame(['POST rma'], $this->resolved);
-        self::assertCount(3, $checks);
+        self::assertSame([], $this->messages($one, CheckStatus::Failure));
+
+        $typo = $this->checker()->check($this->tool(), ['action' => 'serch']);
+        self::assertSame(
+            ['There is no action "serch"; the tool has: search, create, approve'],
+            $this->messages($typo, CheckStatus::Failure)
+        );
     }
 
     #[Test]
-    public function aRouteNoWebapiDeclaresFails(): void
+    public function aRouteThatDoesNotExistOrIsGatedByAnUnknownResourceFails(): void
     {
         unset($this->routes['POST rma']);
-
-        $checks = $this->checker()->check($this->tool(), ['action' => 'create']);
-
-        self::assertSame(CheckStatus::Failure, $checks[2]->status);
-        self::assertSame(
+        self::assertContains(
             'Action "create": no route matches POST /V1/rma in any webapi.xml (Request does not match any route.)',
-            $checks[2]->message
+            $this->failures($this->tool(), ['action' => 'create'])
         );
-    }
 
-    #[Test]
-    public function aRouteGatedByAnUndeclaredResourceFails(): void
-    {
         $this->routes['POST rma'] = $this->route('/V1/rma', 'save', ['MageOS_RMA::nope']);
-
-        $checks = $this->checker()->check($this->tool(), ['action' => 'create']);
-
-        self::assertSame(CheckStatus::Failure, $checks[2]->status);
-        self::assertSame(
+        self::assertContains(
             'Action "create": route /V1/rma is gated by MageOS_RMA::nope, which no acl.xml declares',
-            $checks[2]->message
+            $this->failures($this->tool(), ['action' => 'create'])
         );
     }
 
+    /**
+     * `anonymous` is open to an admin too, so it is no reason to fail; `self` is the customer's own
+     * and never works for an admin.
+     */
     #[Test]
-    public function anActionMarkedReadonlyOnAWritingRouteFails(): void
+    public function anOpenRouteIsFineAndACustomerRouteFails(): void
     {
         $tool = $this->tool(
-            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
-            . '<action name="save" description="d" method="POST" path="rma" readonly="true"/></tool></config>'
+            self::TOOL
+            . '<action name="stores" description="d" method="GET" path="stores">' . self::ID . '</action>'
+            . '<action name="cart" description="d" method="GET" path="carts/mine">' . self::ID . '</action>'
+            . self::END
         );
 
         $checks = $this->checker()->check($tool, []);
 
-        self::assertSame(CheckStatus::Failure, $checks[2]->status);
         self::assertSame(
-            'Action "save" is marked readonly but has a step that writes (POST, PUT or DELETE); it is treated as a '
-            . 'write, so the admin confirms it. Remove readonly="true"',
-            $checks[2]->message
+            ['Action "cart": route /V1/carts/mine is the customer\'s own ("self"); an admin can never call it, '
+                . 'so it cannot be a chat tool'],
+            $this->messages($checks, CheckStatus::Failure)
         );
+        self::assertSame([], $this->messages($checks, CheckStatus::Warning));
     }
 
     #[Test]
-    public function aDisabledModuleFailsAndAnActionWithoutARouteFails(): void
+    public function aDisabledModuleAnActionWithoutARouteAndAReadonlyWriteFail(): void
     {
         $this->moduleEnabled = false;
         $tool = $this->tool(
-            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
-            . '<action name="a" description="d"/></tool></config>'
+            self::TOOL
+            . '<action name="a" description="d">' . self::ID . '</action>'
+            . '<action name="save" description="d" method="POST" path="rma" readonly="true">' . self::ID . '</action>'
+            . self::END
         );
 
-        $checks = $this->checker()->check($tool, []);
-
         self::assertSame(
-            [CheckStatus::Failure, CheckStatus::Pass, CheckStatus::Failure],
-            array_map(static fn (ToolCheck $c): CheckStatus => $c->status, $checks)
+            [
+                'Declaring module MageOS_RMA is not enabled, so the tool is left out of the registry',
+                'Action "a" has no route: give it method and path, or <step> elements',
+                'Action "save" is marked readonly but has a step that writes (POST, PUT or DELETE); it is treated as '
+                . 'a write, so the admin confirms it. Remove readonly="true"',
+            ],
+            $this->failures($tool)
         );
-        self::assertSame(
-            'Declaring module MageOS_RMA is not enabled, so the tool is left out of the registry',
-            $checks[0]->message
-        );
-        self::assertSame('Action "a" has no route: give it method and path, or <step> elements', $checks[2]->message);
-        self::assertSame([], $this->resolved);
     }
 
     #[Test]
-    public function aPathPlaceholderWithoutAParamFails(): void
+    public function aPlaceholderHasToNameAParameterOrAnEarlierStep(): void
     {
         $tool = $this->tool(
-            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
-            . '<action name="items" description="d" method="GET" path="rma/{rmaId}/items">'
-            . '<param name="rma_id" type="integer" in="path"/></action></tool></config>'
+            self::TOOL
+            . '<action name="items" description="d" method="GET" path="rma/{rmaId}/items" status="Loading {id}...">'
+            . '<param name="rma_id" type="integer" in="path"/>' . self::ID . '</action>'
+            . '<action name="chain" description="d" result="steps.save">' . self::ID
+            . '<step name="load" method="GET" path="rma/{steps.later.id}"/>'
+            . '<step name="save" method="PUT" path="rma/{steps.load.entity_id}" when="{steps.typo.x}">'
+            . '<field name="note" value="{missing}"/></step>'
+            . '<step name="later" method="GET" path="rma/search"/></action>'
+            . self::END
+        );
+
+        $failures = $this->failures($tool);
+
+        self::assertContains(
+            'Action "items": the path uses {rmaId}, which no <param> of the action declares; the call would leave '
+            . 'that segment empty',
+            $failures
+        );
+        self::assertContains('Action "items": status uses {id}, which is no parameter of the action', $failures);
+        self::assertContains(
+            'Action "chain": step "load" uses {steps.later.id}, but no step called "later" runs before it',
+            $failures
+        );
+        self::assertContains(
+            'Action "chain": step "save" uses {steps.typo.x}, but no step called "typo" runs before it',
+            $failures
+        );
+        self::assertContains(
+            'Action "chain": step "save" uses {missing}, which no <param> of the action declares; it would be '
+            . 'left empty',
+            $failures
+        );
+        self::assertContains(
+            'Action "chain": result="steps.save" must be one placeholder naming a step, such as {steps.load}',
+            $failures
+        );
+    }
+
+    /**
+     * A field of an earlier step in a path is valid; it stands in as one segment for the route check.
+     */
+    #[Test]
+    public function aPathBuiltFromAnEarlierStepResolves(): void
+    {
+        $tool = $this->tool(
+            self::TOOL . '<action name="chain" description="d" result="{steps.save}">' . self::ID
+            . '<step name="load" method="GET" path="rma/search"/>'
+            . '<step name="save" method="PUT" path="rma/{steps.load.entity_id}"/></action>' . self::END
+        );
+        $this->routes['PUT rma/1'] = $this->route('/V1/rma/:entityId', 'save', ['MageOS_RMA::rma']);
+
+        $checks = $this->checker()->check($tool, []);
+
+        self::assertSame([], $this->messages($checks, CheckStatus::Failure));
+        self::assertSame(['GET rma/search', 'PUT rma/1'], $this->resolved);
+    }
+
+    #[Test]
+    public function whatTheModelIsShownMustMatchAcrossActions(): void
+    {
+        $tool = $this->tool(
+            self::TOOL
+            . '<action name="get" description="d" method="GET" path="rma/search">' . self::ID
+            . '<param name="id" type="integer" in="query"/><param name="mode" type="string" enum="a,b" in="query"/>'
+            . '</action>'
+            . '<action name="find" description="d" method="GET" path="rma/search">' . self::ID
+            . '<param name="id" type="string" in="query"/><param name="mode" type="string" enum="c,d" in="query"/>'
+            . '</action>' . self::END
+        );
+
+        self::assertSame(
+            [
+                'Parameter "id" is integer in action "get" and string in action "find"; the model is shown one schema '
+                . 'per tool, so give one of them its own name',
+                'Parameter "mode" allows different values in action "get" and in action "find" (enum or items); the '
+                . 'model is shown one schema per tool, so give one of them its own name',
+            ],
+            $this->failures($tool)
+        );
+    }
+
+    #[Test]
+    public function declarationsTheRuntimeWouldIgnoreOrRefuseAreReported(): void
+    {
+        $tool = $this->tool(
+            self::TOOL
+            . '<action name="list" description="d" method="GET" path="rma/search" sort="created:downwards" '
+            . 'impact="Gone.">' . self::ID
+            . '<param name="action" type="string" in="query"/>'
+            . '<param name="steps" type="string" in="query"/>'
+            . '<param name="note" type="string"/>'
+            . '</action>'
+            . '<action name="add" description="d" method="POST" path="rma" acl="MageOS_RMA::rma_manage">' . self::ID
+            . '<param name="limit" type="integer" in="page_size"/>'
+            . '</action>' . self::END
         );
 
         $checks = $this->checker()->check($tool, []);
 
-        self::assertSame(CheckStatus::Failure, $checks[2]->status);
         self::assertSame(
-            'Action "items": the path uses {rmaId}, which no <param> of the action declares; the call would leave '
-            . 'that segment empty',
-            $checks[2]->message
+            [
+                'Action "list": a parameter cannot be called "action", the tool uses that name itself',
+                'Action "list": a parameter cannot be called "steps", the tool uses that name itself',
+                'Action "list": sort="created:downwards" must be a field, or field:asc or field:desc',
+            ],
+            $this->messages($checks, CheckStatus::Failure)
         );
-        self::assertSame([], $this->resolved, 'nothing is matched against the routes');
+        self::assertSame(
+            [
+                'Action "list" never sends note: ' . self::UNSENT,
+                'Action "list" has an impact text that is never shown: it belongs to irreversible="true"',
+                'Action "add" never sends limit: ' . self::UNSENT,
+            ],
+            $this->messages($checks, CheckStatus::Warning)
+        );
+    }
+
+    /**
+     * The card lists what the model sent. A parameter that no step carries would be confirmed by
+     * the admin and then not written.
+     */
+    #[Test]
+    public function aParameterNoStepCarriesAnUnknownActionAclAndABadTokenAreReported(): void
+    {
+        $tool = $this->tool(
+            self::TOOL
+            . '<action name="set" description="d" acl="MageOS_RMA::rma_delet">' . self::ID
+            . '<param name="entity_id" type="integer" in="path"/><param name="status_id" type="integer"/>'
+            . '<param name="note" type="string"/><param name="extra" type="string" in="none"/>'
+            . '<field name="customer_name" class="tokenise"/>'
+            . '<field name="order" class="tokenise" token="order_number"/>'
+            . '<step name="save" method="PUT" path="rma/{entity_id}">'
+            . '<field name="status_id" value="{status_id}" as="int"/></step></action>' . self::END
+        );
+
+        $checks = $this->checker()->check($tool, []);
+
+        self::assertSame(
+            [
+                'Action "set": acl="MageOS_RMA::rma_delet" is declared in no acl.xml, so no restricted admin could '
+                . 'ever run it',
+                'Action "set": field "customer_name" is tokenised without a token type; use lowercase letters only, '
+                . 'e.g. token="name"',
+                'Action "set": field "order" is tokenised with token="order_number", which is no valid token type; '
+                . 'use lowercase letters only, e.g. token="name"',
+            ],
+            $this->messages($checks, CheckStatus::Failure)
+        );
+        self::assertContains(
+            'Action "set" never sends note, extra: ' . self::UNSENT,
+            $this->messages($checks, CheckStatus::Warning)
+        );
+    }
+
+    /**
+     * Things that are right and must not be reported: a path segment that is one of a few words,
+     * the same enum in another order, the word TODO in a real description, a whole step in `when`.
+     */
+    #[Test]
+    public function aCorrectManifestIsNotReported(): void
+    {
+        $this->routes['PUT rma/1/approve'] = $this->route('/V1/rma/:id/approve', 'approve', ['MageOS_RMA::rma']);
+        $tool = $this->tool(
+            self::TOOL
+            . '<action name="move" description="Move the TODO list of a return" method="PUT" '
+            . 'path="rma/{entity_id}/{transition}">' . self::ID
+            . '<param name="entity_id" type="integer" in="path"/>'
+            . '<param name="transition" type="string" in="path" enum="approve,reject"/>'
+            . '<param name="mode" type="string" enum="a,b"/></action>'
+            . '<action name="chain" description="d">' . self::ID
+            . '<param name="mode" type="string" enum="b,a" in="none"/>'
+            . '<step name="load" method="GET" path="rma/search"/>'
+            . '<step name="save" method="POST" path="rma" when="{steps.load}">'
+            . '<field name="mode" value="{mode}"/></step></action>' . self::END
+        );
+        $this->routes['POST rma'] = $this->route('/V1/rma', 'save', ['MageOS_RMA::rma']);
+
+        $checks = $this->checker()->check($tool, []);
+
+        self::assertSame([], $this->messages($checks, CheckStatus::Failure));
+        self::assertSame([], $this->messages($checks, CheckStatus::Warning));
+        self::assertContains('PUT rma/1/approve', $this->resolved);
+    }
+
+    #[Test]
+    public function aLinkLabelNamingAFieldThatIsNotPublicFails(): void
+    {
+        $tool = $this->tool(
+            self::TOOL . '<action name="list" description="d" method="GET" path="rma/search">'
+            . '<field name="increment_id" class="public"/>'
+            . '<field name="customer_name" class="tokenise" token="name"/>'
+            . '<link label="Open {increment_id} for {customer_name} in {address.city}" route="rma/rma/edit" '
+            . 'param="id" from="entity_id"/></action>' . self::END
+        );
+
+        self::assertSame(
+            ['Action "list": the link label "Open {increment_id} for {customer_name} in {address.city}" uses '
+                . '{customer_name}, {address.city}, which the action does not classify public. A label reaches the '
+                . 'model as text, so it is rendered without that value; name a public field instead'],
+            $this->failures($tool)
+        );
+    }
+
+    #[Test]
+    public function whatReachesTheModelIsPointedOutWithoutFlaggingIdsAndCodes(): void
+    {
+        $tool = $this->tool(
+            self::TOOL
+            . '<action name="list" description="d" method="GET" path="rma/search">' . self::ID
+            . '<field name="comment" class="public"/><field name="admin_note" class="public"/>'
+            . '<field name="reason" class="tokenise" token="reason"/>'
+            . '<field name="reason_id" class="public"/><field name="reason_code" class="public"/>'
+            . '<field name="error" class="public"/><field name="url" class="public"/><fields class="strip"/>'
+            . '<pick field="entity_id"/><pick field="secret"/>'
+            . '<link label="Open {entity_id}" route="rma/rma/edit" param="id" from="entity_id"/></action>'
+            . '<action name="all" description="d" method="GET" path="rma/search"><fields class="public"/></action>'
+            . '<action name="none" description="d" method="GET" path="rma/search"/>'
+            . self::END
+        );
+
+        $warnings = $this->messages($this->checker()->check($tool, []), CheckStatus::Warning);
+
+        self::assertSame(
+            [
+                'Action "list" sends comment, admin_note to the model as text. If a customer or another outside party '
+                . 'can write there, classify it tokenise: that text is where a prompt injection arrives',
+                'Action "list" declares a field called error. That name is the tool\'s own error message, so a route '
+                . 'field called error is always left out of the result',
+                'Action "list" has links and a rule for a field called url. A link\'s url is signed with the admin '
+                . 'key, so every url of this action is tokenised whatever that rule says',
+                'Action "list" picks secret, which no rule lets through: the model does not see it. Give it a '
+                . '<field> rule',
+                'Action "all" classifies every field it does not name as public (<fields class="public"/>): whatever '
+                . 'the route returns reaches the model as text. Name the public fields and strip the rest',
+                'Action "none" classifies no field, so the model sees nothing of its result but an error. Declare '
+                . '<field name="..." class="public|tokenise|strip"/> for what it may see',
+            ],
+            $warnings
+        );
     }
 
     #[Test]
@@ -183,63 +408,44 @@ final class ManifestCheckerTest extends TestCase
     {
         $tool = $this->tool(
             '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" '
-            . 'description="TODO: what the model can do">'
+            . 'description="TODO: what the model can do"><instructions>TODO: how to present</instructions>'
             . '<action name="list" description="TODO: Find rma by text" method="GET" path="rma/search">'
-            . '<param name="query" type="string" criteria="TODO_field"/></action></tool></config>'
+            . '<param name="query" type="string" in="criteria" criteria="TODO_field"/>' . self::ID . '</action>'
+            . self::END
         );
 
-        $checks = $this->checker()->check($tool, []);
+        $failures = implode("\n", $this->failures($tool));
 
-        self::assertSame(CheckStatus::Failure, $checks[2]->status);
-        self::assertStringContainsString('the tool description', $checks[2]->message);
-        self::assertStringContainsString('action "list" description', $checks[2]->message);
-        self::assertStringContainsString('parameter "query" criteria', $checks[2]->message);
+        self::assertStringContainsString('the tool description', $failures);
+        self::assertStringContainsString('the tool instructions', $failures);
+        self::assertStringContainsString('action "list" description', $failures);
+        self::assertStringContainsString('parameter "query" criteria', $failures);
     }
 
-    #[Test]
-    public function oneParameterNameWithTwoTypesAcrossActionsFails(): void
+    /**
+     * @param array<string, mixed> $params
+     * @return list<string>
+     */
+    private function failures(ManifestTool $tool, array $params = []): array
     {
-        $tool = $this->tool(
-            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">'
-            . '<action name="get" description="d" method="GET" path="rma/search">'
-            . '<param name="id" type="integer"/></action>'
-            . '<action name="find" description="d" method="GET" path="rma/search">'
-            . '<param name="id" type="string"/></action></tool></config>'
-        );
-
-        $checks = $this->checker()->check($tool, []);
-
-        self::assertSame(CheckStatus::Failure, $checks[2]->status);
-        self::assertSame(
-            'Parameter "id" is integer in action "get" and string in action "find"; the model is shown one schema '
-            . 'per tool, so give one of them its own name',
-            $checks[2]->message
-        );
+        return $this->messages($this->checker()->check($tool, $params), CheckStatus::Failure);
     }
 
-    #[Test]
-    public function aManifestInAnOlderFormatIsAWarning(): void
+    /**
+     * @param ToolCheck[] $checks
+     * @return list<string>
+     */
+    private function messages(array $checks, CheckStatus $status): array
     {
-        $tool = $this->tool(
-            '<config version="1"><tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d" schema="0">'
-            . '<action name="a" description="d" method="GET" path="rma/search"/></tool></config>'
-        );
-
-        $older = $this->checker()->check($tool, [])[1];
-        $current = $this->checker()->check($this->tool(), [])[1];
-
-        self::assertSame(CheckStatus::Warning, $older->status);
-        self::assertSame(
-            'Manifest format version 0 is older than the current 1; it is still read, but check the release notes '
-            . 'for what changed',
-            $older->message
-        );
-        self::assertSame(CheckStatus::Pass, $current->status);
-        self::assertSame('Manifest format version 1', $current->message);
+        return array_values(array_map(
+            static fn (ToolCheck $check): string => $check->message,
+            array_filter($checks, static fn (ToolCheck $check): bool => $check->status === $status)
+        ));
     }
 
     private function checker(): ManifestChecker
     {
+        $this->resolved = [];
         $resolver = new class ($this->routes, $this->resolved) extends RouteResolver {
             /**
              * @param array<string, ResolvedRoute> $routes

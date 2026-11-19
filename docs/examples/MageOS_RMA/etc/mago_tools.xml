@@ -97,6 +97,7 @@
 
         <action name="list_comments" description="The comments on an RMA, from the customer and from the store" method="GET" path="rma/{rma_id}/comments" readonly="true" sort="created_at:asc">
             <param name="rma_id" type="integer" description="Entity id of the RMA" required="true" in="path"/>
+            <param name="limit" type="integer" description="Maximum number of comments, default 50" in="page_size" default="50"/>
             <field name="entity_id" class="public"/>
             <field name="rma_id" class="public"/>
             <field name="author_type" class="public"/>

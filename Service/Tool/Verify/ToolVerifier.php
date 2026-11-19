@@ -50,9 +50,25 @@ class ToolVerifier
             ...$this->checkAcls($tool, [], 'without input'),
             ...($params === [] ? $this->checkInputNeeded($tool) : $this->checkAcls($tool, $params, 'for this call')),
             $this->checkAccess($tool, $params),
-            ...$this->checkClassification($tool->getFieldClassification($this->actionOf($params))),
+            ...$this->checkOwnClassification($tool, $params),
             ...$this->checkManifest($tool, $params),
         ];
+    }
+
+    /**
+     * A manifest tool classifies per action, and its checker reports on each of them; without an
+     * action named there is no classification to judge here.
+     *
+     * @param array<string,mixed> $params
+     * @return ToolCheck[]
+     */
+    private function checkOwnClassification(ToolInterface $tool, array $params): array
+    {
+        if ($tool instanceof ManifestTool && $this->manifestChecker !== null) {
+            return [];
+        }
+
+        return $this->checkClassification($tool->getFieldClassification($this->actionOf($params)));
     }
 
     /**
