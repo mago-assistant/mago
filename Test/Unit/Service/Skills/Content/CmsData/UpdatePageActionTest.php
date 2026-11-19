@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Content\CmsData;
 
+use MagoAssistant\Mago\Service\Skills\Content\CmsData\CmsWriteCautions;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\GetPageAction;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\UpdatePageAction;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
@@ -36,8 +37,27 @@ class UpdatePageActionTest extends TestCase
         return new UpdatePageAction(
             $this->apiClient,
             new GetPageAction($this->apiClient),
-            new SecureAdminUrl(new FakeBackendUrl())
+            new SecureAdminUrl(new FakeBackendUrl()),
+            new CmsWriteCautions()
         );
+    }
+
+    #[Test]
+    public function itCautionsFromThePagesCurrentStateWithoutWritingAnything(): void
+    {
+        $action = $this->action();
+
+        $cautions = $action->getCautions(['identifier' => '5', 'content' => '<p>New</p>'], self::ADMIN_USER_ID);
+
+        self::assertCount(1, $cautions);
+        self::assertStringContainsString('Replaces the live content of page "about-us"', $cautions[0]);
+        self::assertSame([], $this->apiClient->callsOf(FakeInternalApiClient::PUT));
+    }
+
+    #[Test]
+    public function itNamesNoCautionForACallThatChangesNothing(): void
+    {
+        self::assertSame([], $this->action()->getCautions(['identifier' => '5'], self::ADMIN_USER_ID));
     }
 
     #[Test]

@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Content\CmsData;
 
+use MagoAssistant\Mago\Service\Skills\Content\CmsData\CmsWriteCautions;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\CreatePageAction;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
@@ -96,6 +97,11 @@ class CreatePageActionTest extends TestCase
             ->with('cms/page/edit', ['page_id' => 12])
             ->willReturn('https://admin.example/cms/page/edit/page_id/12/');
 
-        return new CreatePageAction($apiClient, new StoreScopeContext($this->multiStoreManager()), $secureAdminUrl);
+        return new CreatePageAction(
+            $apiClient,
+            new StoreScopeContext($this->multiStoreManager()),
+            $secureAdminUrl,
+            new CmsWriteCautions()
+        );
     }
 }

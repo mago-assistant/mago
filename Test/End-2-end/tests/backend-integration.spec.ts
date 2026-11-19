@@ -42,6 +42,10 @@ test.describe('Backend integration', () => {
       'the page must not exist before the admin confirms'
     ).toBeNull();
 
+    // A page that goes live gets the caution card: Allow waits for the tick.
+    await expect(page.locator('#mago-messages')).toContainText('goes live right away for every storefront visitor');
+    await expect(chatPanel.confirmButton(page)).toBeDisabled();
+    await chatPanel.acknowledgement(page).click();
     await chatPanel.confirmButton(page).click();
 
     await expect(chatPanel.lastAssistantMessage(page)).toContainText(
@@ -90,7 +94,10 @@ test.describe('Backend integration', () => {
         }
       }
 
-      const confirm = async () => (await post(config.confirmUrl, {message_id: messageId})).text();
+      // Creating a live page is a cautioned write, so a confirm carries the ticked acknowledgement.
+      const confirm = async () => (
+        await post(config.confirmUrl, {message_id: messageId, acknowledged: true})
+      ).text();
       return Promise.all([confirm(), confirm()]);
     });
 
