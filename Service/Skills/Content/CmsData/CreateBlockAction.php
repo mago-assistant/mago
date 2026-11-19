@@ -37,17 +37,14 @@ class CreateBlockAction implements ActionInterface
             'identifier' => [
                 'type' => 'string',
                 'description' => 'Block identifier (e.g. "footer-links")',
-                'required' => true,
             ],
             'title' => [
                 'type' => 'string',
                 'description' => 'Block title',
-                'required' => true,
             ],
             'content' => [
                 'type' => 'string',
                 'description' => 'Block content (HTML)',
-                'required' => true,
             ],
             'is_active' => [
                 'type' => 'boolean',

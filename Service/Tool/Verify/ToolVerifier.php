@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Tool\Verify;
 
 use MagoAssistant\Mago\Api\Acl;
+use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
 use MagoAssistant\Mago\Service\Acl\ToolAccess;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
@@ -44,6 +45,7 @@ class ToolVerifier
             $this->checkName($tool),
             $this->checkDescription($tool),
             $this->checkSchema($tool),
+            $this->checkRequiredLists($tool),
             ...$this->checkAcls($tool, [], 'without input'),
             ...($params === [] ? $this->checkInputNeeded($tool) : $this->checkAcls($tool, $params, 'for this call')),
             $this->checkAccess($tool, $params),
@@ -91,6 +93,66 @@ class ToolVerifier
         return ($tool->getParameterSchema()['type'] ?? null) === 'object'
             ? ToolCheck::pass('Parameter schema is an object schema')
             : ToolCheck::failure('Parameter schema must have "type": "object"');
+    }
+
+    /**
+     * JSON Schema's "required" is a list of property names on the object that holds them. A flag on a
+     * property (a boolean "required") is not, and OpenAI rejects the whole tool for it ("True is not of type
+     * 'array'"). A skill's combined schema keeps the first declaration of a shared parameter, which
+     * can hide a flag that another action sends on its own, so a skill is checked action by action.
+     *
+     * @param ToolInterface $tool
+     * @return ToolCheck
+     */
+    private function checkRequiredLists(ToolInterface $tool): ToolCheck
+    {
+        $schema = $tool->getParameterSchema();
+        $schemas = ['' => $schema];
+        if ($tool instanceof ActionScopedToolInterface) {
+            // Each action on its own: together they hold every declaration the combined schema drops.
+            $schemas = [];
+            foreach ((array)($schema['properties']['action']['enum'] ?? []) as $action) {
+                $schemas[(string)$action] = $tool->getParameterSchemaForActions([(string)$action]);
+            }
+        }
+
+        $paths = [];
+        foreach ($schemas as $action => $actionSchema) {
+            foreach ($this->findRequiredFlags($actionSchema, '') as $path) {
+                $paths[] = $path . ($action === '' ? '' : ' (action ' . $action . ')');
+            }
+        }
+
+        return $paths === []
+            ? ToolCheck::pass('Every "required" in the parameter schema is a list of property names')
+            : ToolCheck::failure(
+                '"required" must be a list of property names on the object, not a flag on a property; providers '
+                . 'such as OpenAI reject the whole tool for it: ' . implode(', ', $paths)
+            );
+    }
+
+    /**
+     * Paths of every "required" that is not a list, at any depth of properties and items
+     *
+     * @param array<string,mixed> $schema
+     * @param string $path Dotted path of $schema in the tool's schema, empty at the root
+     * @return string[]
+     */
+    private function findRequiredFlags(array $schema, string $path): array
+    {
+        $found = array_key_exists('required', $schema) && !is_array($schema['required'])
+            ? [$path === '' ? '(root)' : $path]
+            : [];
+        foreach ((array)($schema['properties'] ?? []) as $name => $property) {
+            if (is_array($property)) {
+                $found = [...$found, ...$this->findRequiredFlags($property, ltrim($path . '.' . $name, '.'))];
+            }
+        }
+        if (is_array($schema['items'] ?? null)) {
+            $found = [...$found, ...$this->findRequiredFlags($schema['items'], $path . '[]')];
+        }
+
+        return $found;
     }
 
     /**
