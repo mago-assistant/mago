@@ -14,6 +14,7 @@ use Magento\Framework\Filesystem\Driver\File;
 use Magento\Framework\Filesystem\DriverPool;
 use MagoAssistant\Mago\Console\Command\CreateTool;
 use MagoAssistant\Mago\Service\Tool\Scaffold\ToolScaffolder;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeInstalledPackages;
 use MagoAssistant\Mago\Service\Tool\Verify\AclResourceIndex;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAclResourceProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -155,7 +156,7 @@ final class CreateToolTest extends TestCase
         $driverPool = new DriverPool();
 
         return new CommandTester(new CreateTool(
-            new ToolScaffolder(new File()),
+            new ToolScaffolder(new File(), new FakeInstalledPackages()),
             new AclResourceIndex(FakeAclResourceProvider::withResources(self::ACL)),
             new Filesystem(new DirectoryList($this->root), new ReadFactory($driverPool), new WriteFactory($driverPool))
         ));

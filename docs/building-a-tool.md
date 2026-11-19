@@ -42,7 +42,9 @@ The module is written to `app/code/<Vendor>/<Module>/`. An existing directory is
 To develop the tool as its own composer package (for example to publish it later), pass the module
 directory with `--path`, e.g. `--path=package-source/magento2-vies`. The command then prints the
 path repository and `composer require` steps to install it from there. `--class` and `--package`
-override the derived class and composer names.
+override the derived class and composer names. The generated `composer.json` requires
+`mago-assistant/magento2-mago` at the release line installed in the project (`^1.1` next to 1.1.x), so the
+printed `composer require` resolves; a dev branch or path checkout of Mago falls back to the current line.
 
 When the ACL resource belongs to the new module (`MagoAssistant_Vies::check`), the command also
 writes `etc/acl.xml` declaring it under the assistant's resource tree.
