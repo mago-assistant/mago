@@ -81,6 +81,16 @@ class EmptyCategoriesReport
     }
 
     /**
+     * Products assigned to each category under the root itself, in any status
+     *
+     * @return array<int,int> Category id => product count
+     */
+    public function assignedCountsUnderRoot(int $rootCategoryId): array
+    {
+        return $this->assignedCounts[$rootCategoryId] ??= $this->assignedProductCounts($rootCategoryId);
+    }
+
+    /**
      * @param array<int,CategoryNode> $categories Category id => node, every category under the root
      * @param array<int,int> $liveCounts Category id => products assigned to it that are enabled, visible
      *        in the catalog and in the website
@@ -186,7 +196,7 @@ class EmptyCategoriesReport
      *
      * @param array<int,CategoryNode> $categories
      */
-    private static function breadcrumb(array $categories, string $path, int $categoryId, int $rootCategoryId): string
+    public static function breadcrumb(array $categories, string $path, int $categoryId, int $rootCategoryId): string
     {
         $names = [];
         foreach ([...self::ancestorIds($path, $categoryId), $categoryId] as $id) {

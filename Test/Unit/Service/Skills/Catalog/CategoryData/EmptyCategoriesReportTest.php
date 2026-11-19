@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Catalog\CategoryData;
 
+use Magento\Catalog\Model\Indexer\Category\Product\TableMaintainer;
 use Magento\Catalog\Model\Product\Visibility;
 use Magento\CatalogInventory\Api\StockConfigurationInterface;
 use Magento\Eav\Model\Config as EavConfig;
@@ -384,7 +385,13 @@ final class EmptyCategoriesReportTest extends TestCase
             $metadataPool,
             new Visibility($this->createStub(\Magento\Eav\Model\ResourceModel\Entity\Attribute::class)),
             $salableProducts,
-            new CategoryTree($resource, $metadataPool, $attributeJoin),
+            new CategoryTree(
+                $resource,
+                $metadataPool,
+                $attributeJoin,
+                $this->createStub(TableMaintainer::class),
+                $this->createStub(Visibility::class)
+            ),
             $attributeJoin
         );
     }
