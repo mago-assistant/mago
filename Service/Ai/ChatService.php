@@ -497,12 +497,23 @@ class ChatService implements ChatServiceInterface
         $refusals = [];
         foreach ($toolCalls as $toolCall) {
             $tool = $this->toolRegistry->getTool($toolCall['name'], $adminUserId);
-            if (!$tool instanceof ValidatingToolInterface || $tool->isReadOnlyAction($toolCall['input'] ?? [])) {
+            if (!$tool || $tool->isReadOnlyAction($toolCall['input'] ?? [])) {
                 continue;
             }
             // A denied call is answered with its denial when executed; its validation may already
             // reach the service the admin was not granted.
             if ($this->getDenialReason($tool, $toolCall['input'] ?? [], $adminUserId) !== null) {
+                continue;
+            }
+            // Before the card, for every write: the card would look right while a broken character is saved.
+            $controlCharacter = $this->toolCallGate->findControlCharacter(
+                $this->inputForAction($tool, $toolCall['input'] ?? [])
+            );
+            if ($controlCharacter !== null) {
+                $refusals[$toolCall['id']] = $this->toolCallGate->controlCharacterRefusal($controlCharacter);
+                continue;
+            }
+            if (!$tool instanceof ValidatingToolInterface) {
                 continue;
             }
             $refusal = $tool->findRefusal($toolCall['input'] ?? []);
@@ -945,6 +956,13 @@ class ChatService implements ChatServiceInterface
             if (!$tool->isReadOnlyAction($input) && $this->privacyService->containsSensitiveToken($input)) {
                 return ['error' => 'This action would write an admin URL into data. Ask the '
                     . 'administrator to enter it directly on the form or in the request.'];
+            }
+            // Also on the paths without a pre-card refusal (REST, a confirmed call).
+            $controlCharacter = $tool->isReadOnlyAction($input)
+                ? null
+                : $this->toolCallGate->findControlCharacter($input);
+            if ($controlCharacter !== null) {
+                return $this->toolCallGate->controlCharacterRefusal($controlCharacter);
             }
             if (!$tool->isReadOnlyAction($input) && $this->privacyService->containsCustomerWrittenToken($input)) {
                 return ['error' => 'This action would copy text a customer wrote (a review, its title or '
