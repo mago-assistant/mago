@@ -245,12 +245,22 @@ $starterIcons = [
 >
     <?php /* The slash menu (commands and skills) opens here, above the bar, when the field starts with "/" */ ?>
     <div id="mago-dock-slash-menu" class="mago-slash-menu mago-dock-slash-menu"></div>
-    <span class="mago-dock-mark" aria-hidden="true">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="34 30 188 188" fill="currentColor">
-            <polygon points="128,40 160,72 128,104 96,72" opacity="0.55"/>
-            <polygon points="44,208 96,104 128,136 160,104 212,208 152,208 128,160 104,208"/>
-        </svg>
-    </span>
+    <?php /* The mark is the panel header's gradient tile, and opens the panel like the button at the end */ ?>
+    <button
+        type="button"
+        id="mago-dock-mark"
+        class="mago-dock-mark"
+        title="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
+        aria-label="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
+        aria-controls="mago-chat"
+    >
+        <span class="mago-dock-tile" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="34 30 188 188" fill="currentColor">
+                <polygon points="128,40 160,72 128,104 96,72"/>
+                <polygon points="44,208 96,104 128,136 160,104 212,208 152,208 128,160 104,208"/>
+            </svg>
+        </span>
+    </button>
     <label for="mago-dock-input" class="mago-sr-only">
         <?= $escaper->escapeHtml(__('Message %1', $assistantName)) ?>
     </label>
@@ -258,16 +268,22 @@ $starterIcons = [
         type="text"
         id="mago-dock-input"
         class="mago-dock-input"
-        placeholder="<?= $escaper->escapeHtmlAttr(__('Ask %1', $assistantName)) ?>"
+        placeholder="<?= $escaper->escapeHtmlAttr(__('Ask %1 anything…', $assistantName)) ?>"
+        data-placeholder-short="<?= $escaper->escapeHtmlAttr(__('Ask %1', $assistantName)) ?>"
         autocomplete="off"
         aria-autocomplete="list"
+        aria-describedby="mago-dock-hint"
         enterkeyhint="send"
     >
+    <?php /* Shown while the field is empty, so the slash menu can be found */ ?>
+    <span id="mago-dock-hint" class="mago-dock-hint">
+        <kbd>/</kbd> <?= $escaper->escapeHtml(__('for skills')) ?>
+    </span>
     <?php /* Voice input (#141): hidden until voice-input.js finds speech recognition and the setting is on */ ?>
     <button
         type="button"
         id="mago-dock-mic"
-        class="mago-dock-btn mago-dock-mic"
+        class="mago-dock-btn mago-dock-square mago-dock-mic"
         hidden
         title="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>"
         aria-label="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>"
@@ -277,7 +293,7 @@ $starterIcons = [
     </button>
     <button
         type="submit"
-        class="mago-dock-btn mago-dock-send"
+        class="mago-dock-btn mago-dock-square mago-dock-send"
         title="<?= $escaper->escapeHtmlAttr(__('Send')) ?>"
         aria-label="<?= $escaper->escapeHtmlAttr(__('Send')) ?>"
     >

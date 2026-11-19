@@ -518,6 +518,16 @@ define([
             send();
         });
         qs('#mago-dock-open').addEventListener('click', openFromDock);
+        qs('#mago-dock-mark').addEventListener('click', openFromDock);
+
+        // A narrow window has no room for the full placeholder: the short one, at the CSS's breakpoint (@screen__m)
+        const narrow = window.matchMedia('(max-width: 768px)');
+        const fullPlaceholder = dockInput.placeholder;
+        const fitPlaceholder = () => {
+            dockInput.placeholder = narrow.matches ? dockInput.dataset.placeholderShort : fullPlaceholder;
+        };
+        fitPlaceholder();
+        narrow.addEventListener('change', fitPlaceholder);
         dockInput.addEventListener('input', () => {
             const value = dockInput.value;
             if (value.charAt(0) === '/') {
