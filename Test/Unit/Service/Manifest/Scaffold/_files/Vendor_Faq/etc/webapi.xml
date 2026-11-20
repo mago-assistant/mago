@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © Mago Assistant
+ */
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Webapi:etc/webapi.xsd">
+    <route url="/V1/faq/questions" method="GET">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="getList"/>
+        <resources><resource ref="Vendor_Faq::faq_manage"/></resources>
+    </route>
+    <route url="/V1/faq/questions/:faqId" method="GET">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="get"/>
+        <resources><resource ref="Vendor_Faq::faq_manage"/></resources>
+    </route>
+    <route url="/V1/faq/questions" method="POST">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="save"/>
+        <resources><resource ref="Vendor_Faq::faq_manage"/></resources>
+    </route>
+    <route url="/V1/faq/questions/:faqId" method="PUT">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="save"/>
+        <resources><resource ref="Vendor_Faq::faq_manage"/></resources>
+    </route>
+    <route url="/V1/faq/questions/:faqId" method="DELETE">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="deleteById"/>
+        <resources><resource ref="Vendor_Faq::faq_manage"/></resources>
+    </route>
+    <route url="/V1/faq/questions/:faqId/publish" method="POST">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="publish"/>
+        <resources><resource ref="Vendor_Faq::faq_publish"/></resources>
+    </route>
+    <route url="/V1/faq/topics/search" method="GET">
+        <service class="Vendor\Faq\Api\TopicRepositoryInterface" method="getList"/>
+        <resources><resource ref="Vendor_Faq::faq_manage"/></resources>
+    </route>
+    <route url="/V1/faq/topics" method="POST">
+        <service class="Vendor\Faq\Api\TopicRepositoryInterface" method="save"/>
+        <resources><resource ref="Vendor_Faq::faq_manage"/></resources>
+    </route>
+    <route url="/V1/reviews/:id" method="GET">
+        <service class="Vendor\Faq\Api\ReviewRepositoryInterface" method="get"/>
+        <resources><resource ref="Vendor_Faq::reviews"/></resources>
+    </route>
+</routes>

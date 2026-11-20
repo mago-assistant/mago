@@ -23,7 +23,7 @@ class PrivacyFilter
      * instead of dropped, so the panel can hand the admin a link that opens, and a wildcard-public
      * tool cannot make it public by accident.
      */
-    private const NEVER_PUBLIC = ['admin_url' => 'url'];
+    public const NEVER_PUBLIC = ['admin_url' => 'url'];
 
     /**
      * Kept whatever the classification so a tool's failure or ACL denial can still be explained,
