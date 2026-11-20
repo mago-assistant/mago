@@ -9,7 +9,7 @@ namespace MagoAssistant\Mago\Model\Manifest\Config;
 use Magento\Framework\Config\ConverterInterface;
 
 /**
- * The merged mago_tools.xml DOM as plain arrays, one per tool, keyed by tool name. Everything the
+ * One module's mago_tools.xml DOM as plain arrays, one per tool, keyed by tool name. Everything the
  * manifest tool needs at runtime is in here; the XML is not touched again.
  *
  * @phpstan-type ParamDef array{
@@ -37,6 +37,11 @@ use Magento\Framework\Config\ConverterInterface;
 class Converter implements ConverterInterface
 {
     /**
+     * The name of the step an action's own method and path make up, as in {steps.main}.
+     */
+    public const OWN_STEP = 'main';
+
+    /**
      * @param \DOMDocument $source
      * @return array<string, ToolDef>
      */
@@ -49,7 +54,7 @@ class Converter implements ConverterInterface
         }
         $version = $root->getAttribute('version');
         foreach ($this->children($root, 'tool') as $toolNode) {
-            $tool = $this->tool($toolNode, $version === '' ? Reader::SCHEMA_VERSION : $version);
+            $tool = $this->tool($toolNode, $version);
             $tools[$tool['name']] = $tool;
         }
 
@@ -93,12 +98,22 @@ class Converter implements ConverterInterface
 
         $steps = [];
         foreach ($this->children($node, 'step') as $stepNode) {
-            $steps[] = $this->step($stepNode);
+            $step = $this->step($stepNode);
+            // What the action says about the body wrapper and the order holds for its steps too
+            $step['body'] ??= $this->optional($node, 'body');
+            $step['sort'] ??= $this->optional($node, 'sort');
+            $steps[] = $step;
         }
         // The action's own method and path are its first step; <step> elements follow it.
         if ($node->hasAttribute('method') && $node->hasAttribute('path')) {
+            if (in_array(self::OWN_STEP, array_column($steps, 'name'), true)) {
+                throw new \InvalidArgumentException(
+                    'Action "' . $node->getAttribute('name') . '" has a method and path of its own, which is its '
+                    . 'step "' . self::OWN_STEP . '"; a <step> cannot have that name as well.'
+                );
+            }
             array_unshift($steps, [
-                'name' => 'main',
+                'name' => self::OWN_STEP,
                 'method' => $node->getAttribute('method'),
                 'path' => $node->getAttribute('path'),
                 'body' => $this->optional($node, 'body'),

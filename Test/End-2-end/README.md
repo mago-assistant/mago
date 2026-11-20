@@ -122,6 +122,7 @@ viewports are present but commented out in `playwright.config.ts`, same as Molli
 global-setup.ts                     runs once, before the setup project
 tsconfig.json                       Pages/ Actions/ Services/ Config/ Fixtures/ path aliases
 fixtures/scenarios.ts               canned SSE conversations, one per scenario
+fixtures/MagoFixture_Manifest       a module with only a tool manifest, installed by the workflow
 support/pages/backend/BackendLogin  admin login
 support/pages/backend/ChatPanel     locators and interactions for the chat panel
 support/actions/backend/ChatMock    SSE builder and route interception
@@ -157,12 +158,12 @@ otherwise; a stub left behind by one test can still be present, and can still wi
 later test — this run or a later one — which makes stub selection arbitrary and the assertions
 against it meaningless without ever failing loudly. The checked-in, file-based mappings are the
 baseline every runtime stub is registered on top of and deleted back down to: `POST
-/__admin/mappings/reset` restores exactly **52** mappings (`admin-users-link.json`: 3,
+/__admin/mappings/reset` restores exactly **56** mappings (`admin-users-link.json`: 3,
 `cms-page.json`: 2, `deny-customer-facing-forms.json`: 3, `flag-answer.json`: 1,
-`markdown-sanitizing.json`: 1, `navigation-note.json`: 1, `order-note.json`: 3,
-`page-context.json`: 3, `page-form.json`: 14, `privacy-canary-tripwire.json`: 1,
-`privacy-lookup.json`: 3, `raw-data-guard.json`: 2, `slash-confirm.json`: 2,
-`slash-history.json`: 2, `store-scope.json`: 5, `unknown-tool-id.json`: 6 — the `page_form` specs
+`low-stock-export.json`: 2, `manifest-tool.json`: 2, `markdown-sanitizing.json`: 1,
+`navigation-note.json`: 1, `order-note.json`: 3, `page-context.json`: 3, `page-form.json`: 14,
+`privacy-canary-tripwire.json`: 1, `privacy-lookup.json`: 3, `raw-data-guard.json`: 2,
+`slash-confirm.json`: 2, `slash-history.json`: 2, `store-scope.json`: 5, `unknown-tool-id.json`: 6 — the `page_form` specs
 account for 18 of them).
 
 **Never assert on a Magento admin flash message.** Flash messages are session-stored and consumed

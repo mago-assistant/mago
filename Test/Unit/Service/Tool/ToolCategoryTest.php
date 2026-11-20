@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Tool;
 
 use MagoAssistant\Mago\Service\Skills\Sales\OrderManager;
+use MagoAssistant\Mago\Api\Tool\CategorisedToolInterface;
 use MagoAssistant\Mago\Service\Tool\ToolCategory;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeTool;
@@ -24,6 +25,18 @@ final class ToolCategoryTest extends TestCase
         $category = (new ToolCategory())->of(new OrderManager(new FakeAuthorization(), []));
 
         self::assertSame('Sales', $category);
+    }
+
+    /**
+     * A tool that is not a class of its own (one built from a manifest) names its category itself.
+     */
+    #[Test]
+    public function aToolThatNamesItsCategoryIsListedUnderIt(): void
+    {
+        $tool = $this->createStub(CategorisedToolInterface::class);
+        $tool->method('getCategory')->willReturn('RMA');
+
+        self::assertSame('RMA', (new ToolCategory())->of($tool));
     }
 
     #[Test]

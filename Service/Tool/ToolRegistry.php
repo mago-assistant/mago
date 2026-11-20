@@ -11,10 +11,13 @@ use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
 use MagoAssistant\Mago\Api\Tool\AvailabilityAwareToolInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
 use MagoAssistant\Mago\Api\Tool\ToolProviderInterface;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Skills\PermissionChecker;
 
 class ToolRegistry
 {
+    private const PROVIDER_LOG_CONTEXT = 'ToolProvider';
+
     /** @var ToolInterface[] */
     private array $tools;
 
@@ -35,31 +38,34 @@ class ToolRegistry
     public function __construct(
         private readonly ?PermissionChecker $permissionChecker = null,
         array $tools = [],
-        array $providers = []
+        array $providers = [],
+        private readonly ?ErrorReporter $errorReporter = null
     ) {
-        $registered = [];
+        // The tools listed in di.xml are kept as they were; a provider only adds names not taken yet
+        $taken = [];
         foreach ($tools as $tool) {
-            $registered[$tool->getName()] = $tool;
+            $taken[$tool->getName()] = true;
         }
         foreach ($providers as $provider) {
             foreach ($this->provided($provider) as $tool) {
-                if (!isset($registered[$tool->getName()])) {
-                    $registered[$tool->getName()] = $tool;
+                if (!isset($taken[$tool->getName()])) {
+                    $taken[$tool->getName()] = true;
+                    $tools[] = $tool;
                 }
             }
         }
 
-        $this->tools = array_values(array_filter(
-            $registered,
+        $this->tools = array_filter(
+            $tools,
             static fn (ToolInterface $tool): bool => !$tool instanceof AvailabilityAwareToolInterface
                 || $tool->isAvailable()
-        ));
+        );
     }
 
     /**
      * What a provider offers. The registry is built for every chat request, the Skills grid and
      * the panel, and a provider is code from elsewhere: one that throws, or hands back something
-     * that is not a tool, loses its own tools and nothing else. The provider logs its own failures.
+     * that is not a tool, loses its own tools and nothing else; what it threw is logged.
      *
      * @return ToolInterface[]
      */
@@ -67,11 +73,25 @@ class ToolRegistry
     {
         try {
             $tools = $provider->getTools();
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            $this->report($exception);
+
             return [];
         }
 
         return array_filter($tools, static fn (mixed $tool): bool => $tool instanceof ToolInterface);
+    }
+
+    /**
+     * A log that cannot be written must not take the registry down with it.
+     */
+    private function report(\Throwable $exception): void
+    {
+        try {
+            $this->errorReporter?->log(self::PROVIDER_LOG_CONTEXT, $exception);
+        } catch (\Throwable) {
+            return;
+        }
     }
 
     /**

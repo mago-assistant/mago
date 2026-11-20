@@ -25,6 +25,18 @@ interface FakeFaqDataInterface
 
     public function getVatId(): string;
 
+    /**
+     * Typed in the docblock only, as most of Magento's data interfaces are.
+     *
+     * @return string|null
+     */
+    public function getNote();
+
+    /**
+     * @return \MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqDataInterface[]
+     */
+    public function getChildren();
+
     public function get3dSecure(): bool;
 
     public function getExtensionAttributes(): ?object;

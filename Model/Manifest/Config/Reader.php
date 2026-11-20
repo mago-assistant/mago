@@ -6,6 +6,8 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Model\Manifest\Config;
 
+use Magento\Framework\Component\ComponentRegistrar;
+use Magento\Framework\Component\ComponentRegistrarInterface;
 use Magento\Framework\Config\Dom;
 use Magento\Framework\Config\FileResolverInterface;
 use Magento\Framework\Config\Reader\Filesystem;
@@ -45,6 +47,7 @@ class Reader extends Filesystem
         SchemaLocator $schemaLocator,
         ValidationStateInterface $validationState,
         private readonly ErrorReporter $errorReporter,
+        private readonly ComponentRegistrarInterface $componentRegistrar,
         string $fileName = self::FILE_NAME,
         array $idAttributes = [],
         string $domDocumentClass = Dom::class,
@@ -60,6 +63,24 @@ class Reader extends Filesystem
             $domDocumentClass,
             $defaultScope
         );
+    }
+
+    /**
+     * The module whose directory holds the file, or an empty string when none does.
+     */
+    private function moduleOf(string $file): string
+    {
+        $owner = '';
+        $longest = 0;
+        foreach ($this->componentRegistrar->getPaths(ComponentRegistrar::MODULE) as $module => $path) {
+            $path = rtrim((string)$path, '/') . '/';
+            if (str_starts_with($file, $path) && strlen($path) > $longest) {
+                $owner = (string)$module;
+                $longest = strlen($path);
+            }
+        }
+
+        return $owner;
     }
 
     /**
@@ -79,7 +100,19 @@ class Reader extends Filesystem
                 ));
                 continue;
             }
+            $owner = $this->moduleOf((string)$file);
             foreach ($declared as $name => $tool) {
+                if ($tool['module'] !== $owner) {
+                    $this->report(new LocalizedException(__(
+                        'The manifest "%1" declares the tool "%2" for the module "%3", but the file belongs to '
+                        . '"%4". A module declares its own tools only, so this declaration is left out.',
+                        (string)$file,
+                        $name,
+                        $tool['module'],
+                        $owner
+                    )));
+                    continue;
+                }
                 if (isset($tools[$name])) {
                     $this->report(new LocalizedException(__(
                         'The manifest "%1" declares the tool "%2", which "%3" already declares. A tool belongs '

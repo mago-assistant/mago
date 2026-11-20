@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Model\Manifest\Config;
 
+use Magento\Framework\Component\ComponentRegistrarInterface;
 use Magento\Framework\Config\FileResolverInterface;
 use Magento\Framework\Config\ValidationStateInterface;
 use Magento\Framework\Serialize\Serializer\Json;
@@ -137,6 +138,24 @@ final class ReaderTest extends TestCase
         self::assertSame([], $this->read([]));
     }
 
+    /**
+     * The tool exists while its `module` is enabled, and its grants are stored under its name: a
+     * manifest that names another module would tie its tool to that module's switch.
+     */
+    #[Test]
+    public function aToolDeclaredForAnotherModuleThanTheFilesIsLeftOut(): void
+    {
+        $tools = $this->read([
+            'a/etc/mago_tools.xml' => $this->manifest($this->tool('alpha', 'A') . $this->tool('borrowed', 'B')),
+            'elsewhere/etc/mago_tools.xml' => $this->manifest($this->tool('stray', 'A')),
+        ]);
+
+        self::assertSame(['alpha'], array_keys($tools));
+        $logged = implode("\n", $this->logger->getMessages());
+        self::assertCount(2, $this->logger->getMessages());
+        self::assertStringContainsString('for the module "Vendor_B", but the file belongs to "Vendor_A"', $logged);
+    }
+
     private function tool(string $name, string $module): string
     {
         return sprintf(self::TOOL, $name, $module, 'GET');
@@ -161,12 +180,16 @@ final class ReaderTest extends TestCase
         $validation = $this->createStub(ValidationStateInterface::class);
         $validation->method('isValidationRequired')->willReturn(false);
 
+        $registrar = $this->createStub(ComponentRegistrarInterface::class);
+        $registrar->method('getPaths')->willReturn(['Vendor_A' => 'a', 'Vendor_B' => 'b', 'Vendor_C' => 'c']);
+
         return (new Reader(
             $resolver,
             new Converter(),
             $schemaLocator,
             $validation,
-            new ErrorReporter(new ErrorLogger($this->logger, new Json()), new PiiHeuristic())
+            new ErrorReporter(new ErrorLogger($this->logger, new Json()), new PiiHeuristic()),
+            $registrar
         ))->read();
     }
 }

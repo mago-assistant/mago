@@ -108,7 +108,7 @@ final class ManifestDrafterTest extends TestCase
         $create = $actions['create_questions'];
         self::assertSame('entity', $create['steps'][0]['body']);
         self::assertSame(
-            ['faq_id', 'question', 'answer', 'is_active', 'product_skus', 'vat_id'],
+            ['faq_id', 'question', 'answer', 'is_active', 'product_skus', 'vat_id', 'note'],
             array_keys($create['params'])
         );
         self::assertSame('boolean', $create['params']['is_active']['type']);
@@ -117,7 +117,7 @@ final class ManifestDrafterTest extends TestCase
 
         $update = $actions['update_questions'];
         self::assertSame(
-            ['faq_id', 'question', 'answer', 'is_active', 'product_skus', 'vat_id'],
+            ['faq_id', 'question', 'answer', 'is_active', 'product_skus', 'vat_id', 'note'],
             array_keys($update['params'])
         );
         self::assertSame('path', $update['params']['faq_id']['in'], 'the path parameter is declared once');
@@ -144,7 +144,7 @@ final class ManifestDrafterTest extends TestCase
 
         self::assertSame(['faq_id' => ['public'], '*' => ['strip']], $get['fields']);
         self::assertStringContainsString(
-            'TODO: classify question, answer, is_active, product_skus, created_at, vat_id as public, tokenise '
+            'TODO: classify question, answer, is_active, product_skus, created_at, vat_id, note as public, tokenise '
             . '(personal data) '
             . 'or strip',
             $xml
@@ -203,7 +203,7 @@ final class ManifestDrafterTest extends TestCase
         foreach (array_keys($tools['rma']['actions']) as $name) {
             self::assertLessThanOrEqual(64, strlen((string)$name));
         }
-        self::assertCount(6, $tools['rma']['actions'], 'the two long names stay apart');
+        self::assertCount(8, $tools['rma']['actions'], 'the two long names stay apart');
     }
 
     /**
@@ -248,7 +248,6 @@ final class ManifestDrafterTest extends TestCase
         self::assertSame('query', $reasons['params']['code']['in']);
         self::assertSame(['public'], $reasons['fields']['faq_id'], 'a numeric id');
         self::assertArrayNotHasKey('vat_id', $reasons['fields'], 'a text id waits for the author');
-        self::assertStringContainsString('reads $storeId from the query under that exact name', $xml);
 
         $comment = $actions['create_comments'];
         self::assertSame('comment', $comment['steps'][0]['body']);
@@ -256,6 +255,17 @@ final class ManifestDrafterTest extends TestCase
         self::assertStringContainsString('rma_id is in the path but is no field of $comment', $xml);
         self::assertStringContainsString('product_skus are lists, drafted as lists of text', $xml);
         self::assertTrue($this->validates($xml));
+
+        self::assertSame('string', $comment['params']['note']['type'], 'a getter typed in its docblock only');
+        self::assertArrayNotHasKey('children', $comment['params'], 'a list of objects is no parameter');
+        $purge = $actions['delete_purge'];
+        self::assertSame(['faq_id'], array_keys($purge['params']), 'a DELETE carries no query parameter');
+        self::assertStringContainsString('the route also takes $force, which a DELETE cannot carry', $xml);
+
+        $byCode = $actions['get_code'];
+        self::assertSame('string', $byCode['params']['code']['type'], 'typed by the @param of the contract');
+        self::assertSame(['code'], array_keys($byCode['params']));
+        self::assertStringContainsString('the route also takes $anything, which could not be drafted', $xml);
     }
 
     #[Test]

@@ -29,6 +29,14 @@
         <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="comment"/>
         <resources><resource ref="Vendor_Mixed::rma"/></resources>
     </route>
+    <route url="/V1/rma/:faqId/purge" method="DELETE">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="purge"/>
+        <resources><resource ref="Vendor_Mixed::rma"/></resources>
+    </route>
+    <route url="/V1/rma/code/:code" method="GET">
+        <service class="MagoAssistant\Mago\Test\Unit\Fakes\FakeFaqRepositoryInterface" method="byCode"/>
+        <resources><resource ref="Vendor_Mixed::rma"/></resources>
+    </route>
     <route url="/V1/rma-lines" method="GET">
         <service class="Vendor\Mixed\Api\LineRepositoryInterface" method="getList"/>
         <resources><resource ref="Vendor_Mixed::rma"/></resources>

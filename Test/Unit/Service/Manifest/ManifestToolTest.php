@@ -9,6 +9,10 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Manifest;
 use Magento\Backend\Model\UrlInterface as BackendUrl;
 use Magento\Framework\Module\Manager as ModuleManager;
 use MagoAssistant\Mago\Model\Manifest\Config\Converter;
+use MagoAssistant\Mago\Api\Tool\ValidatingToolInterface;
+use MagoAssistant\Mago\Service\Api\InProcess\ApiCall;
+use MagoAssistant\Mago\Service\Api\InProcess\ResolvedRoute;
+use MagoAssistant\Mago\Service\Api\InProcess\RouteResolver;
 use MagoAssistant\Mago\Service\Manifest\ManifestTool;
 use MagoAssistant\Mago\Service\Manifest\Placeholders;
 use MagoAssistant\Mago\Service\Privacy\ConversationVault;
@@ -18,6 +22,7 @@ use MagoAssistant\Mago\Service\Privacy\PrivacyFilter;
 use MagoAssistant\Mago\Service\Skills\ResultLimit;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeSearchServiceInterface;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -32,6 +37,9 @@ final class ManifestToolTest extends TestCase
     private FakeInternalApiClient $api;
 
     private bool $moduleEnabled = true;
+
+    /** @var list<string> */
+    private array $routes = [];
 
     protected function setUp(): void
     {
@@ -62,8 +70,9 @@ final class ManifestToolTest extends TestCase
     }
 
     /**
-     * The model is shown one schema for the tool and has to send the same properties whatever the
-     * action, so a parameter is only non-nullable when every action in the schema requires it.
+     * The schema is in the plain form the built-in tools use and every provider accepts: one type
+     * per parameter, nothing nullable, only `action` required. Which action needs what is in the
+     * description.
      */
     #[Test]
     public function theSchemaListsTheActionsAndTheirParametersOnce(): void
@@ -77,14 +86,14 @@ final class ManifestToolTest extends TestCase
         self::assertSame(['search', 'create', 'approve'], $schema['properties']['action']['enum']);
         self::assertSame(['action'], $schema['required']);
         self::assertSame(
-            ['type' => ['string', 'null'], 'description' => 'Part of the RMA number'],
+            ['type' => 'string', 'description' => 'Part of the RMA number (required for search)'],
             $schema['properties']['query'],
-            'required by search only: create and approve must be able to leave it out'
+            'required by search only: the schema cannot require it for create and approve'
         );
-        self::assertSame(['type' => ['integer', 'null']], $schema['properties']['limit']);
+        self::assertSame(['type' => 'integer'], $schema['properties']['limit']);
         self::assertSame(
             [
-                'type' => ['array', 'null'],
+                'type' => 'array',
                 'items' => ['type' => 'string', 'enum' => ['refund', 'replacement', 'repair']],
             ],
             $schema['properties']['tags'],
@@ -94,8 +103,9 @@ final class ManifestToolTest extends TestCase
         $create = $this->tool()->getParameterSchemaForActions(['create'])['properties'];
         self::assertSame(['action', 'order_id', 'reason', 'tags'], array_keys($create));
         self::assertSame(['create'], $create['action']['enum']);
-        self::assertSame('integer', $create['order_id']['type'], 'required by every action in this schema');
-        self::assertSame(['array', 'null'], $create['tags']['type']);
+        self::assertSame('integer', $create['order_id']['type']);
+        self::assertSame('array', $create['tags']['type']);
+        self::assertStringNotContainsString('null', (string)json_encode($schema), 'no provider-specific forms');
 
         $approve = $this->tool()->getParameterSchemaForActions(['approve'])['properties'];
         self::assertSame('integer', $approve['entity_id']['type'], 'a path parameter is always required');
@@ -105,6 +115,7 @@ final class ManifestToolTest extends TestCase
     public function readOnlyAclAndIrreversibilityFollowTheAction(): void
     {
         $tool = $this->tool();
+        self::assertSame('MageOS_RMA', $tool->getCategory(), 'the declaring module, for the Skills grid');
 
         self::assertFalse($tool->isReadOnly());
         self::assertTrue($tool->isReadOnlyAction(['action' => 'search']));
@@ -160,13 +171,17 @@ final class ManifestToolTest extends TestCase
                 'error' => ['public'],
                 'items' => ['public'],
                 'total_count' => ['public'],
+                'result' => ['public'],
                 '_links' => ['public'],
                 'label' => ['public'],
                 'url' => ['tokenise', 'url'],
             ],
             $tool->getFieldClassification('search')
         );
-        self::assertSame(['error' => ['public']], $tool->getFieldClassification('create'));
+        self::assertSame(
+            ['error' => ['public'], 'items' => ['public'], 'total_count' => ['public'], 'result' => ['public']],
+            $tool->getFieldClassification('create')
+        );
         self::assertSame([], $tool->getFieldClassification('nope'));
     }
 
@@ -602,8 +617,8 @@ final class ManifestToolTest extends TestCase
         );
 
         $schema = $tool->getParameterSchema()['properties'];
-        self::assertSame([0, 1, 2, null], $schema['level']['enum'], 'in the type to send, null for "not given"');
-        self::assertSame(['admin', null], $schema['author']['enum']);
+        self::assertSame([0, 1, 2], $schema['level']['enum'], 'in the type the model has to send');
+        self::assertSame(['admin'], $schema['author']['enum']);
         self::assertSame(['type' => 'integer'], $schema['ids']['items']);
     }
 
@@ -844,6 +859,374 @@ final class ManifestToolTest extends TestCase
         self::assertStringNotContainsString('admin.test', json_encode($seen) ?: '');
     }
 
+    /**
+     * A write the tool would refuse must not get a confirmation card first: the chat asks before it
+     * shows the card.
+     */
+    #[Test]
+    public function aWriteThatWouldBeRefusedIsRefusedBeforeTheConfirmationCard(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="save" description="d" method="POST" path="x">'
+            . '<param name="id" type="integer" required="true"/>'
+            . '<param name="mode" type="string" enum="a,b"/></action></tool></config>'
+        );
+
+        self::assertInstanceOf(ValidatingToolInterface::class, $tool);
+        self::assertSame(
+            ['error' => 'Parameter "id" is required for save'],
+            $tool->findRefusal(['action' => 'save', 'mode' => 'a'])
+        );
+        self::assertSame(
+            ['error' => 'Parameter "mode" must be one of: a, b'],
+            $tool->findRefusal(['action' => 'save', 'id' => 1, 'mode' => 'c'])
+        );
+        self::assertNull($tool->findRefusal(['action' => 'save', 'id' => 1]));
+        self::assertNull($tool->findRefusal(['action' => 'nope']), 'execute() answers an unknown action');
+        self::assertSame([], $this->api->calls());
+    }
+
+    /**
+     * Privacy mode shows the model a token for a value and puts the value back before the call.
+     * The check before the card sees the token, and must leave it to the call to judge.
+     */
+    #[Test]
+    public function aTokenIsNotJudgedBeforeTheCard(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="save" description="d" method="PUT" path="orders/{order_id}">'
+            . '<param name="order_id" type="integer" in="path"/>'
+            . '<param name="state" type="string" enum="open,closed" required="true"/>'
+            . '<param name="ids" type="array" items="integer"/></action></tool></config>'
+        );
+
+        self::assertNull($tool->findRefusal(
+            ['action' => 'save', 'order_id' => 'mago://order_1', 'state' => '[value_2]', 'ids' => ['mago://id_3']]
+        ));
+        self::assertSame(
+            ['error' => 'Parameter "state" must be one of: open, closed'],
+            $tool->findRefusal(['action' => 'save', 'order_id' => 'mago://order_1', 'state' => 'gone']),
+            'what is no token is still judged'
+        );
+        self::assertSame(
+            ['error' => 'Parameter "order_id" must be of type integer'],
+            $tool->execute(['action' => 'save', 'order_id' => 'mago://order_1', 'state' => 'open']),
+            'a token that reaches the call unreplaced is refused there'
+        );
+    }
+
+    /**
+     * A record keeps its own lines (an order, a return), a bare answer survives a pick, and a
+     * record's own number called `result` does not pass as one.
+     */
+    #[Test]
+    public function aRecordKeepsItsLinesAndABareAnswerIsJudgedOnWhatTheRouteSent(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="get" description="d" method="GET" path="orders/{id}" readonly="true">'
+            . '<param name="id" type="integer" in="path"/>'
+            . '<field name="id" class="public"/><field name="sku" class="public"/><fields class="strip"/>'
+            . '</action>'
+            . '<action name="save" description="d" method="POST" path="orders">'
+            . '<field name="id" class="public"/><fields class="strip"/><pick field="id"/><pick field="result"/>'
+            . '</action></tool></config>'
+        );
+        $this->api
+            ->withResponse(FakeInternalApiClient::GET, 'orders/9', [
+                'id' => 9,
+                'items' => [['sku' => 'A', 'name' => 'Jan'], 'bare text', ['sku' => 'B']],
+            ])
+            ->withResponse(FakeInternalApiClient::POST, 'orders', ['result' => 15]);
+
+        $record = $tool->execute(['action' => 'get', 'id' => 9, '_admin_user_id' => self::ADMIN_ID]);
+        $bare = $tool->execute(['action' => 'save', '_admin_user_id' => self::ADMIN_ID]);
+        $this->api->withResponse(FakeInternalApiClient::POST, 'orders', ['id' => 1, 'result' => 4111111111111111]);
+        $picked = $tool->execute(['action' => 'save', '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertSame(
+            ['id' => 9, 'items' => [['sku' => 'A'], ['sku' => 'B']]],
+            $this->seen($tool, 'get', $record),
+            'the lines, by the rules of their fields, without the bare text'
+        );
+        self::assertSame(['result' => 15], $this->seen($tool, 'save', $bare), 'not lost to the pick');
+        self::assertSame(['id' => 1], $this->seen($tool, 'save', $picked), 'a field of a record is no bare answer');
+    }
+
+    /**
+     * A parameter in the path of a step that always runs is required up front; a store that is no
+     * code is refused instead of running in the default store.
+     */
+    #[Test]
+    public function whatWouldFailLaterIsRefusedBeforeTheFirstStep(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="a" description="d"><param name="code" type="string" in="none"/>'
+            . '<param name="note" type="string" in="none"/>'
+            . '<step name="save" method="PUT" path="x"/><step name="log" method="POST" path="log/{code}"/>'
+            . '<step name="extra" method="POST" path="notes/{note}" when="{note}"/></action>'
+            . '<action name="s" description="d" method="POST" path="y">'
+            . '<param name="shop" type="number" in="store"/></action></tool></config>'
+        );
+
+        self::assertSame(
+            ['error' => 'Parameter "code" is required for a'],
+            $tool->execute(['action' => 'a', '_admin_user_id' => self::ADMIN_ID]),
+            'note is optional: its step only runs when it is given'
+        );
+        self::assertSame(
+            ['error' => 'Parameter "shop" must be a store code'],
+            $tool->execute(['action' => 's', 'shop' => 3.5, '_admin_user_id' => self::ADMIN_ID])
+        );
+        self::assertSame([], $this->api->calls());
+    }
+
+    /**
+     * A repository's getList without search criteria answers with every row of the table.
+     */
+    #[Test]
+    public function aSearchRouteAlwaysGetsAPageSize(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="all" description="d" method="GET" path="things/all" readonly="true"/>'
+            . '<action name="one" description="d" method="GET" path="things/first" readonly="true"/>'
+            . '</tool></config>'
+        );
+
+        $tool->execute(['action' => 'all', '_admin_user_id' => self::ADMIN_ID]);
+        $tool->execute(['action' => 'one', '_admin_user_id' => self::ADMIN_ID]);
+
+        [$search, $plain] = array_column($this->api->calls(), 'payload');
+        self::assertSame(20, $search['searchCriteria[pageSize]']);
+        self::assertSame([], $plain, 'a route that is no search stays a plain GET');
+    }
+
+    /**
+     * The count of a list is the tool's to pass on: with a rule for `items`, without a catch-all,
+     * and for an empty answer. What a search result carries next to its rows is left out.
+     */
+    #[Test]
+    public function aListAlwaysCarriesItsCountAndNothingElseNextToItsRows(): void
+    {
+        $response = ['items' => [['id' => 1, 'name' => 'x']], 'search_criteria' => [], 'total_count' => 57];
+        foreach ([
+            'no catch-all' => '<field name="id" class="public"/>',
+            'a rule for items' => '<field name="id" class="public"/><field name="items" class="public"/>'
+                . '<fields class="strip"/>',
+            'catch-all only' => '<field name="id" class="public"/><fields class="strip"/>',
+        ] as $case => $rules) {
+            $tool = $this->tool(
+                '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+                . '<action name="list" description="d" method="GET" path="x" readonly="true">' . $rules
+                . '</action></tool></config>'
+            );
+            $this->api->withResponse(FakeInternalApiClient::GET, 'x', $response);
+
+            $result = $tool->execute(['action' => 'list', '_admin_user_id' => self::ADMIN_ID]);
+            $seen = $this->seen($tool, 'list', $result);
+
+            self::assertSame(['items' => [['id' => 1]], 'total_count' => 57], $seen, $case);
+        }
+
+        $this->api->withResponse(FakeInternalApiClient::GET, 'x', []);
+        self::assertSame(
+            ['items' => [], 'total_count' => 0],
+            $tool->execute(['action' => 'list', '_admin_user_id' => self::ADMIN_ID]),
+            'an empty answer to a read is an empty list'
+        );
+    }
+
+    /**
+     * A route that answers with true or an id arrives as {"result": ...}. That is safe to show; a
+     * text under the same name, or a field called result inside a record, is not shown by itself.
+     */
+    #[Test]
+    public function theBareAnswerOfARouteReachesTheModelAndATextDoesNot(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="drop" description="d" method="DELETE" path="x/{id}">'
+            . '<param name="id" type="integer" in="path"/><fields class="strip"/></action></tool></config>'
+        );
+        $run = function (array $response) use ($tool): array {
+            $this->api->withResponse(FakeInternalApiClient::DELETE, 'x/1', $response);
+
+            return $this->seen($tool, 'drop', $tool->execute(['action' => 'drop', 'id' => 1, '_admin_user_id' => 7]));
+        };
+
+        self::assertSame(['result' => true], $run(['result' => true]));
+        self::assertSame(['result' => 15], $run(['result' => 15]));
+        self::assertSame([], $run(['result' => 'Deleted the return of Jan Jansen']));
+        self::assertSame([], $run(['id' => 1, 'result' => true]), 'a field of a record, not the bare answer');
+    }
+
+    /**
+     * A step field cast with as="int" is as strict as an integer parameter, and a required filter
+     * cannot be an empty list (that would search without it).
+     */
+    #[Test]
+    public function aCastDoesNotRoundAndARequiredFilterIsNotEmpty(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="save" description="d"><param name="v" type="string" in="none"/>'
+            . '<step name="save" method="POST" path="x"><field name="f" value="{v}" as="int"/>'
+            . '<field name="g" value="7" as="int"/></step></action>'
+            . '<action name="find" description="d" method="GET" path="y" readonly="true">'
+            . '<param name="ids" type="array" items="integer" in="criteria" criteria="entity_id" condition="in" '
+            . 'required="true"/></action></tool></config>'
+        );
+
+        foreach (['5.7', '1e3', ' 7 ', '99999999999999999999', 'abc'] as $value) {
+            $tool->execute(['action' => 'save', 'v' => $value, '_admin_user_id' => self::ADMIN_ID]);
+        }
+        $tool->execute(['action' => 'save', 'v' => '12', '_admin_user_id' => self::ADMIN_ID]);
+        $payloads = array_column($this->api->calls(), 'payload');
+
+        self::assertSame(array_fill(0, 5, ['g' => 7]), array_slice($payloads, 0, 5), 'left out, never rounded');
+        self::assertSame(['f' => 12, 'g' => 7], $payloads[5]);
+        self::assertSame(
+            ['error' => 'Parameter "ids" is required for find and cannot be empty'],
+            $tool->execute(['action' => 'find', 'ids' => [], '_admin_user_id' => self::ADMIN_ID])
+        );
+    }
+
+    /**
+     * A value that cannot be a path segment is refused with the other parameters, before the first
+     * step runs, and not after an earlier step has written.
+     */
+    #[Test]
+    public function aBadPathValueIsRefusedBeforeAnyStepRuns(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="a" description="d"><param name="flag" type="boolean" in="none"/>'
+            . '<step name="save" method="PUT" path="x"/><step name="note" method="POST" path="log/{flag}"/>'
+            . '</action></tool></config>'
+        );
+
+        $result = $tool->execute(['action' => 'a', 'flag' => true, '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertSame(
+            ['error' => 'Parameter "flag" is part of the route and must be a single text or number'],
+            $result
+        );
+        self::assertSame($result, $tool->findRefusal(['action' => 'a', 'flag' => true]));
+        self::assertSame([], $this->api->calls());
+    }
+
+    /**
+     * Magento matches a literal route before one with a variable. The model must not be able to
+     * turn faq/{code} into faq/search by sending "search" as the code.
+     */
+    #[Test]
+    public function aValueCannotPickAnotherRouteThanTheOneTheManifestNames(): void
+    {
+        $this->routes = [
+            'GET faq/search', 'GET faq/:code', 'DELETE faq/all', 'DELETE faq/:code',
+            'PUT rma/:id/approve', 'PUT rma/:id/reject', 'GET rma/:id/items',
+        ];
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="get" description="d" method="GET" path="faq/{code}" readonly="true">'
+            . '<param name="code" type="string" in="path"/></action>'
+            . '<action name="drop" description="d" method="DELETE" path="faq/{code}">'
+            . '<param name="code" type="string" in="path"/></action>'
+            . '<action name="move" description="d" method="PUT" path="rma/{id}/{transition}">'
+            . '<param name="id" type="integer" in="path"/>'
+            . '<param name="transition" type="string" in="path" enum="approve,reject"/></action>'
+            . '<action name="free" description="d" method="GET" path="rma/{id}/{part}" readonly="true">'
+            . '<param name="id" type="integer" in="path"/><param name="part" type="string" in="path"/></action>'
+            . '</tool></config>'
+        );
+        $refused = fn (string $action): array => ['error' => 'A value is the name of another route, so nothing '
+            . 'was called. Use the id or code of a record for ' . $action . '.'];
+        $run = fn (array $input): array => $tool->execute($input + ['_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertSame($refused('get'), $run(['action' => 'get', 'code' => 'search']));
+        self::assertSame($refused('drop'), $run(['action' => 'drop', 'code' => 'all']));
+        self::assertSame([], $this->api->calls(), 'neither call was made');
+        self::assertSame(
+            $refused('drop'),
+            $tool->findRefusal(['action' => 'drop', 'code' => 'all']),
+            'and the admin is not asked to confirm the delete first'
+        );
+        self::assertNull($tool->findRefusal(['action' => 'drop', 'code' => 'shipping']));
+
+        $run(['action' => 'get', 'code' => 'shipping']);
+        $run(['action' => 'move', 'id' => 5, 'transition' => 'approve']);
+        self::assertSame(['faq/shipping', 'rma/5/approve'], array_column($this->api->calls(), 'endpoint'));
+
+        self::assertSame(
+            $refused('free'),
+            $tool->execute(['action' => 'free', 'id' => 5, 'part' => 'items', '_admin_user_id' => self::ADMIN_ID]),
+            'the parameter has no enum, so its value would choose among the literal routes'
+        );
+    }
+
+    /**
+     * ChatService carries a client_directive of a tool result to the admin's browser without
+     * filtering it. A route's field of that name must never get there.
+     */
+    #[Test]
+    public function aRouteCannotSendADirectiveToTheBrowser(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="get" description="d" method="GET" path="x" readonly="true"><fields class="public"/>'
+            . '</action></tool></config>'
+        );
+        $this->api->withResponse(FakeInternalApiClient::GET, 'x', [
+            'id' => 1,
+            'client_directive' => ['type' => 'form_navigate', 'url' => 'javascript:alert(1)'],
+            'nested' => ['client_directive' => ['type' => 'form_write']],
+        ]);
+
+        $result = $tool->execute(['action' => 'get', '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertStringNotContainsString('client_directive', (string)json_encode($result));
+        self::assertSame(1, $result['id']);
+    }
+
+    #[Test]
+    public function aStoreGivenAsANumberIsNotSilentlyDropped(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="save" description="d" method="POST" path="x">'
+            . '<param name="store_id" type="integer" in="store"/></action></tool></config>'
+        );
+
+        $tool->execute(['action' => 'save', 'store_id' => 3, '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertSame('3', $this->api->calls()[0]['store_code']);
+    }
+
+    #[Test]
+    public function aLinkLabelNeverCarriesAnAdminUrl(): void
+    {
+        $tool = $this->tool(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="get" description="d" method="GET" path="x" readonly="true">'
+            . '<field name="entity_id" class="public"/><field name="admin_url" class="public"/>'
+            . '<link label="Open {entity_id} at {admin_url}" route="a/b/c" param="id" from="entity_id"/>'
+            . '</action></tool></config>'
+        );
+        $this->api->withResponse(
+            FakeInternalApiClient::GET,
+            'x',
+            ['entity_id' => 4, 'admin_url' => 'https://admin.test/key/abc']
+        );
+
+        $result = $tool->execute(['action' => 'get', '_admin_user_id' => self::ADMIN_ID]);
+
+        self::assertSame('Open 4 at', trim($result['_links'][0]['label']));
+    }
+
     #[Test]
     public function aPathPlaceholderMustResolveToASingleValue(): void
     {
@@ -861,7 +1244,10 @@ final class ManifestToolTest extends TestCase
         $list = $tool->execute(['action' => 'items', 'ids' => ['5'], '_admin_user_id' => self::ADMIN_ID]);
         $chain = $tool->execute(['action' => 'chain', '_admin_user_id' => self::ADMIN_ID]);
 
-        self::assertSame(['error' => 'No value for {ids} in the route of items'], $list);
+        self::assertSame(
+            ['error' => 'Parameter "ids" is part of the route and must be a single text or number'],
+            $list
+        );
         self::assertSame(['error' => 'No value for {steps.load.lines} in the route of chain'], $chain);
         self::assertSame(['rma/1'], array_column($this->api->calls(), 'endpoint'));
     }
@@ -904,7 +1290,10 @@ final class ManifestToolTest extends TestCase
         );
 
         self::assertSame(
-            ['type' => ['string', 'null'], 'description' => 'search: Part of the number; get: The whole number'],
+            [
+                'type' => 'string',
+                'description' => 'search: Part of the number; get: The whole number (required for get)',
+            ],
             $tool->getParameterSchema()['properties']['number']
         );
     }
@@ -1164,7 +1553,67 @@ final class ManifestToolTest extends TestCase
             $this->api,
             new Placeholders(),
             new SecureAdminUrl($backendUrl),
-            $moduleManager
+            $moduleManager,
+            $this->routes()
         );
+    }
+
+    /**
+     * Routes as Magento matches them: of the templates in $routes that fit, the most literal one
+     * wins. Without templates every path is its own variable route.
+     */
+    private function routes(): RouteResolver
+    {
+        return new class ($this->routes) extends RouteResolver {
+            /**
+             * @param list<string> $routes "METHOD path/:variable"
+             */
+            public function __construct(private readonly array $routes)
+            {
+            }
+
+            public function resolve(ApiCall $call): ResolvedRoute
+            {
+                if ($this->routes === []) {
+                    $generic = $call->httpMethod . ' generic/' . substr_count($call->endpoint, '/');
+                    // A path that ends in /all stands for a repository's getList
+                    $search = str_ends_with($call->endpoint, '/all');
+
+                    return new ResolvedRoute(
+                        $search ? FakeSearchServiceInterface::class : 'Service',
+                        $search ? 'getList' : 'method',
+                        $generic,
+                        [],
+                        []
+                    );
+                }
+                $segments = explode('/', $call->endpoint);
+                $best = null;
+                $bestScore = -1;
+                foreach ($this->routes as $route) {
+                    [$method, $template] = explode(' ', $route);
+                    $parts = explode('/', $template);
+                    if ($method !== $call->httpMethod || count($parts) !== count($segments)) {
+                        continue;
+                    }
+                    $score = 0;
+                    foreach ($parts as $i => $part) {
+                        if (!str_starts_with($part, ':') && $part !== $segments[$i]) {
+                            continue 2;
+                        }
+                        $score += str_starts_with($part, ':') ? 0 : 1;
+                    }
+                    if ($score > $bestScore) {
+                        $best = $route;
+                        $bestScore = $score;
+                    }
+                }
+                if ($best === null) {
+                    throw new \RuntimeException('Request does not match any route.');
+                }
+
+                return new ResolvedRoute('Service', 'method', $best, [], []);
+            }
+        };
     }
 }

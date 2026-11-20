@@ -89,7 +89,7 @@ class CreateManifest extends Command
             '  bin/magento cache:clean config',
             '  bin/magento mago:tool:verify <tool> \'{"action": "<action>"}\'',
             '',
-            'Guide: vendor/mago-assistant/magento2-mago/docs/manifest-tools.md',
+            'Guide: docs/manifest-tools.md in the Mago module.',
         ]);
 
         return Command::SUCCESS;

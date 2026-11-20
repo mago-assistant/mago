@@ -32,7 +32,7 @@ final class ManifestCheckerTest extends TestCase
     private const TOOL = '<config version="1">'
         . '<tool name="t" acl="MageOS_RMA::rma" module="MageOS_RMA" description="d">';
     private const END = '</tool></config>';
-    private const ID = '<field name="entity_id" class="public"/>';
+    private const ID = '<field name="entity_id" class="public"/><fields class="strip"/>';
     private const UNSENT = 'a body parameter needs a POST or PUT step without <field> elements or a '
         . '<field value="{name}"> of its own, a criteria, query or page_size parameter a GET step. The admin would '
         . 'confirm a value that is not used';
@@ -344,6 +344,98 @@ final class ManifestCheckerTest extends TestCase
         self::assertSame([], $this->messages($checks, CheckStatus::Failure));
         self::assertSame([], $this->messages($checks, CheckStatus::Warning));
         self::assertContains('PUT rma/1/approve', $this->resolved);
+    }
+
+    #[Test]
+    public function aStoreParameterThatIsNoTextAndAnActionWithoutACatchAllAreReported(): void
+    {
+        $tool = $this->tool(
+            self::TOOL . '<action name="list" description="d" method="GET" path="rma/search">'
+            . '<field name="entity_id" class="public"/><field name="admin_url" class="public"/>'
+            . '<param name="store_id" type="integer" in="store"/>'
+            . '<link label="Open {admin_url}" route="rma/rma/edit" param="id" from="entity_id"/></action>' . self::END
+        );
+
+        $checks = $this->checker()->check($tool, []);
+
+        self::assertSame(
+            [
+                'Action "list": parameter "store_id" sets the store and must be type="string": a call runs in a '
+                . 'store by its code',
+                'Action "list": the link label "Open {admin_url}" uses {admin_url}, which the action does not '
+                . 'classify public. A label reaches the model as text, so it is rendered without that value; name a '
+                . 'public field instead',
+            ],
+            $this->messages($checks, CheckStatus::Failure)
+        );
+        self::assertSame(
+            ['Action "list" has no <fields class="strip"/>. Without it the names of nested fields the action does '
+                . 'not classify still reach the model, and in a map keyed by data (an e-mail address, a name) those '
+                . 'names are data. Add <fields class="strip"/>'],
+            $this->messages($checks, CheckStatus::Warning)
+        );
+    }
+
+    #[Test]
+    public function thingsThatReadAsIfTheyWorkAndDoNothingAreReported(): void
+    {
+        $tool = $this->tool(
+            self::TOOL . '<action name="list" description="d">' . self::ID
+            . '<param name="flag" type="boolean" in="none"/><param name="limit" type="string" in="page_size"/>'
+            . '<param name="tags" type="array" items="string" in="query"/>'
+            . '<step name="find" method="GET" path="rma/search" when="!{flag}"/>'
+            . '<step name="one" method="GET" path="rma/{flag}"/>'
+            . '<pick field="customer.email"/>'
+            . '<link label="Open" route="rma/rma/edit" param="id" from="customer.id"/></action>'
+            . '<action name="other" description="d" method="GET" path="rma/search">' . self::ID
+            . '<param name="tags" type="array" in="query"/></action>' . self::END
+        );
+
+        $checks = $this->checker()->check($tool, []);
+
+        self::assertSame(
+            [
+                'Action "list": parameter "flag" is a boolean and cannot be a segment of a path',
+                'Action "list": parameter "limit" is the page size and must be type="integer"',
+            ],
+            $this->messages($checks, CheckStatus::Failure),
+            'items="string" and no items are the same list, so tags is no clash'
+        );
+        $warnings = implode("\n", $this->messages($checks, CheckStatus::Warning));
+        self::assertStringContainsString('when="!{flag}" is more than one placeholder', $warnings);
+        self::assertStringContainsString('customer.email, customer.id names a field inside another', $warnings);
+    }
+
+    /**
+     * A parameter the action demands and no call carries can never be satisfied; a result has to be
+     * a whole step; a catch-all that tokenises still lets the names of nested fields through.
+     */
+    #[Test]
+    public function aDemandedParameterThatIsNeverSentAndAResultThatIsNoStepFail(): void
+    {
+        $this->routes['DELETE rma/1'] = $this->route('/V1/rma/:entityId', 'deleteById', ['MageOS_RMA::rma']);
+        $tool = $this->tool(
+            self::TOOL . '<action name="drop" description="d" method="DELETE" path="rma/{entity_id}/{parts}" '
+            . 'result="{steps.main.result}">'
+            . '<field name="entity_id" class="public"/><fields class="tokenise" token="value"/>'
+            . '<param name="entity_id" type="integer" in="path"/>'
+            . '<param name="parts" type="array" in="none"/>'
+            . '<param name="force" type="boolean" in="query" required="true"/></action>' . self::END
+        );
+
+        $checks = $this->checker()->check($tool, []);
+        $failures = implode("\n", $this->messages($checks, CheckStatus::Failure));
+
+        self::assertStringContainsString('requires force and never sends it', $failures);
+        self::assertStringContainsString(
+            'result="{steps.main.result}" must be one placeholder naming a step',
+            $failures
+        );
+        self::assertStringContainsString('parameter "parts" is a list and cannot be one segment of a path', $failures);
+        self::assertStringContainsString(
+            'has no <fields class="strip"/>',
+            implode("\n", $this->messages($checks, CheckStatus::Warning))
+        );
     }
 
     #[Test]

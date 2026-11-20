@@ -1,0 +1,22 @@
+data: {"id":"chatcmpl-e2e-manifest-1","object":"chat.completion.chunk","created":1754000101,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-manifest-1","object":"chat.completion.chunk","created":1754000101,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"Sure, I will "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-manifest-1","object":"chat.completion.chunk","created":1754000101,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"content":"create that CMS block."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-manifest-1","object":"chat.completion.chunk","created":1754000101,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_e2e_manifest_1","type":"function","function":{"name":"fixture_blocks","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-manifest-1","object":"chat.completion.chunk","created":1754000101,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"action\":\"create"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-manifest-1","object":"chat.completion.chunk","created":1754000101,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\",\"identifier\":\"e2e-manifest"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-manifest-1","object":"chat.completion.chunk","created":1754000101,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"-block\",\"title\":\"E2E Manifest Block\","}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-manifest-1","object":"chat.completion.chunk","created":1754000101,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"content\":\"<p>Created through a manifest tool.</p>\""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-manifest-1","object":"chat.completion.chunk","created":1754000101,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-e2e-manifest-1","object":"chat.completion.chunk","created":1754000101,"model":"gemma-3-4b-it-qat","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1200,"completion_tokens":80,"total_tokens":1280}}
+
+data: [DONE]
+

@@ -10,6 +10,7 @@ use Magento\Framework\Module\Manager as ModuleManager;
 use MagoAssistant\Mago\Service\Api\InProcess\ApiCall;
 use MagoAssistant\Mago\Service\Api\InProcess\RouteResolver;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Privacy\PrivacyFilter;
 use MagoAssistant\Mago\Service\Tool\Verify\AclResourceIndex;
 use MagoAssistant\Mago\Service\Tool\Verify\ToolCheck;
 
@@ -100,6 +101,7 @@ class ManifestChecker
                 ...$this->checkPlaceholders($action),
                 ...$this->checkLinkLabels($action),
                 ...$this->checkPrivacy($action),
+                ...$this->checkSilentNoOps($action),
             ];
             if ($action['steps'] === []) {
                 $checks[] = ToolCheck::failure(
@@ -148,7 +150,7 @@ class ManifestChecker
                         . $first['action'] . '" and ' . $param['type'] . ' in action "' . $action['name']
                         . '"; the model is shown one schema per tool, so give one of them its own name';
                 } elseif ($this->sorted($first['param']['enum']) !== $this->sorted($param['enum'])
-                    || $first['param']['items'] !== $param['items']) {
+                    || ($first['param']['items'] ?? 'string') !== ($param['items'] ?? 'string')) {
                     $clashes[$name] ??= 'Parameter "' . $name . '" allows different values in action "'
                         . $first['action'] . '" and in action "' . $action['name'] . '" (enum or items); the '
                         . 'model is shown one schema per tool, so give one of them its own name';
@@ -214,15 +216,42 @@ class ManifestChecker
                     $label . ': a parameter cannot be called "' . $name . '", the tool uses that name itself'
                 );
             }
-            if ($param['in'] === 'path' && $param['type'] === 'array') {
+            if ($param['type'] === 'array' && ($param['in'] === 'path' || $this->isInAPath($action, (string)$name))) {
                 $checks[] = ToolCheck::failure(
                     $label . ': parameter "' . $name . '" is a list and cannot be one segment of a path'
+                );
+            }
+            if ($param['in'] === 'page_size' && $param['type'] !== 'integer') {
+                $checks[] = ToolCheck::failure(
+                    $label . ': parameter "' . $name . '" is the page size and must be type="integer"'
+                );
+            }
+            if ($param['type'] === 'boolean' && $this->isInAPath($action, (string)$name)) {
+                $checks[] = ToolCheck::failure(
+                    $label . ': parameter "' . $name . '" is a boolean and cannot be a segment of a path'
+                );
+            }
+            if ($param['in'] === 'store' && $param['type'] !== 'string') {
+                $checks[] = ToolCheck::failure(
+                    $label . ': parameter "' . $name . '" sets the store and must be type="string": a call runs in '
+                    . 'a store by its code'
                 );
             }
             if (!$this->isSent($action, (string)$name, $param)) {
                 $unsent[] = $name;
             }
         }
+        $demanded = array_values(array_filter(
+            $unsent,
+            static fn (int|string $name): bool => (bool)$action['params'][$name]['required']
+        ));
+        if ($demanded !== [] && $methods !== []) {
+            $checks[] = ToolCheck::failure(
+                $label . ' requires ' . implode(', ', $demanded) . ' and never sends it: the admin would have to '
+                . 'give and confirm a value that no call carries (a DELETE takes no query parameters or body)'
+            );
+        }
+        $unsent = array_values(array_diff($unsent, $demanded));
         if ($unsent !== [] && $methods !== []) {
             $checks[] = ToolCheck::warning(
                 $label . ' never sends ' . implode(', ', $unsent) . ': a body parameter needs a POST or PUT step '
@@ -241,6 +270,54 @@ class ManifestChecker
                     $label . ': sort="' . $step['sort'] . '" must be a field, or field:asc or field:desc'
                 );
             }
+        }
+
+        return $checks;
+    }
+
+    /**
+     * @param array<string, mixed> $action
+     */
+    private function isInAPath(array $action, string $name): bool
+    {
+        foreach ($action['steps'] as $step) {
+            if (in_array($name, $this->placeholders->names($step['path']), true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Things that read as if they work and do nothing: a `when` that is more than one placeholder
+     * always runs, and `pick` and a link's `from` only see the fields of the record itself.
+     *
+     * @param array<string, mixed> $action
+     * @return ToolCheck[]
+     */
+    private function checkSilentNoOps(array $action): array
+    {
+        $label = 'Action "' . $action['name'] . '"';
+        $checks = [];
+        foreach ($action['steps'] as $step) {
+            $when = (string)($step['when'] ?? '');
+            if ($when !== '' && preg_match('/^\{[^{}]+\}$/', $when) !== 1) {
+                $checks[] = ToolCheck::warning(
+                    $label . ': when="' . $when . '" is more than one placeholder. A step runs when the text is '
+                    . 'not empty, so this one always runs; there are no comparisons or negations'
+                );
+            }
+        }
+        $nested = array_filter(
+            [...$action['pick'], ...array_column($action['links'], 'from')],
+            static fn (string $field): bool => str_contains($field, '.')
+        );
+        if ($nested !== []) {
+            $checks[] = ToolCheck::warning(
+                $label . ': ' . implode(', ', array_unique($nested)) . ' names a field inside another. <pick> '
+                . 'and a link\'s from only read the fields of the record itself, so nothing is found'
+            );
         }
 
         return $checks;
@@ -318,7 +395,9 @@ class ManifestChecker
         if ($result !== null) {
             $names = $this->placeholders->names($result);
             $step = explode('.', $names[0] ?? '')[1] ?? '';
-            if (count($names) !== 1 || $result !== '{' . $names[0] . '}' || !in_array($step, $earlier, true)) {
+            $wholeStep = count(explode('.', $names[0] ?? '')) === 2;
+            if (count($names) !== 1 || $result !== '{' . $names[0] . '}' || !$wholeStep
+                || !in_array($step, $earlier, true)) {
                 $problems[] = 'result="' . $result . '" must be one placeholder naming a step, such as {steps.'
                     . ($earlier[0] ?? 'save') . '}';
             }
@@ -408,6 +487,13 @@ class ManifestChecker
                 );
             }
         }
+        if (($fields['*'][0] ?? null) !== PiiClass::STRIP && !$this->isPublicField($action, '*')) {
+            $checks[] = ToolCheck::warning(
+                $label . ' has no <fields class="strip"/>. Without it the names of nested fields the action does '
+                . 'not classify still reach the model, and in a map keyed by data (an e-mail address, a name) '
+                . 'those names are data. Add <fields class="strip"/>'
+            );
+        }
         if ($this->isPublicField($action, '*')) {
             $checks[] = ToolCheck::warning(
                 $label . ' classifies every field it does not name as public '
@@ -468,7 +554,7 @@ class ManifestChecker
     {
         $rule = $action['fields'][$field] ?? $action['fields']['*'] ?? null;
 
-        return ($rule[0] ?? null) === 'public';
+        return ($rule[0] ?? null) === 'public' && !isset(PrivacyFilter::NEVER_PUBLIC[$field]);
     }
 
     /**

@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Tool;
 
+use MagoAssistant\Mago\Api\Tool\CategorisedToolInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
 
 /**
@@ -19,6 +20,10 @@ final class ToolCategory
 
     public function of(ToolInterface $tool): string
     {
+        if ($tool instanceof CategorisedToolInterface && $tool->getCategory() !== '') {
+            return $tool->getCategory();
+        }
+
         return explode('\\', get_class($tool))[self::CATEGORY_SEGMENT] ?? self::FALLBACK;
     }
 

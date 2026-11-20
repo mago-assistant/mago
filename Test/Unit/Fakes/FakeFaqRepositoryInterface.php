@@ -19,6 +19,16 @@ interface FakeFaqRepositoryInterface
 
     public function deleteById(int $faqId): bool;
 
+    public function purge(int $faqId, bool $force = false): bool;
+
+    /**
+     * Arguments typed in the docblock only.
+     *
+     * @param string $code
+     * @param mixed $anything
+     */
+    public function byCode($code, $anything = null): FakeFaqDataInterface;
+
     public function byStore(int $storeId, string $code = ''): FakeFaqDataInterface;
 
     public function comment(int $rmaId, FakeFaqDataInterface $comment): FakeFaqDataInterface;

@@ -137,7 +137,7 @@ export default class MagentoApi {
       return;
     }
 
-    await request.delete('/rest/V1/cmsBlock/' + block.block_id, {
+    await request.delete('/rest/V1/cmsBlock/' + (block.id ?? block.block_id), {
       headers: {Authorization: 'Bearer ' + await this.getToken(request)},
     });
   }

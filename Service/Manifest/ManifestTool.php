@@ -6,14 +6,21 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Manifest;
 
+use Magento\Framework\Api\SearchCriteriaInterface;
 use Magento\Framework\Module\Manager as ModuleManager;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Api\Tool\ActionAclAwareToolInterface;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
 use MagoAssistant\Mago\Api\Tool\AvailabilityAwareToolInterface;
+use MagoAssistant\Mago\Api\Tool\CategorisedToolInterface;
 use MagoAssistant\Mago\Api\Tool\IrreversibleToolInterface;
 use MagoAssistant\Mago\Api\Tool\PresentableToolInterface;
+use MagoAssistant\Mago\Api\Tool\ValidatingToolInterface;
+use MagoAssistant\Mago\Service\Api\InProcess\ApiCall;
+use MagoAssistant\Mago\Service\Api\InProcess\ResolvedRoute;
+use MagoAssistant\Mago\Service\Api\InProcess\RouteResolver;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Privacy\PrivacyFilter;
 use MagoAssistant\Mago\Service\Skills\ResultLimit;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
@@ -36,15 +43,32 @@ class ManifestTool implements
     ActionAclAwareToolInterface,
     IrreversibleToolInterface,
     PresentableToolInterface,
-    AvailabilityAwareToolInterface
+    AvailabilityAwareToolInterface,
+    CategorisedToolInterface,
+    ValidatingToolInterface
 {
     private const DEFAULT_PAGE_SIZE = 20;
     private const ERROR_KEY = 'error';
+    private const DIRECTIVE_KEY = 'client_directive';
+    private const ROUTE_PROBE = '0';
+    private const OTHER_ROUTE = 'A value is the name of another route, so nothing was called. Use the id or code '
+        . 'of a record for ';
+    private const RESULT_KEY = 'result';
+
+    /**
+     * A value privacy mode has replaced by a token (mago://order_1 or [order_1]). The chat puts the
+     * real value back before execute(); before the confirmation card the tool only sees the token.
+     */
+    private const TOKEN = '/^(mago:\/\/[^\s"\'<>\[\]]+_\d+|\[[^\s"\'<>\[\]]+_\d+\])$/';
+    private const SEARCH_CRITERIA = SearchCriteriaInterface::class;
 
     /**
      * The largest whole number a float still represents exactly; beyond it a cast to int is a guess.
      */
     private const MAX_SAFE_INTEGER = 9007199254740992;
+
+    /** @var array<string, ResolvedRoute|null> Routes looked up during this request, by method and path */
+    private array $routes = [];
 
     /**
      * @param ToolDef $definition
@@ -54,7 +78,8 @@ class ManifestTool implements
         private readonly InternalApiClientInterface $apiClient,
         private readonly Placeholders $placeholders,
         private readonly SecureAdminUrl $adminUrl,
-        private readonly ModuleManager $moduleManager
+        private readonly ModuleManager $moduleManager,
+        private readonly RouteResolver $routeResolver
     ) {
     }
 
@@ -166,19 +191,21 @@ class ManifestTool implements
     }
 
     /**
-     * Rules for the rest of the structure this tool adds, where the manifest gave none: a catch-all
-     * of strip would otherwise drop the whole `items` list, and a link needs its label.
+     * Rules for the rest of the structure this tool adds, where the manifest gave none: the `items`
+     * and `total_count` of a list, the bare `result` of a write, and the label of a link.
      *
      * @param ActionDef $action
      * @return array<string, array{0: string, 1?: string}>
      */
     private function gapRules(array $action): array
     {
-        $rules = [];
-        if (isset($action['fields']['*'])) {
-            $rules['items'] = [PiiClass::PUBLIC];
-            $rules['total_count'] = [PiiClass::PUBLIC];
-        }
+        // `result` is how a route's bare answer (true, an id) arrives; guardStructure() keeps it only
+        // when it is that
+        $rules = [
+            'items' => [PiiClass::PUBLIC],
+            'total_count' => [PiiClass::PUBLIC],
+            self::RESULT_KEY => [PiiClass::PUBLIC],
+        ];
         if ($action['links'] !== []) {
             $rules['_links'] = [PiiClass::PUBLIC];
             $rules['label'] = [PiiClass::PUBLIC];
@@ -196,7 +223,8 @@ class ManifestTool implements
     {
         $rule = $action['fields'][$field] ?? $action['fields']['*'] ?? null;
 
-        return ($rule[0] ?? null) === PiiClass::PUBLIC;
+        // What the filter never lets through as text is not public here either (a link label)
+        return ($rule[0] ?? null) === PiiClass::PUBLIC && !isset(PrivacyFilter::NEVER_PUBLIC[$field]);
     }
 
     /**
@@ -248,9 +276,35 @@ class ManifestTool implements
         return $this->placeholders->render((string)$definition['status'], $this->shown($definition, $input), []);
     }
 
+    /**
+     * The declaring module, in full: without its vendor two modules could share a category, or
+     * land in one of the built-in ones.
+     */
+    public function getCategory(): string
+    {
+        return $this->definition['module'];
+    }
+
     public function isAvailable(): bool
     {
         return $this->moduleManager->isEnabled($this->definition['module']);
+    }
+
+    /**
+     * Before the confirmation card: a write the tool would refuse anyway must not be put to the
+     * admin first.
+     */
+    public function findRefusal(array $input): ?array
+    {
+        $action = $this->action($input);
+        if ($action === null || $action['steps'] === []) {
+            return null;
+        }
+        // The card comes before the tokens are replaced by their values, so a token is not judged here
+        [$values, $refusal] = $this->resolve($action, $input, true);
+        $refusal ??= $this->routeRefusal($action, $values);
+
+        return $refusal === null ? null : $this->failed($refusal);
     }
 
     public function execute(array $params): array
@@ -266,6 +320,7 @@ class ManifestTool implements
         }
 
         [$values, $refusal] = $this->resolve($action, $params);
+        $refusal ??= $this->routeRefusal($action, $values);
         if ($refusal !== null) {
             return $this->failed($refusal);
         }
@@ -276,6 +331,7 @@ class ManifestTool implements
         $written = [];
         $ran = [];
         $last = null;
+        $lastWasRead = false;
         foreach ($action['steps'] as $step) {
             if ($step['when'] !== null && !$this->placeholders->isSet($step['when'], $values, $steps)) {
                 $steps[$step['name']] = [];
@@ -288,6 +344,7 @@ class ManifestTool implements
             $steps[$step['name']] = $response;
             $ran[] = $step['name'];
             $last = $response;
+            $lastWasRead = $step['method'] === 'GET';
             if ($step['method'] !== 'GET') {
                 $written[] = $step['name'];
             }
@@ -304,8 +361,8 @@ class ManifestTool implements
             $result = is_array($picked) ? $picked : ['value' => $picked];
         }
         // A route that answers with a bare list is a list: the same shape as a search result, so
-        // pick, links and the privacy rules apply per row.
-        if ($result !== [] && array_is_list($result)) {
+        // pick, links and the privacy rules apply per row. An empty answer to a read is an empty list.
+        if (array_is_list($result) && ($result !== [] || $lastWasRead)) {
             $result = ['items' => $result, 'total_count' => count($result)];
         }
         $isList = $this->isList($result);
@@ -313,7 +370,15 @@ class ManifestTool implements
         // The links are read from the whole record, before pick narrows it: a label may name a
         // public field the result itself leaves out.
         $links = $this->links($action, $result, $isList);
-        $result = $this->guardStructure($action, $this->pick($result, $action['pick'], $isList), $isList);
+        // A route's bare answer, as the API client hands it over: {"result": true} or an id. Judged
+        // on what the route sent, before pick could make a record's own `result` field look like one.
+        $bare = array_keys($result) === [self::RESULT_KEY]
+            && (is_bool($result[self::RESULT_KEY]) || is_int($result[self::RESULT_KEY])
+                || is_float($result[self::RESULT_KEY]));
+        if (!$bare) {
+            $result = $this->pick($result, $action['pick'], $isList);
+        }
+        $result = $this->guardStructure($action, $result, $isList, $bare);
         if ($links !== []) {
             $result['_links'] = $links;
         }
@@ -397,9 +462,17 @@ class ManifestTool implements
             }
         }
         $path = $this->placeholders->render($step['path'], $values, $steps, true);
+        if (!$this->staysOnItsRoute($action, $step, $path, $values, $steps)) {
+            return $this->failed(self::OTHER_ROUTE . $action['name'] . '.');
+        }
 
         if ($step['method'] === 'GET') {
-            return $this->apiClient->get($path, $this->query($action, $step, $values), $adminUserId, $storeCode);
+            return $this->apiClient->get(
+                $path,
+                $this->query($action, $step, $values, $path),
+                $adminUserId,
+                $storeCode
+            );
         }
         if ($step['method'] === 'DELETE') {
             return $this->apiClient->delete($path, $adminUserId, $storeCode);
@@ -424,7 +497,7 @@ class ManifestTool implements
      * @param array<string, mixed> $values
      * @return array<string, mixed>
      */
-    private function query(array $action, array $step, array $values): array
+    private function query(array $action, array $step, array $values, string $path): array
     {
         $filters = [];
         $query = [];
@@ -461,7 +534,8 @@ class ManifestTool implements
             $action['params'],
             static fn (array $param): bool => $param['criteria'] !== null || $param['in'] === 'page_size'
         ) !== [];
-        if ($filters === [] && $sortOrders === null && !$declaresCriteria) {
+        if ($filters === [] && $sortOrders === null && !$declaresCriteria
+            && !$this->takesSearchCriteria($step['method'], $path)) {
             return $query;
         }
 
@@ -527,7 +601,8 @@ class ManifestTool implements
     private function cast(mixed $value, string $as): mixed
     {
         return match ($as) {
-            'int' => is_bool($value) ? (int)$value : (is_numeric($value) ? (int)$value : null),
+            // As strict as an integer parameter: 5.7 is not 5, and a text is not 0
+            'int' => is_bool($value) ? (int)$value : $this->integer($value),
             'string' => is_scalar($value) ? $this->asText($value) : null,
             'list' => is_array($value) ? array_values($value) : [$value],
             default => $value,
@@ -547,7 +622,7 @@ class ManifestTool implements
      * @param array<string, mixed> $input
      * @return array{0: array<string, mixed>, 1: ?string} The values and, when refused, why
      */
-    private function resolve(array $action, array $input): array
+    private function resolve(array $action, array $input, bool $beforeTokens = false): array
     {
         $values = [];
         foreach ($action['params'] as $name => $param) {
@@ -556,10 +631,14 @@ class ManifestTool implements
                 $raw = $this->defaultOf($param);
             }
             if ($raw === null) {
-                // A path parameter is always required: an empty one would leave a hole in the route
-                if ($param['required'] || $param['in'] === 'path') {
+                // A parameter in the path of a step that always runs is required: an empty one would
+                // leave a hole in the route, after earlier steps may have written
+                if ($param['required'] || $param['in'] === 'path' || $this->isInAPath($action, (string)$name, true)) {
                     return [[], 'Parameter "' . $name . '" is required for ' . $action['name']];
                 }
+                continue;
+            }
+            if ($beforeTokens && $this->holdsToken($raw)) {
                 continue;
             }
 
@@ -569,6 +648,17 @@ class ManifestTool implements
             }
             if ($param['enum'] !== [] && !$this->isOneOf($value, $param)) {
                 return [[], 'Parameter "' . $name . '" must be one of: ' . implode(', ', $param['enum'])];
+            }
+            // An empty list is a value for a body field ("no tags"), but as a filter it filters on nothing
+            if ($value === [] && $param['required'] && $param['criteria'] !== null) {
+                return [[], 'Parameter "' . $name . '" is required for ' . $action['name'] . ' and cannot be empty'];
+            }
+            // Checked here and not at the call, so no earlier step has written by then
+            if ((is_bool($value) || is_array($value)) && $this->isInAPath($action, (string)$name)) {
+                return [[], 'Parameter "' . $name . '" is part of the route and must be a single text or number'];
+            }
+            if ($param['in'] === 'store' && !is_string($value) && !is_int($value)) {
+                return [[], 'Parameter "' . $name . '" must be a store code'];
             }
             if ($param['in'] === 'page_size' && $value < 1) {
                 // A page size below one is no page size: the manifest default, or the tool's own
@@ -581,6 +671,63 @@ class ManifestTool implements
         }
 
         return [$values, null];
+    }
+
+    /**
+     * @param ActionDef $action
+     * @param bool $alwaysRuns Only steps without a `when`
+     */
+    private function isInAPath(array $action, string $name, bool $alwaysRuns = false): bool
+    {
+        foreach ($action['steps'] as $step) {
+            if ($alwaysRuns && $step['when'] !== null) {
+                continue;
+            }
+            if (in_array($name, $this->placeholders->names($step['path']), true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function holdsToken(mixed $value): bool
+    {
+        foreach (is_array($value) ? $value : [$value] as $entry) {
+            if (is_string($entry) && preg_match(self::TOKEN, $entry) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Checked before the first step, and before the confirmation card: the steps whose path is
+     * made of parameters only. A path built from an earlier step's answer is checked at its call.
+     *
+     * @param ActionDef $action
+     * @param array<string, mixed> $values
+     */
+    private function routeRefusal(array $action, array $values): ?string
+    {
+        foreach ($action['steps'] as $step) {
+            $names = $this->placeholders->names($step['path']);
+            if ($names === [] || array_diff($names, array_keys($values)) !== []) {
+                continue;
+            }
+            foreach ($names as $name) {
+                if ($this->holdsToken($values[$name])) {
+                    continue 2;
+                }
+            }
+            $path = $this->placeholders->render($step['path'], $values, [], true);
+            if (!$this->staysOnItsRoute($action, $step, $path, $values, [])) {
+                return self::OTHER_ROUTE . $action['name'] . '.';
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -751,14 +898,107 @@ class ManifestTool implements
     }
 
     /**
+     * Magento matches a literal route before one with a variable: with path="faq/{code}" the value
+     * "search" would run /V1/faq/search instead of /V1/faq/:code, and its answer would be read with
+     * this action's field rules. The route a call reaches may therefore not depend on a value the
+     * model or an earlier step supplied: with a neutral value in that place it has to be the same
+     * route. A parameter with an enum is exempt, since its values are the manifest's own
+     * (rma/{id}/{transition} with transition one of approve, reject).
+     *
+     * @param ActionDef $action
+     * @param StepDef $step
+     * @param array<string, mixed> $values
+     * @param array<string, array<array-key, mixed>> $steps
+     */
+    private function staysOnItsRoute(array $action, array $step, string $path, array $values, array $steps): bool
+    {
+        $free = array_filter(
+            $this->placeholders->names($step['path']),
+            static fn (string $name): bool => ($action['params'][$name]['enum'] ?? []) === []
+        );
+        if ($free === []) {
+            return true;
+        }
+        $actual = $this->routeOf($step['method'], $path);
+        if ($actual === null) {
+            // No such route: the call itself answers with that
+            return true;
+        }
+        foreach ($free as $name) {
+            $template = str_replace('{' . $name . '}', self::ROUTE_PROBE, $step['path']);
+            $probe = $this->placeholders->render($template, $values, $steps, true);
+            if ($this->routeOf($step['method'], $probe) !== $actual) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function routeOf(string $method, string $path): ?string
+    {
+        $route = $this->route($method, $path);
+
+        return $route === null
+            ? null
+            : $route->serviceClass . '::' . $route->serviceMethod . ' ' . $route->routePath;
+    }
+
+    private function route(string $method, string $path): ?ResolvedRoute
+    {
+        $key = $method . ' ' . $path;
+        if (!array_key_exists($key, $this->routes)) {
+            try {
+                $this->routes[$key] = $this->routeResolver->resolve(new ApiCall($method, $path, [], [], 0, null));
+            } catch (\Throwable) {
+                $this->routes[$key] = null;
+            }
+        }
+
+        return $this->routes[$key];
+    }
+
+    /**
+     * Whether the route is a search (its service takes search criteria). Called without criteria
+     * such a route answers with every row there is, so it always gets a page size, also when the
+     * manifest declares no filter, page size or sort for it.
+     */
+    private function takesSearchCriteria(string $method, string $path): bool
+    {
+        $route = $this->route($method, $path);
+        try {
+            if ($route === null || !method_exists($route->serviceClass, $route->serviceMethod)) {
+                return false;
+            }
+            $service = new \ReflectionMethod($route->serviceClass, $route->serviceMethod);
+            foreach ($service->getParameters() as $parameter) {
+                $type = $parameter->getType();
+                if ($type instanceof \ReflectionNamedType && is_a($type->getName(), self::SEARCH_CRITERIA, true)) {
+                    return true;
+                }
+                // Typed in the docblock only, as many service contracts are
+                $documented = '/@param\s+\S*SearchCriteriaInterface\s+\$' . $parameter->getName() . '\b/';
+                if ($type === null && preg_match($documented, (string)$service->getDocComment()) === 1) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
      * @param ActionDef $action
      * @param array<string, mixed> $values
      */
     private function storeCode(array $action, array $values): ?string
     {
         foreach ($action['params'] as $name => $param) {
-            if ($param['in'] === 'store' && is_string($values[$name] ?? null) && $values[$name] !== '') {
-                return $values[$name];
+            $value = $values[$name] ?? null;
+            if ($param['in'] === 'store' && (is_string($value) || is_int($value)) && $value !== '') {
+                return (string)$value;
             }
         }
 
@@ -798,20 +1038,27 @@ class ManifestTool implements
      * @param array<array-key, mixed> $result
      * @return array<array-key, mixed>
      */
-    private function guardStructure(array $action, array $result, bool $isList): array
+    private function guardStructure(array $action, array $result, bool $isList, bool $bare): array
     {
         $reserved = $this->reservedKeys($action);
-        $wrapsItems = $isList && in_array('items', $reserved, true);
+        // `items` without a rule of its own: the rows of a list, or the lines of a record (an order,
+        // a return). Either way only named fields are kept, so a bare text does not pass as public.
+        $ownItems = in_array('items', $reserved, true);
 
         $guarded = [];
         foreach ($result as $key => $value) {
-            if ($wrapsItems && $key === 'items') {
-                $guarded[$key] = $this->rows((array)$value, $reserved);
-            } elseif ($wrapsItems && $key === 'total_count') {
+            if ($isList && $key === 'total_count') {
+                // The count of a list is this tool's to pass on, whatever rule `items` has
                 if (is_int($value)) {
                     $guarded[$key] = $value;
                 }
-            } elseif (!is_string($key) || !in_array($key, $reserved, true)) {
+            } elseif ($ownItems && $key === 'items' && is_array($value)) {
+                $guarded[$key] = $this->rows($value, $reserved);
+            } elseif ($isList && $key !== 'items' && !isset($action['fields'][$key])) {
+                // Next to its rows a search result only carries what the manifest named (not
+                // search_criteria)
+                continue;
+            } elseif ($bare || !is_string($key) || !in_array($key, $reserved, true)) {
                 $guarded[$key] = is_array($value) ? $this->withoutKeys($value, $reserved) : $value;
             }
         }
@@ -827,7 +1074,8 @@ class ManifestTool implements
      */
     private function reservedKeys(array $action): array
     {
-        $reserved = [self::ERROR_KEY];
+        // A client_directive is carried to the admin's browser unfiltered; only a tool may send one
+        $reserved = [self::ERROR_KEY, self::DIRECTIVE_KEY];
         if ($this->isPublicField($action, PiiClass::ANY)) {
             return $reserved;
         }
@@ -956,9 +1204,10 @@ class ManifestTool implements
     }
 
     /**
-     * One schema for the given actions. A parameter several actions share is described once: the
-     * model is told which action means what, and it may leave the parameter out (null) unless every
-     * one of the actions requires it, because it has to send the same properties for each of them.
+     * One schema for the given actions, in the plain form every provider accepts: one type per
+     * parameter, only `action` required. A parameter several actions share is described once, and
+     * the model is told which action means what. What an action requires is in its description and
+     * is checked before the call (and before the confirmation card, for a write).
      *
      * @param array<string, ActionDef> $actions
      * @return array<string, mixed>
@@ -974,15 +1223,7 @@ class ManifestTool implements
 
         $properties = [];
         foreach ($declared as $name => $perAction) {
-            $requiredByAll = count($perAction) === count($actions) && array_filter(
-                $perAction,
-                static fn (array $param): bool => !$param['required'] && $param['in'] !== 'path'
-            ) === [];
-            $properties[$name] = $this->paramSchema(
-                reset($perAction),
-                !$requiredByAll,
-                $this->describeParam($perAction)
-            );
+            $properties[$name] = $this->paramSchema(reset($perAction), $this->describeParam($perAction));
         }
 
         return [
@@ -999,6 +1240,9 @@ class ManifestTool implements
     }
 
     /**
+     * The description of one parameter name. Which actions require it is said here, since the
+     * schema itself can only require what every action needs.
+     *
      * @param array<string, ParamDef> $perAction The declarations of one parameter name, by action
      */
     private function describeParam(array $perAction): string
@@ -1006,24 +1250,32 @@ class ManifestTool implements
         $descriptions = array_filter(
             array_map(static fn (array $param): string => $param['description'], $perAction)
         );
-        if (count(array_unique($descriptions)) <= 1) {
-            return (string)reset($descriptions);
+        $text = (string)reset($descriptions);
+        if (count(array_unique($descriptions)) > 1) {
+            $parts = [];
+            foreach ($descriptions as $action => $description) {
+                $parts[] = $action . ': ' . $description;
+            }
+            $text = implode('; ', $parts);
         }
-        $parts = [];
-        foreach ($descriptions as $action => $description) {
-            $parts[] = $action . ': ' . $description;
+        $requiredBy = array_keys(array_filter(
+            $perAction,
+            static fn (array $param): bool => $param['required'] || $param['in'] === 'path'
+        ));
+        if ($requiredBy === []) {
+            return $text;
         }
 
-        return implode('; ', $parts);
+        return ltrim($text . ' ') . '(required for ' . implode(', ', $requiredBy) . ')';
     }
 
     /**
      * @param ParamDef $param
      * @return array<string, mixed>
      */
-    private function paramSchema(array $param, bool $nullable, string $description): array
+    private function paramSchema(array $param, string $description): array
     {
-        $schema = ['type' => $nullable ? [$param['type'], 'null'] : $param['type']];
+        $schema = ['type' => $param['type']];
         if ($description !== '') {
             $schema['description'] = $description;
         }
@@ -1038,9 +1290,6 @@ class ManifestTool implements
         }
         if ($param['enum'] !== []) {
             $schema['enum'] = $this->enumOf($param['enum'], $param['type']);
-            if ($nullable) {
-                $schema['enum'][] = null;
-            }
         }
 
         return $schema;

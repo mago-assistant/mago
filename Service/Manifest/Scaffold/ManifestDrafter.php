@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Manifest\Scaffold;
 
+use Magento\Framework\Api\SearchCriteriaInterface;
 use Magento\Framework\Filesystem\Driver\File;
 use Magento\Framework\Module\Dir;
 use Magento\Framework\Module\Dir\Reader as ModuleDirReader;
@@ -31,6 +32,7 @@ class ManifestDrafter
     private const TYPE_MAP = ['int' => 'integer', 'string' => 'string', 'bool' => 'boolean', 'float' => 'number'];
     private const SERVER_MANAGED = ['created_at', 'updated_at'];
     private const MAX_NAME_LENGTH = 64;
+    private const SEARCH_CRITERIA = SearchCriteriaInterface::class;
 
     /**
      * Route resources that are not for an admin: `anonymous` is the storefront's, `self` the
@@ -73,7 +75,7 @@ class ManifestDrafter
             "\n" . 'Mago tools of ' . $module . ', drafted by bin/magento mago:tool:manifest from etc/webapi.xml.'
             . "\n"
             . 'Resolve every TODO, then run bin/magento mago:tool:verify <tool> \'{"action": "..."}\'.' . "\n"
-            . 'Reference: vendor/mago-assistant/magento2-mago/docs/manifest-tools.md' . "\n"
+            . 'Reference: docs/manifest-tools.md in the Mago module.' . "\n"
             . ($leftOut > 0
                 ? $leftOut . ' route(s) for customers or guests ("self", "anonymous") were left out.' . "\n"
                 : '')
@@ -151,7 +153,6 @@ class ManifestDrafter
     }
 
     /**
-     * @param list<RouteDef> $routes
      * @param list<RouteDef> $routes
      * @return array<string, list<RouteDef>>
      */
@@ -300,8 +301,12 @@ class ManifestDrafter
         $entities = [];
         $unreadable = [];
         foreach ($method->getParameters() as $parameter) {
-            $type = $parameter->getType();
-            $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : null;
+            $typeName = $this->argumentType($method, $parameter);
+            if (in_array($this->snake($parameter->getName()), $pathSnake, true)
+                && !isset(self::TYPE_MAP[(string)$typeName])) {
+                // Already a path parameter, whatever its type says
+                continue;
+            }
             if ($typeName !== null && isset(self::TYPE_MAP[$typeName])) {
                 $scalars[] = $parameter;
                 $scalarTypes[$parameter->getName()] = self::TYPE_MAP[$typeName];
@@ -377,7 +382,8 @@ class ManifestDrafter
     }
 
     /**
-     * The scalar arguments of a GET or DELETE that are no part of the path travel in the query.
+     * The scalar arguments of a GET that are no part of the path travel in the query, under their
+     * snake_case name, which Magento reads as the argument. A DELETE cannot carry them.
      *
      * @param RouteDef $route
      * @param list<string> $pathParams
@@ -385,23 +391,31 @@ class ManifestDrafter
     private function queryParams(\DOMDocument $document, \DOMElement $action, array $route, array $pathParams): void
     {
         $pathSnake = array_map($this->snake(...), $pathParams);
-        foreach ($this->reflect($route['class'], $route['serviceMethod'])?->getParameters() ?? [] as $parameter) {
-            $type = $parameter->getType();
+        $method = $this->reflect($route['class'], $route['serviceMethod']);
+        foreach ($method?->getParameters() ?? [] as $parameter) {
+            $type = $this->argumentType($method, $parameter);
             $name = $this->snake($parameter->getName());
-            if (!$type instanceof \ReflectionNamedType || !isset(self::TYPE_MAP[$type->getName()])
-                || in_array($name, $pathSnake, true)) {
+            if (in_array($name, $pathSnake, true) || is_a((string)$type, self::SEARCH_CRITERIA, true)) {
                 continue;
             }
-            if ($name !== $parameter->getName()) {
+            if ($type === null || !isset(self::TYPE_MAP[$type])) {
                 $action->appendChild($document->createComment(
-                    ' TODO: the route reads $' . $parameter->getName() . ' from the query under that exact name; '
-                    . 'a parameter is sent under its own name, so rename "' . $name . '" if the call fails '
+                    ' TODO: the route also takes $' . $parameter->getName() . ', which could not be drafted (no '
+                    . 'scalar type); declare it by hand if a call needs it '
                 ));
+                continue;
+            }
+            if ($route['method'] !== 'GET') {
+                $action->appendChild($document->createComment(
+                    ' TODO: the route also takes $' . $parameter->getName() . ', which a ' . $route['method']
+                    . ' cannot carry: a manifest sends query parameters with a GET only '
+                ));
+                continue;
             }
             $action->appendChild($this->param(
                 $document,
                 $name,
-                self::TYPE_MAP[$type->getName()],
+                self::TYPE_MAP[$type],
                 'query',
                 !$parameter->isOptional() && !$parameter->allowsNull()
             ));
@@ -487,10 +501,12 @@ class ManifestDrafter
                 continue;
             }
             $type = $method->getReturnType();
-            if (!$type instanceof \ReflectionNamedType) {
+            // Magento's data interfaces mostly type their getters in the docblock only
+            $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : $this->documentedType($method);
+            if ($typeName === null) {
                 continue;
             }
-            $manifestType = self::TYPE_MAP[$type->getName()] ?? ($type->getName() === 'array' ? 'array' : null);
+            $manifestType = self::TYPE_MAP[$typeName] ?? ($typeName === 'array' ? 'array' : null);
             $field = $this->snake(substr($name, 3));
             // get3dSecure would be 3d_secure, which is no parameter name the schema accepts
             if ($manifestType !== null && preg_match('/^[a-z][a-z0-9_]*$/', $field) === 1) {
@@ -499,6 +515,54 @@ class ManifestDrafter
         }
 
         return $fields;
+    }
+
+    /**
+     * The type of a service argument: its native type, or the one its `@param` names.
+     */
+    private function argumentType(?\ReflectionMethod $method, \ReflectionParameter $parameter): ?string
+    {
+        $type = $parameter->getType();
+        if ($type instanceof \ReflectionNamedType) {
+            return $type->getName();
+        }
+        $pattern = '/@param\s+([^\s*]+)\s+\$' . preg_quote($parameter->getName(), '/') . '\b/';
+        if ($method === null || preg_match($pattern, (string)$method->getDocComment(), $match) !== 1) {
+            return null;
+        }
+
+        return $this->scalarName($match[1]);
+    }
+
+    /**
+     * The scalar type a getter's `@return` names: "string|null" is string, "int[]" is array.
+     */
+    private function documentedType(\ReflectionMethod $method): ?string
+    {
+        if (preg_match('/@return\s+([^\s*]+)/', (string)$method->getDocComment(), $match) !== 1) {
+            return null;
+        }
+        return $this->scalarName($match[1]);
+    }
+
+    /**
+     * A docblock type as PHP names it: "string|null" is string, "int[]" is array; a union of two
+     * types, or a class, is not a scalar this can draft.
+     */
+    private function scalarName(string $documented): ?string
+    {
+        $types = array_values(array_diff(explode('|', strtolower($documented)), ['null']));
+        if (count($types) !== 1) {
+            return null;
+        }
+        $type = ltrim($types[0], '?\\');
+        if (str_ends_with($type, '[]')) {
+            return in_array(substr($type, 0, -2), ['string', 'int', 'integer', 'float', 'mixed'], true)
+                ? 'array'
+                : null;
+        }
+
+        return ['integer' => 'int', 'boolean' => 'bool', 'double' => 'float'][$type] ?? $type;
     }
 
     private function reflect(string $class, string $method): ?\ReflectionMethod
@@ -568,10 +632,11 @@ class ManifestDrafter
      */
     private function pathType(array $route, string $param): string
     {
-        foreach ($this->reflect($route['class'], $route['serviceMethod'])?->getParameters() ?? [] as $parameter) {
-            $type = $parameter->getType();
-            if ($parameter->getName() === $param && $type instanceof \ReflectionNamedType) {
-                return self::TYPE_MAP[$type->getName()] ?? 'string';
+        $method = $this->reflect($route['class'], $route['serviceMethod']);
+        foreach ($method?->getParameters() ?? [] as $parameter) {
+            $type = $this->argumentType($method, $parameter);
+            if ($parameter->getName() === $param && $type !== null) {
+                return self::TYPE_MAP[$type] ?? 'string';
             }
         }
 

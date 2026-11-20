@@ -7,16 +7,21 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Tool;
 
 use Magento\Framework\AuthorizationInterface;
+use Magento\Framework\Serialize\Serializer\Json;
+use MagoAssistant\Mago\Api\Acl;
+use MagoAssistant\Mago\Api\Tool\ToolProviderInterface;
+use MagoAssistant\Mago\Logger\ErrorLogger;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
+use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
 use MagoAssistant\Mago\Service\Skills\PermissionChecker;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAction;
-use MagoAssistant\Mago\Test\Unit\Fakes\FakeAvailabilityAwareTool;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeAvailabilityAwareTool;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeLogger;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakePermissionChecker;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeSkill;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeTool;
-use MagoAssistant\Mago\Api\Acl;
-use MagoAssistant\Mago\Api\Tool\ToolProviderInterface;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -395,6 +400,43 @@ final class ToolRegistryTest extends TestCase
         $registry = new ToolRegistry(null, [$this->cacheManager], [$throwing, $sloppy, $this->provider($good)]);
 
         self::assertSame(['cache_manager', 'rma_manager'], array_keys($registry->getEnabledTools(self::ADMIN_USER_ID)));
+    }
+
+    /**
+     * Providers are an addition: the tools listed in di.xml are kept exactly as before, keys and
+     * all, also when two of them carry one name.
+     */
+    #[Test]
+    public function theToolsListedInDiAreKeptAsTheyWereWithOrWithoutProviders(): void
+    {
+        $twin = new FakeTool('cache_manager', ['other'], []);
+        $tools = ['cache' => $this->cacheManager, 'twin' => $twin];
+
+        $without = new ToolRegistry(null, $tools);
+        $with = new ToolRegistry(null, $tools, [$this->provider(new FakeTool('rma_manager', ['list'], ['list']))]);
+
+        self::assertSame($tools, $without->getAllTools());
+        self::assertSame(['cache', 'twin', 0], array_keys($with->getAllTools()));
+        self::assertSame($this->cacheManager, $with->getToolByName('cache_manager'), 'the first, as before');
+    }
+
+    #[Test]
+    public function whatAProviderThrewIsLogged(): void
+    {
+        $throwing = new class implements ToolProviderInterface {
+            public function getTools(): array
+            {
+                throw new \RuntimeException('provider broke');
+            }
+        };
+        $logger = new FakeLogger();
+        $reporter = new ErrorReporter(new ErrorLogger($logger, new Json()), new PiiHeuristic());
+
+        $registry = new ToolRegistry(null, [$this->cacheManager], [$throwing], $reporter);
+
+        self::assertCount(1, $registry->getAllTools());
+        self::assertStringContainsString('ToolProvider', implode("\n", $logger->getMessages()));
+        self::assertStringContainsString('provider broke', implode("\n", $logger->getMessages()));
     }
 
     private function provider(\MagoAssistant\Mago\Api\Tool\ToolInterface ...$tools): ToolProviderInterface

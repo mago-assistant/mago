@@ -12,7 +12,9 @@ namespace MagoAssistant\Mago\Service\Manifest;
  */
 class Placeholders
 {
-    private const PATTERN = '/\{([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)\}/i';
+    private const NAME = '[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*';
+    private const PATTERN = '/\{(' . self::NAME . ')\}/i';
+    private const WHOLE = '/^\{(' . self::NAME . ')\}$/i';
 
     /**
      * The value a single placeholder expression stands for, with its original type; null when the
@@ -23,7 +25,7 @@ class Placeholders
      */
     public function value(string $expression, array $params, array $steps): mixed
     {
-        if (preg_match('/^' . substr(self::PATTERN, 1, -2) . '$/i', $expression, $m) !== 1) {
+        if (preg_match(self::WHOLE, $expression, $m) !== 1) {
             return null;
         }
 

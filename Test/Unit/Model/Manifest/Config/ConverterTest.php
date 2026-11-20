@@ -16,6 +16,36 @@ use PHPUnit\Framework\TestCase;
  */
 final class ConverterTest extends TestCase
 {
+    /**
+     * What the action says about the body wrapper and the order holds for its steps, and the name
+     * of the action's own call cannot be given to a second step.
+     */
+    #[Test]
+    public function anActionsBodyAndSortHoldForItsStepsAndMainIsTaken(): void
+    {
+        $document = new \DOMDocument();
+        $document->loadXML(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="w" description="d" body="entity" sort="created_at:desc">'
+            . '<step name="find" method="GET" path="x/search"/>'
+            . '<step name="save" method="POST" path="x"/>'
+            . '<step name="own" method="POST" path="y" body="other" sort="id"/></action></tool></config>'
+        );
+        $steps = (new Converter())->convert($document)['t']['actions']['w']['steps'];
+
+        self::assertSame(['entity', 'entity', 'other'], array_column($steps, 'body'));
+        self::assertSame(['created_at:desc', 'created_at:desc', 'id'], array_column($steps, 'sort'));
+
+        $document->loadXML(
+            '<config version="1"><tool name="t" acl="V::a" module="Vendor_Module" description="d">'
+            . '<action name="a" description="d" method="GET" path="x">'
+            . '<step name="main" method="POST" path="second"/></action></tool></config>'
+        );
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('a <step> cannot have that name as well');
+        (new Converter())->convert($document);
+    }
+
     /** @var array<string, array<string, mixed>> */
     private array $tools;
 

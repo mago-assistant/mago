@@ -61,9 +61,15 @@ jobs:
           docker cp $(pwd) mage-os-community-edition:/data/extensions/
           docker exec mage-os-community-edition ./install-composer-package mago-assistant/magento2-mago:@dev
 
+      # A module with a tool manifest and no PHP of its own, for the manifest tool spec.
+      - name: Add the manifest fixture module
+        run: |
+          docker exec mage-os-community-edition mkdir -p app/code/MagoFixture
+          docker cp Test/End-2-end/fixtures/MagoFixture_Manifest mage-os-community-edition:/data/app/code/MagoFixture/Manifest
+
       - name: Activate the extension
         run: |
-          docker exec mage-os-community-edition ./retry "php bin/magento module:enable MageOS_AiBase MagoAssistant_Mago"
+          docker exec mage-os-community-edition ./retry "php bin/magento module:enable MageOS_AiBase MagoAssistant_Mago MagoFixture_Manifest"
           # Two dashboard modals cover the whole admin on first login and swallow every click:
           # the admin usage tracking modal and the release notification banner.
           docker exec mage-os-community-edition ./retry "php bin/magento module:disable Magento_AdminAnalytics Magento_ReleaseNotification"
