@@ -75,13 +75,7 @@ class ChatManagement implements ChatManagementInterface
             $toolCallsDisplay = [];
             foreach (($response['tool_calls'] ?? []) as $tc) {
                 $tc['input'] = $this->privacyService->rehydrateArguments($tc['input'] ?? []);
-                if (isset($tc['impacts']) && is_array($tc['impacts'])) {
-                    $tc['impacts'] = array_map(
-                        fn (string $line): string => $this->privacyService->rehydrate($line),
-                        $tc['impacts']
-                    );
-                }
-                $toolCallsDisplay[] = $tc;
+                $toolCallsDisplay[] = $this->withDisplayImpacts($tc);
             }
 
             return $this->toJson([
@@ -124,6 +118,7 @@ class ChatManagement implements ChatManagementInterface
                 if (isset($message['content']) && is_string($message['content'])) {
                     $messages[$index]['content'] = $this->privacyService->displayText($message['content']);
                 }
+                $messages[$index]['tool_calls'] = $this->storedToolCallsForDisplay($message['tool_calls'] ?? null);
             }
             $conversation['messages'] = $messages;
 
@@ -131,6 +126,57 @@ class ChatManagement implements ChatManagementInterface
         } catch (\Throwable $e) {
             return $this->toJson(['error' => $this->errorReporter->report('ChatManagement::getConversation', $e)]);
         }
+    }
+
+    /**
+     * Stored tool calls with their impact and caution lines rehydrated. The lines are persisted
+     * concealed to vault tokens (audit 2026-11-02 finding 2), but a REST caller rebuilding a
+     * confirmation card from this response has no token map, so it must get the real values the
+     * way the admin panel does on reload; confirmAction's acknowledgement assumes the caller could
+     * read them. The input stays tokenised: it is the canonical copy a confirm re-reads from the
+     * store, and it was tokenised in this response before the lines were.
+     */
+    private function storedToolCallsForDisplay(mixed $storedToolCalls): mixed
+    {
+        if (!is_string($storedToolCalls) || $storedToolCalls === '') {
+            return $storedToolCalls;
+        }
+
+        try {
+            $toolCalls = $this->json->unserialize($storedToolCalls);
+        } catch (\InvalidArgumentException) {
+            return $storedToolCalls;
+        }
+        if (!is_array($toolCalls)) {
+            return $storedToolCalls;
+        }
+
+        return $this->json->serialize(array_map(
+            fn (mixed $toolCall): mixed => is_array($toolCall) ? $this->withDisplayImpacts($toolCall) : $toolCall,
+            $toolCalls
+        ));
+    }
+
+    /**
+     * One tool call with its impact and caution lines rehydrated for display. An unresolved token
+     * shows the neutral label, never raw token grammar (#97 decision 5); a non-string line in a
+     * stored row is dropped rather than fatal.
+     *
+     * @param array<string, mixed> $toolCall
+     * @return array<string, mixed>
+     */
+    private function withDisplayImpacts(array $toolCall): array
+    {
+        if (!isset($toolCall['impacts']) || !is_array($toolCall['impacts'])) {
+            return $toolCall;
+        }
+
+        $toolCall['impacts'] = array_map(
+            $this->privacyService->displayText(...),
+            array_values(array_filter($toolCall['impacts'], 'is_string'))
+        );
+
+        return $toolCall;
     }
 
     public function deleteConversation(int $conversationId): string
