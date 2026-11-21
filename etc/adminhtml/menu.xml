@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Backend:etc/menu.xsd">
     <menu>
-        <add id="MagoAssistant_Mago::assistant_menu" title="Admin Assistant" module="MagoAssistant_Mago" parent="Magento_Backend::stores" resource="MagoAssistant_Mago::assistant" sortOrder="100"/>
+        <add id="MagoAssistant_Mago::assistant_menu" title="Mago Assistant" module="MagoAssistant_Mago" parent="Magento_Backend::stores" resource="MagoAssistant_Mago::assistant" sortOrder="100"/>
         <add id="MagoAssistant_Mago::statistics" title="Statistics" module="MagoAssistant_Mago" parent="MagoAssistant_Mago::assistant_menu" action="mago/statistics/index" resource="MagoAssistant_Mago::statistics" sortOrder="10"/>
         <add id="MagoAssistant_Mago::conversations" title="Conversations" module="MagoAssistant_Mago" parent="MagoAssistant_Mago::assistant_menu" action="mago/conversations/index" resource="MagoAssistant_Mago::conversations" sortOrder="15"/>
         <add id="MagoAssistant_Mago::flags" title="Answer Feedback" module="MagoAssistant_Mago" parent="MagoAssistant_Mago::assistant_menu" action="mago/flags/index" resource="MagoAssistant_Mago::flags" sortOrder="18"/>

@@ -51,6 +51,62 @@ final class BlockedConfigPathsTest extends TestCase
     }
 
     /**
+     * Security report 2026-11-02 (search endpoint SSRF sinks): the search client sends its requests,
+     * and with HTTP auth on its username and password, to whatever host these settings name.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function searchEndpointPaths(): array
+    {
+        return [
+            'opensearch host' => ['catalog/search/opensearch_server_hostname'],
+            'opensearch port' => ['catalog/search/opensearch_server_port'],
+            'elasticsearch 8 host' => ['catalog/search/elasticsearch8_server_hostname'],
+            'elasticsearch 8 port' => ['catalog/search/elasticsearch8_server_port'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('searchEndpointPaths')]
+    public function itBlocksTheHostTheSearchClientSendsItsCredentialsTo(string $path): void
+    {
+        self::assertTrue(
+            (new BlockedConfigPaths())->isBlocked($path),
+            sprintf('config_writer may still change "%s"', $path)
+        );
+    }
+
+    /**
+     * Same sink shape as the search endpoints: the carrier and New Relic clients send their
+     * requests, and their stored credentials, to whatever host these settings name.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function serviceEndpointPaths(): array
+    {
+        return [
+            'ups gateway' => ['carriers/ups/gateway_url'],
+            'ups tracking' => ['carriers/ups/tracking_url'],
+            'usps secure gateway' => ['carriers/usps/gateway_secure_url'],
+            'usps rest gateway' => ['carriers/usps/gateway_rest_prod_url'],
+            'fedex web services' => ['carriers/fedex/production_webservices_url'],
+            'dhl xml gateway' => ['carriers/dhl/gateway_xml_url'],
+            'new relic api' => ['newrelicreporting/general/api_url'],
+            'new relic nerd graph api' => ['newrelicreporting/general/nerd_graph_api_url'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('serviceEndpointPaths')]
+    public function itBlocksTheGatewayAServiceClientSendsItsCredentialsTo(string $path): void
+    {
+        self::assertTrue(
+            (new BlockedConfigPaths())->isBlocked($path),
+            sprintf('config_writer may still change "%s"', $path)
+        );
+    }
+
+    /**
      * @return array<string, array{0: string}>
      */
     public static function everydayPaths(): array
@@ -64,6 +120,11 @@ final class BlockedConfigPathsTest extends TestCase
             'payment failed mail receiver' => ['checkout/payment_failed/receiver'],
             'order mail copy method' => ['sales_email/order/copy_method'],
             'template hints' => ['dev/debug/template_hints_storefront'],
+            'search engine choice' => ['catalog/search/engine'],
+            'minimum search query length' => ['catalog/search/min_query_length'],
+            'ups carrier title' => ['carriers/ups/title'],
+            'flat rate shipping price' => ['carriers/flatrate/price'],
+            'new relic app name' => ['newrelicreporting/general/app_name'],
         ];
     }
 

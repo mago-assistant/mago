@@ -9,6 +9,8 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Tool\Scaffold;
 use Magento\Framework\Filesystem\Driver\File;
 use MagoAssistant\Mago\Service\Tool\Scaffold\ToolScaffold;
 use MagoAssistant\Mago\Service\Tool\Scaffold\ToolScaffolder;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeInstalledPackages;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -85,7 +87,7 @@ final class ToolScaffolderTest extends TestCase
     #[Test]
     public function itDeclaresAnAclResourceThatBelongsToTheNewModule(): void
     {
-        $files = (new ToolScaffolder(new File()))->render(
+        $files = $this->scaffolder()->render(
             ToolScaffold::fromInput('vies_vat_check', 'MagoAssistant_Vies', 'MagoAssistant_Vies::check', 'read')
         );
 
@@ -102,12 +104,58 @@ final class ToolScaffolderTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, string}>
+     */
+    public static function installedMagoVersions(): array
+    {
+        return [
+            'release' => ['1.1.0', '^1.1'],
+            'release with v' => ['v1.3.2', '^1.3'],
+            'two-part tag' => ['v1.2', '^1.2'],
+            'pre-1.0' => ['0.4.1', '^0.4'],
+            'not a version' => ['12abc', '^1.1'],
+            'next major' => ['2.0.0', '^2.0'],
+            'branch alias' => ['1.2.x-dev', '^1.2'],
+            'dev branch' => ['dev-main', '^1.1'],
+            'not installed' => ['', '^1.1'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('installedMagoVersions')]
+    public function theModuleRequiresTheInstalledMagoReleaseLine(string $installed, string $constraint): void
+    {
+        $packages = new FakeInstalledPackages();
+        if ($installed !== '') {
+            $packages->withPackage('mago-assistant/magento2-mago', $installed);
+        }
+
+        $composer = json_decode(
+            (new ToolScaffolder(new File(), $packages))->render(
+                ToolScaffold::fromInput('vies_vat_check', 'MagoAssistant_Vies', 'Magento_Sales::actions_view', 'read')
+            )['composer.json'],
+            true,
+            flags: JSON_THROW_ON_ERROR
+        );
+
+        self::assertSame($constraint, $composer['require']['mago-assistant/magento2-mago']);
+    }
+
+    /**
      * @return array<string,string>
      */
     private function render(string $access): array
     {
-        return (new ToolScaffolder(new File()))->render(
+        return $this->scaffolder()->render(
             ToolScaffold::fromInput('vies_vat_check', 'MagoAssistant_Vies', 'Magento_Sales::actions_view', $access)
+        );
+    }
+
+    private function scaffolder(): ToolScaffolder
+    {
+        return new ToolScaffolder(
+            new File(),
+            (new FakeInstalledPackages())->withPackage('mago-assistant/magento2-mago', '1.1.0')
         );
     }
 }

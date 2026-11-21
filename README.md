@@ -110,6 +110,9 @@ Then, under `Stores > Configuration > Mago Assistant`:
 2. **Pick the AI Service** the assistant runs on (API Settings). Leave it on *Automatic* to use
    the first usable one, which is what a single-provider store wants.
 
+Everything else lives in the admin menu under `Stores > Mago Assistant`: Statistics, Conversations,
+Answer Feedback, Skills & Permissions, and a shortcut to Configuration.
+
 ### New add-ons in the chat panel (off by default)
 
 `Stores > Configuration > Mago Assistant > Add-ons > Show new add-ons` puts the newest Mago
@@ -257,7 +260,7 @@ and how to add scenarios.
 
 | ACL Resource | Grants |
 |---|---|
-| `MagoAssistant_Mago::config` | Module configuration (Stores > Configuration > Mago) |
+| `MagoAssistant_Mago::config` | Module configuration (Stores > Configuration > Mago Assistant) |
 | `MagoAssistant_Mago::assistant_read` | Read-only tools (analytics, config reading, navigation) |
 | `MagoAssistant_Mago::assistant_write` | Write tools (config changes, CMS, content generation) |
 | `MagoAssistant_Mago::conversations` | Conversations grid and transcripts of every admin, continue a conversation |

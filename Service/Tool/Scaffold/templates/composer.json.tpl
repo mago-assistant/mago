@@ -6,7 +6,7 @@
     "license": "proprietary",
     "require": {
         "php": ">=8.2",
-        "mago-assistant/magento2-mago": "^2.0"
+        "mago-assistant/magento2-mago": "{{mago_constraint}}"
     },
     "autoload": {
         "files": [
