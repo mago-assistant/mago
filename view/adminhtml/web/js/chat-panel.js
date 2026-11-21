@@ -1455,11 +1455,19 @@ define([
     // An answered write comes back as the card it ended on: the S03 line with its request and
     // duration, the S04 card when it failed, or a muted line when it was declined. Without the
     // stored outcome there is nothing to tell these apart, so the row stays as it was asked.
+    // A superseded proposal never ran and was not declined; its line says what happened to it.
+    function supersededTitle(title) {
+        return title + ' — ' + t('not run, replaced by your newer message');
+    }
+
     function restoreWriteResult(msgEl, tools) {
         var first = tools[0] || null;
         if (!first || !first.status) return;
 
         var title = skillTitle(first.name);
+        if (first.status === 'superseded') {
+            title = supersededTitle(title);
+        }
         var failed = tools.filter(function(t) { return t.status === 'failed'; })[0];
         if (failed) {
             msgEl.appendChild(UI.skillFailed({
@@ -1945,11 +1953,11 @@ define([
 
         var decided = false;
         // A new message supersedes this proposal on the server (#332); the card follows by turning
-        // into the same muted line a declined write leaves, so it cannot be clicked afterwards.
+        // into a muted line that says so, so it cannot be clicked and does not read as declined.
         openConfirmCards.push(function() {
             if (decided) return;
             decided = true;
-            card.replaceWith(UI.skillLine({title: title, action: first && first.input ? first.input.action : null, state: 'skipped'}));
+            card.replaceWith(UI.skillLine({title: supersededTitle(title), action: first && first.input ? first.input.action : null, state: 'skipped'}));
             sessionLog.write(title, first && first.input ? first.input.action : null, 'skipped');
         });
         // One answer per card: a second click (or a double click) must not send a second confirm.

@@ -84,7 +84,9 @@ class Confirm extends Action implements HttpPostActionInterface
                 return $this->finishResponse();
             }
 
-            // A bulk confirmation sends the ticked tool call ids; without the field everything runs
+            // A bulk confirmation sends the ticked tool call ids. The claim below refuses a
+            // proposal of several confirmable actions without them, and a selection that is empty
+            // or names ids the proposal does not hold (#332).
             $selectedIds = $confirmRequest->selectedIds;
 
             // Claimed before anything runs, so a second click or a parallel REST confirm gets an

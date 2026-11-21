@@ -50,8 +50,10 @@ interface ChatManagementInterface
      * A proposal whose tool calls carry "irreversible" or "caution" only runs with acknowledged
      * set to true, the API's counterpart of the checkbox on the admin panel's card. A proposal
      * that holds more than one confirmable action only runs the calls named in toolCallIds, the
-     * API's counterpart of the tick list; without it such a proposal is refused (#332). Calls left
-     * out are answered with a skipped result and never run.
+     * API's counterpart of the tick list; without it such a proposal is refused (#332). A sent
+     * selection that is empty, or names a call the proposal does not hold, is refused too and the
+     * proposal stays pending. Calls left out of a valid selection are answered with a skipped
+     * result and never run.
      *
      * @param int $messageId
      * @param bool $acknowledged The caller read the impacts and cautions and accepts them

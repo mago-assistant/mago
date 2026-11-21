@@ -65,7 +65,7 @@ test.describe('Stale confirmation card', () => {
     ).toHaveCount(1);
 
     const refusal = await confirmDirectly(page, olderMessageId);
-    expect(refusal, 'the server must refuse to run a superseded proposal').toContain('already been handled');
+    expect(refusal, 'the server must refuse to run a superseded proposal').toContain('A newer message replaced this proposal');
 
     await page.reload();
     await expect(chatPanel.confirmActions(page)).toHaveCount(1, {timeout: PROVIDER_ROUND_TRIP_TIMEOUT});

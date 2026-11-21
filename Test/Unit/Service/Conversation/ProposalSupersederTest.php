@@ -7,7 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Conversation;
 
 use Magento\Framework\Serialize\Serializer\Json;
-use MagoAssistant\Mago\Model\Conversation\ConfirmationAlreadyHandledException;
+use MagoAssistant\Mago\Model\Conversation\ConfirmationSupersededException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
 use MagoAssistant\Mago\Service\Conversation\ProposalSuperseder;
@@ -93,7 +93,8 @@ final class ProposalSupersederTest extends TestCase
 
         $this->superseder->supersedePendingProposals($this->conversationId, self::ADMIN_USER_ID);
 
-        $this->expectException(ConfirmationAlreadyHandledException::class);
+        $this->expectException(ConfirmationSupersededException::class);
+        $this->expectExceptionMessage('A newer message replaced this proposal. Nothing was run.');
         $claim->claimToConfirm(new ConfirmRequest($proposalId, true, null), self::ADMIN_USER_ID);
     }
 

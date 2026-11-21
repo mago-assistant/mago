@@ -172,9 +172,11 @@ REST route `POST /V1/mago/confirm/:messageId` takes the same field in its body.
 A proposal that holds more than one confirmable action only runs the calls named in
 `tool_call_ids`; a confirm without that field is refused and the proposal stays pending (#332).
 "No selection" used to mean "run them all", which let a request run every action of a tick list
-nobody ticked. The REST route takes the same list as `toolCallIds`; calls left out are answered
-with a skipped tool result and never run. A single-action card keeps sending no selection, so
-reads the model bundled with the write keep running alongside it.
+nobody ticked. A sent selection that is empty, or names an id the proposal does not hold, is
+refused the same way: claiming it would consume the proposal, run nothing (or half of a typo'd
+list) and report success. The REST route takes the same list as `toolCallIds`; calls left out of
+a valid selection are answered with a skipped tool result and never run. A single-action card
+keeps sending no selection, so reads the model bundled with the write keep running alongside it.
 
 A proposal the admin moves past is superseded: when a new message arrives in the conversation
 (panel or REST), `ProposalSuperseder` claims every open proposal through the same atomic claim a

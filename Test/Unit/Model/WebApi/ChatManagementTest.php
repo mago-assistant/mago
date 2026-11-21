@@ -151,6 +151,33 @@ final class ChatManagementTest extends TestCase
         self::assertSame(1, $this->repository->getMessageById($messageId)['pending_confirmation']);
     }
 
+    /**
+     * #332 review: toolCallIds [] claimed the proposal, skipped everything and reported success
+     */
+    #[Test]
+    public function itRefusesAnEmptySelectionAndLeavesTheProposalPending(): void
+    {
+        $messageId = $this->twoCallProposal();
+
+        $response = $this->decode($this->chatManagement->confirmAction($messageId, false, []));
+
+        self::assertStringContainsString('tool_call_ids', (string)($response['error'] ?? ''));
+        self::assertSame([], $this->chatService->toolCalls);
+        self::assertSame(1, $this->repository->getMessageById($messageId)['pending_confirmation']);
+    }
+
+    #[Test]
+    public function itRefusesASelectionWithATypoAndLeavesTheProposalPending(): void
+    {
+        $messageId = $this->twoCallProposal();
+
+        $response = $this->decode($this->chatManagement->confirmAction($messageId, false, ['call_a', 'nope']));
+
+        self::assertStringContainsString('tool_call_ids', (string)($response['error'] ?? ''));
+        self::assertSame([], $this->chatService->toolCalls);
+        self::assertSame(1, $this->repository->getMessageById($messageId)['pending_confirmation']);
+    }
+
     #[Test]
     public function itRunsOnlyTheTickedCallsOfAMultiCallProposal(): void
     {
