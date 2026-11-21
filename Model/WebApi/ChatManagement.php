@@ -15,6 +15,7 @@ use MagoAssistant\Mago\Api\WebApi\ChatManagementInterface;
 use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Service\Ai\ChatService;
 use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
+use MagoAssistant\Mago\Service\Conversation\ProposalSuperseder;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 
@@ -27,7 +28,8 @@ class ChatManagement implements ChatManagementInterface
         private readonly Json $json,
         private readonly ErrorReporter $errorReporter,
         private readonly PrivacyService $privacyService,
-        private readonly ConfirmationClaim $confirmationClaim
+        private readonly ConfirmationClaim $confirmationClaim,
+        private readonly ProposalSuperseder $proposalSuperseder
     ) {
     }
 
@@ -53,6 +55,10 @@ class ChatManagement implements ChatManagementInterface
                     $conversationId,
                     $this->privacyService->safeTitle($message)
                 );
+            }
+            // A new message moves past every open proposal, here like in the Stream controller (#332)
+            if (!$isNewConversation) {
+                $this->proposalSuperseder->supersedePendingProposals($conversationId, $adminUserId);
             }
             $this->conversationRepository->addMessage($conversationId, 'user', $message);
 
@@ -138,13 +144,15 @@ class ChatManagement implements ChatManagementInterface
         }
     }
 
-    public function confirmAction(int $messageId, bool $acknowledged = false): string
+    public function confirmAction(int $messageId, bool $acknowledged = false, ?array $toolCallIds = null): string
     {
         try {
             $adminUserId = $this->requireAdminUserId();
-            // Same claim as the admin panel's Confirm, so the two cannot both run one proposal
+            $selectedIds = $toolCallIds === null ? null : array_values(array_map('strval', $toolCallIds));
+            // Same claim as the admin panel's Confirm, so the two cannot both run one proposal,
+            // and the same selection rule: a multi-call proposal only runs the named calls (#332)
             $message = $this->confirmationClaim->claimToConfirm(
-                new ConfirmRequest($messageId, $acknowledged, null),
+                new ConfirmRequest($messageId, $acknowledged, $selectedIds),
                 $adminUserId
             );
 
@@ -156,7 +164,7 @@ class ChatManagement implements ChatManagementInterface
             /** @var ChatService $chatService */
             $chatService = $this->chatService;
             $conversationId = (int)$message['conversation_id'];
-            $results = $chatService->executeConfirmedTools($toolCalls, $adminUserId, null, null, $conversationId);
+            $results = $chatService->executeConfirmedTools($toolCalls, $adminUserId, null, $selectedIds, $conversationId);
 
             $this->conversationRepository->resolveConfirmation($messageId, true, $adminUserId);
             foreach ($results as $toolCallId => $result) {

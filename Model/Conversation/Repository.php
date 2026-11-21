@@ -155,10 +155,12 @@ class Repository implements ConversationRepositoryInterface
         $connection = $this->resourceConnection->getConnection();
         $table = $this->resourceConnection->getTableName('mago_message');
 
+        // Rows written in the same request share a created_at second; the id breaks the tie, so a
+        // superseded proposal's skipped results replay before the message that moved past it (#332)
         $select = $connection->select()
             ->from($table)
             ->where('conversation_id = ?', $conversationId)
-            ->order('created_at ASC');
+            ->order(['created_at ASC', 'entity_id ASC']);
 
         return $connection->fetchAll($select);
     }

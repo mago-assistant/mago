@@ -11,6 +11,10 @@ use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationAlreadyHandledException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationExpiredException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationNotAcknowledgedException;
+use MagoAssistant\Mago\Model\Conversation\ConfirmationSelectionMismatchException;
+use MagoAssistant\Mago\Model\Conversation\ConfirmationSelectionRequiredException;
+use MagoAssistant\Mago\Model\Conversation\ConfirmationSupersededException;
+use MagoAssistant\Mago\Model\Conversation\ConfirmationUnavailableException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Model\Conversation\ConversationNotFoundException;
 
@@ -49,6 +53,7 @@ class ConfirmationClaim
      * @param int $adminUserId
      * @return array<string, mixed> The message row that asked for confirmation
      * @throws ConversationNotFoundException when the message is missing or belongs to another admin
+     * @throws ConfirmationSelectionRequiredException when a multi-call proposal is confirmed without ids
      * @throws ConfirmationNotAcknowledgedException when a write that needs the acknowledgement lacks it
      * @throws ConfirmationAlreadyHandledException when another request confirmed or rejected it first
      * @throws ConfirmationExpiredException when it was proposed more than MAX_AGE_SECONDS ago
@@ -57,6 +62,19 @@ class ConfirmationClaim
     {
         $messageId = $request->messageId;
         $message = $this->conversationRepository->getMessageForUser($messageId, $adminUserId);
+        // "No ids" may not mean "run them all" on a tick list: the card says nothing is ticked for
+        // you, so a request without a selection ran actions nobody chose (#332). Checked before the
+        // claim, like the acknowledgement, so the proposal stays pending for a retry that picks.
+        if ($request->selectedIds === null && $this->holdsSeveralCalls($message)) {
+            throw new ConfirmationSelectionRequiredException();
+        }
+        // An empty selection, or one with an id the proposal does not hold, would still claim the
+        // proposal, skip the unnamed actions and report success, so an empty default list or a
+        // typo burnt the card or half-ran it (#332 review). Refused before the claim, like the
+        // missing selection above.
+        if ($this->selectionMismatches($message, $request->selectedIds)) {
+            throw new ConfirmationSelectionMismatchException();
+        }
         // Checked before the claim, so a refused request leaves the card pending for a ticked retry.
         // A proposal past its hour cannot be retried at all, so that refusal says so instead.
         if (!$request->acknowledged && $this->needsAcknowledgement($message, $request->selectedIds)) {
@@ -71,7 +89,7 @@ class ConfirmationClaim
             throw new ConfirmationExpiredException();
         }
 
-        throw new ConfirmationAlreadyHandledException();
+        throw $this->handledException($message);
     }
 
     /**
@@ -89,7 +107,88 @@ class ConfirmationClaim
             return $message;
         }
 
-        throw new ConfirmationAlreadyHandledException();
+        throw $this->handledException($message);
+    }
+
+    /**
+     * Why a claim found nothing pending: superseded by a newer message, or genuinely handled.
+     * "Nothing was run again" on a superseded proposal reads as if it ran once; it never ran.
+     *
+     * @param array<string, mixed> $message
+     */
+    private function handledException(array $message): ConfirmationUnavailableException
+    {
+        $isSuperseded = array_filter(
+            $this->toolCallsOf($message),
+            static fn (array $toolCall): bool =>
+                ($toolCall['status'] ?? '') === ProposalSuperseder::SUPERSEDED_STATUS
+        ) !== [];
+
+        return $isSuperseded ? new ConfirmationSupersededException() : new ConfirmationAlreadyHandledException();
+    }
+
+    /**
+     * Whether a sent selection is empty or names an id the proposal does not hold. A missing
+     * selection is not a selection; an unanswered proposal is judged, a handled one falls through
+     * to the claim, which reports why.
+     *
+     * @param array<string, mixed> $message
+     * @param string[]|null $selectedIds
+     */
+    private function selectionMismatches(array $message, ?array $selectedIds): bool
+    {
+        if ($selectedIds === null || empty($message['pending_confirmation'])) {
+            return false;
+        }
+        if ($selectedIds === []) {
+            return true;
+        }
+        $callIds = array_filter(array_map(
+            static fn (array $toolCall): string => (string)($toolCall['id'] ?? ''),
+            $this->toolCallsOf($message)
+        ), static fn (string $id): bool => $id !== '');
+
+        return array_diff($selectedIds, $callIds) !== [];
+    }
+
+    /**
+     * Whether the proposal holds more than one call the admin was asked about. Only calls with a
+     * stored description count: describedConfirmationCalls() describes exactly the calls the card
+     * lists, and a read carried through undescribed was never anyone's to tick, so refusing over it
+     * would block the single card that legitimately sends no ids. A row where no call carries a
+     * description was stored before the descriptions existed; every call counts there, so a legacy
+     * tick list cannot be run in full without a selection either.
+     *
+     * @param array<string, mixed> $message
+     */
+    private function holdsSeveralCalls(array $message): bool
+    {
+        // A handled proposal runs nothing either way; the claim below reports why
+        if (empty($message['pending_confirmation'])) {
+            return false;
+        }
+
+        $toolCalls = $this->toolCallsOf($message);
+        $describedCalls = array_filter(
+            $toolCalls,
+            static fn (array $toolCall): bool => isset($toolCall['description'])
+        );
+
+        return count($describedCalls === [] ? $toolCalls : $describedCalls) > 1;
+    }
+
+    /**
+     * @param array<string, mixed> $message
+     * @return array<int, array<string, mixed>>
+     */
+    private function toolCallsOf(array $message): array
+    {
+        $toolCalls = $message['tool_calls'] ?? [];
+        if (is_string($toolCalls)) {
+            $toolCalls = $this->json->unserialize($toolCalls);
+        }
+
+        return is_array($toolCalls) ? $toolCalls : [];
     }
 
     /**
@@ -102,13 +201,9 @@ class ConfirmationClaim
         if (empty($message['pending_confirmation'])) {
             return false;
         }
-        $toolCalls = $message['tool_calls'] ?? [];
-        if (is_string($toolCalls)) {
-            $toolCalls = $this->json->unserialize($toolCalls);
-        }
 
         return array_filter(
-            is_array($toolCalls) ? $toolCalls : [],
+            $this->toolCallsOf($message),
             static fn (array $toolCall): bool => ($selectedIds === null
                     || in_array((string)($toolCall['id'] ?? ''), $selectedIds, true))
                 && (!empty($toolCall['irreversible']) || !empty($toolCall['caution']))
