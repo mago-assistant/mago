@@ -191,6 +191,16 @@ class Repository extends System\BaseRepository implements ConfigRepositoryInterf
         return $this->isSetFlag(self::XML_PATH_ANSWER_WIDGETS);
     }
 
+    public function getDisplayMode(): string
+    {
+        $mode = $this->getStoreValue(self::XML_PATH_DISPLAY_MODE, null, ScopeConfigInterface::SCOPE_TYPE_DEFAULT);
+
+        // Anything else would leave admins without a way to open the chat
+        return in_array($mode, [self::DISPLAY_MODE_BUTTON, self::DISPLAY_MODE_CHAT_BAR], true)
+            ? $mode
+            : self::DISPLAY_MODE_BOTH;
+    }
+
     public function isVoiceInputEnabled(): bool
     {
         return $this->isSetFlag(self::XML_PATH_VOICE_INPUT, null, ScopeConfigInterface::SCOPE_TYPE_DEFAULT);

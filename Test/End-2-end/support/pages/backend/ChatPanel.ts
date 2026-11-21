@@ -96,6 +96,39 @@ export default class ChatPanel {
   }
 
   /**
+   * The dashboard with the panel still closed, once chat-panel.js has wired the chat bar (it stays
+   * hidden until then). Needs the default display mode, which shows the bar.
+   */
+  async gotoDashboardWithChatBar(page: Page) {
+    const adminPath = process.env.ADMIN_PATH || 'admin';
+
+    this.adminModals.watch(page);
+    await page.goto('/' + adminPath + '/admin/dashboard', {waitUntil: 'load'});
+    await this.dismissSessionWarningIfPresent(page);
+    await this.chatBar(page).waitFor({state: 'visible', timeout: TOGGLE_BIND_TIMEOUT_MS});
+  }
+
+  chatBar(page: Page): Locator {
+    return page.locator('#mago-dock');
+  }
+
+  chatBarInput(page: Page): Locator {
+    return page.locator('#mago-dock-input');
+  }
+
+  chatBarMicrophone(page: Page): Locator {
+    return page.locator('#mago-dock-mic');
+  }
+
+  chatBarSlashItems(page: Page): Locator {
+    return page.locator('#mago-dock-slash-menu .mago-slash-item');
+  }
+
+  panel(page: Page): Locator {
+    return page.locator('#mago-chat');
+  }
+
+  /**
    * Opens an arbitrary admin route (e.g. `catalog/product/edit/id/42` or `cms/page/edit/page_id/1`)
    * and waits for both the chat panel and the page's own UI component form to be ready.
    */

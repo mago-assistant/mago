@@ -1,7 +1,7 @@
 <?php
 /** @var \MagoAssistant\Mago\Block\Adminhtml\ChatPanel $block */
 /** @var \Magento\Framework\Escaper $escaper */
-if (!$block->isVisible()) {
+if (!$block->isVisible() || !$block->isHeaderButtonEnabled()) {
     return;
 }
 // The button doubles as the close affordance once the panel is open, so the

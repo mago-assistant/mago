@@ -233,8 +233,88 @@ $starterIcons = [
     </div>
 </aside>
 
+<?php /* Chat bar (Chat Settings > Display Mode): a message typed here opens the panel and is sent there.
+       Hidden until chat-panel.js wires it, so it never submits as a plain form, and hidden by CSS while
+       the panel is open. */ ?>
+<?php if ($block->isChatBarEnabled()): ?>
+<form
+    id="mago-dock"
+    class="mago-dock mago-kit"
+    aria-label="<?= $escaper->escapeHtmlAttr(__('Ask %1', $assistantName)) ?>"
+    hidden
+>
+    <?php /* The slash menu (commands and skills) opens here, above the bar, when the field starts with "/" */ ?>
+    <div id="mago-dock-slash-menu" class="mago-slash-menu mago-dock-slash-menu"></div>
+    <?php /* The mark is the panel header's gradient tile, and opens the panel like the button at the end */ ?>
+    <button
+        type="button"
+        id="mago-dock-mark"
+        class="mago-dock-mark"
+        title="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
+        aria-label="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
+        aria-controls="mago-chat"
+    >
+        <span class="mago-dock-tile" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="34 30 188 188" fill="currentColor">
+                <polygon points="128,40 160,72 128,104 96,72"/>
+                <polygon points="44,208 96,104 128,136 160,104 212,208 152,208 128,160 104,208"/>
+            </svg>
+        </span>
+    </button>
+    <label for="mago-dock-input" class="mago-sr-only">
+        <?= $escaper->escapeHtml(__('Message %1', $assistantName)) ?>
+    </label>
+    <input
+        type="text"
+        id="mago-dock-input"
+        class="mago-dock-input"
+        placeholder="<?= $escaper->escapeHtmlAttr(__('Ask %1 anything…', $assistantName)) ?>"
+        data-placeholder-short="<?= $escaper->escapeHtmlAttr(__('Ask %1', $assistantName)) ?>"
+        autocomplete="off"
+        aria-autocomplete="list"
+        aria-describedby="mago-dock-hint"
+        enterkeyhint="send"
+    >
+    <?php /* Shown while the field is empty, so the slash menu can be found */ ?>
+    <span id="mago-dock-hint" class="mago-dock-hint">
+        <kbd>/</kbd> <?= $escaper->escapeHtml(__('for skills')) ?>
+    </span>
+    <?php /* Voice input (#141): hidden until voice-input.js finds speech recognition and the setting is on */ ?>
+    <button
+        type="button"
+        id="mago-dock-mic"
+        class="mago-dock-btn mago-dock-square mago-dock-mic"
+        hidden
+        title="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>"
+        aria-label="<?= $escaper->escapeHtmlAttr(__('Speak your message')) ?>"
+        aria-pressed="false"
+    >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
+    </button>
+    <button
+        type="submit"
+        class="mago-dock-btn mago-dock-square mago-dock-send"
+        title="<?= $escaper->escapeHtmlAttr(__('Send')) ?>"
+        aria-label="<?= $escaper->escapeHtmlAttr(__('Send')) ?>"
+    >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="13 5 20 12 13 19"/></svg>
+    </button>
+    <span class="mago-dock-divider" aria-hidden="true"></span>
+    <button
+        type="button"
+        id="mago-dock-open"
+        class="mago-dock-btn"
+        title="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
+        aria-label="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
+        aria-controls="mago-chat"
+    >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+    </button>
+</form>
+<?php endif; ?>
+
 <script>
-window.MAGO_CONFIG = <?= /* @noEscape */ $block->getJsConfig() ?>;
+window.MAGO_CONFIG =<?= /* @noEscape */ $block->getJsConfig() ?>;
 window.MAGO_CONFIG.adminUser = '<?= $escaper->escapeJs($adminName) ?>';
 window.MAGO_CONFIG.assistantName = '<?= $escaper->escapeJs($assistantName) ?>';
 window.MAGO_CONFIG.formKey = '<?= $escaper->escapeJs($block->getFormKey()) ?>';
