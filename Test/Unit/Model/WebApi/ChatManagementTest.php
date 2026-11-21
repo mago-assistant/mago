@@ -29,6 +29,7 @@ final class ChatManagementTest extends TestCase
     private FakeConversationRepository $repository;
     private FakeChatService $chatService;
     private ChatManagement $chatManagement;
+    private ConversationVault $vault;
     private int $conversationId;
     private int $messageId;
 
@@ -36,7 +37,7 @@ final class ChatManagementTest extends TestCase
     {
         $this->repository = new FakeConversationRepository();
         $this->chatService = new FakeChatService(static fn (array $toolCall): array => ['success' => true]);
-        $vault = new ConversationVault();
+        $vault = $this->vault = new ConversationVault();
         $this->chatManagement = new ChatManagement(
             $this->chatService,
             $this->repository,
@@ -132,6 +133,76 @@ final class ChatManagementTest extends TestCase
 
         self::assertStringContainsString('already been handled', (string)($response['error'] ?? ''));
         self::assertSame([], $this->chatService->toolCalls);
+    }
+
+    /**
+     * PR #347 review: impact lines are stored concealed to vault tokens, but a REST caller
+     * rebuilding a confirmation card from getConversation has no token map, so the lines must come
+     * back rehydrated, like main returned them. The input stays tokenised: it is the canonical
+     * copy a confirm re-reads from the store.
+     */
+    #[Test]
+    public function getConversationRehydratesTheStoredImpactLinesOfAPendingProposal(): void
+    {
+        $token = $this->vault->tokenise('000000549', 'order');
+        $this->repository->addMessage($this->conversationId, 'assistant', '', [[
+            'id' => 'call_3',
+            'name' => 'order_manager',
+            'input' => ['action' => 'cancel', 'order_number' => $token],
+            'irreversible' => true,
+            'impacts' => ['Order #' . $token . ' is canceled and cannot be reopened.'],
+        ]], true);
+
+        $toolCalls = $this->pendingToolCallsOf($this->decode(
+            $this->chatManagement->getConversation($this->conversationId)
+        ));
+
+        self::assertSame(
+            ['Order #000000549 is canceled and cannot be reopened.'],
+            $toolCalls[0]['impacts']
+        );
+        self::assertSame($token, $toolCalls[0]['input']['order_number']);
+    }
+
+    #[Test]
+    public function getConversationShowsANeutralLabelForAnImpactTokenTheVaultCannotResolve(): void
+    {
+        $this->repository->addMessage($this->conversationId, 'assistant', '', [[
+            'id' => 'call_4',
+            'name' => 'order_manager',
+            'input' => ['action' => 'cancel', 'order_number' => 'mago://order_9'],
+            'irreversible' => true,
+            'impacts' => ['Order #mago://order_9 is canceled and cannot be reopened.'],
+        ]], true);
+
+        $toolCalls = $this->pendingToolCallsOf($this->decode(
+            $this->chatManagement->getConversation($this->conversationId)
+        ));
+
+        self::assertSame(
+            ['Order #[earlier record] is canceled and cannot be reopened.'],
+            $toolCalls[0]['impacts']
+        );
+    }
+
+    /**
+     * The tool calls of the newest pending message, decoded from the JSON string shape the
+     * endpoint returns them in.
+     *
+     * @param array<string, mixed> $response
+     * @return array<int, array<string, mixed>>
+     */
+    private function pendingToolCallsOf(array $response): array
+    {
+        $pending = array_values(array_filter(
+            (array)($response['messages'] ?? []),
+            static fn (array $message): bool => (int)($message['pending_confirmation'] ?? 0) === 1
+                && is_string($message['tool_calls'] ?? null)
+        ));
+
+        self::assertNotSame([], $pending, 'the conversation holds no pending row with tool calls');
+
+        return (array)json_decode((string)end($pending)['tool_calls'], true);
     }
 
     private function irreversibleProposal(): int

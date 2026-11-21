@@ -221,6 +221,8 @@ define(['uiRegistry'], function (registry) {
      * a switcher merely hides until another field changes (a coupon code behind "Specific Coupon")
      * is not hidden in this sense: the card names it, and the change that reveals it can be in the
      * same batch. PageContextNormalizer carries the flag and WriteFieldsAction refuses the change.
+     * The value of a hidden field never leaves the browser either: describe_form does not list the
+     * field and read_fields answers "not a field", so nothing may depend on that value downstream.
      *
      * @param {Object} component
      * @returns {Boolean}
@@ -269,18 +271,19 @@ define(['uiRegistry'], function (registry) {
         }
 
         return components.slice(0, caps.maxFields).map(function (component) {
-            var isSecret = isSecretField(component);
+            var isSecret = isSecretField(component),
+                isHidden = isHiddenField(component);
 
             return {
                 path: component.dataScope,
                 label: typeof component.label === 'function' ? component.label() : (component.label || ''),
                 type: isSecret ? 'password' : (component.formElement || ''),
-                value: isSecret ? null : capValue(component.value(), caps.maxFieldValueLength, truncated),
+                value: isSecret || isHidden ? null : capValue(component.value(), caps.maxFieldValueLength, truncated),
                 redacted: isSecret,
                 options: isSecret ? [] : capOptions(readOptions(component), caps.maxFieldOptions, truncated),
                 required: typeof component.required === 'function' ? !!component.required() : false,
                 disabled: typeof component.disabled === 'function' ? !!component.disabled() : false,
-                hidden: isHiddenField(component),
+                hidden: isHidden,
                 usesDefaultValue: usesDefaultValue(component)
             };
         });

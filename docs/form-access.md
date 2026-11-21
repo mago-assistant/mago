@@ -24,6 +24,9 @@ Ask the assistant about "this form" or "the page I'm on" and it can:
 Field values come from the live UI component in the browser, not a fresh database read, so **the
 assistant sees edits you have already typed but not yet saved** — exactly what you'd see on
 screen. Nothing about this is stored anywhere but the conversation until you save it yourself.
+A hidden field (a record id or a value carried along, never shown on screen) is out of scope on
+all three sides: it is not listed, not read and not written, and its value never leaves the
+browser.
 
 If no form is open (the dashboard, a grid, a report), `describe_form` and `read_fields` say so
 plainly and suggest `cms_data` instead for a CMS page that isn't open right now. `page_form` only
