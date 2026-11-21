@@ -381,6 +381,25 @@ define(['uiRegistry'], function (registry) {
     }
 
     /**
+     * The write-blocked field paths BlockedFormFields publishes through
+     * Block\Adminhtml\ChatPanel::getJsConfig, keyed by form namespace: the fields of
+     * Content > Design > Configuration that store a setting config_writer never changes (the
+     * storefront head and footer scripts). The server has already refused such a change before the
+     * confirmation card and on the confirm request; this is the same one-list rule the deny
+     * patterns follow, applied once more before a directive stages anything (security audit
+     * follow-up 2026-11-02, finding 3).
+     *
+     * @param {String} namespace
+     * @param {String} path
+     * @returns {Boolean}
+     */
+    function isBlockedField(namespace, path) {
+        var blocked = (window.MAGO_CONFIG || {}).formBlockedFields || {};
+
+        return (blocked[namespace] || []).indexOf(path) !== -1;
+    }
+
+    /**
      * @param {String} value
      * @param {Array} patterns
      * @returns {Boolean}
@@ -1078,7 +1097,8 @@ define(['uiRegistry'], function (registry) {
 
     /**
      * Waits for one change's own field (whenFieldReady()) and then writes it (writeChange()), or
-     * reports it unwritable if the field never appeared. Every change in a batch waits independently
+     * reports it unwritable if the field never appeared. A write-blocked field (isBlockedField())
+     * is reported unwritable without waiting. Every change in a batch waits independently
      * and in parallel, rather than one at a time, so one slow-to-register field does not hold up
      * every change queued behind it in the directive.
      *
@@ -1088,6 +1108,12 @@ define(['uiRegistry'], function (registry) {
      * @param {Function} callback invoked with the change's result
      */
     function settleChange(namespace, provider, change, callback) {
+        if (isBlockedField(namespace, change.path)) {
+            callback(unwritableChangeResult(change));
+
+            return;
+        }
+
         whenFieldReady(namespace, change.path, FIELD_REGISTRATION_TIMEOUT_MS, function (component) {
             callback(component && !isHiddenField(component)
                 ? writeChange(component, provider, change)
