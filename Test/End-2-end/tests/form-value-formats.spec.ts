@@ -22,7 +22,7 @@ function applyOnConfirmScenario(directive: Record<string, unknown>): ChatScenari
       {event: 'tool_call', data: {id: 'toolu_format_1', name: 'page_form', input: {action: 'write_fields'}}},
       {
         event: 'confirm',
-        data: {tools: [{name: 'page_form', description: 'Write the open form', input: {action: 'write_fields'}}]},
+        data: {message_id: MESSAGE_ID, tools: [{name: 'page_form', description: 'Write the open form', input: {action: 'write_fields'}}]},
       },
       {event: 'done', data: {message_id: MESSAGE_ID, conversation_id: CONVERSATION_ID, pending_confirmation: true}},
     ],

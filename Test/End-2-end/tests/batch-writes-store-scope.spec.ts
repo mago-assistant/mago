@@ -56,6 +56,7 @@ function batchScenario(opts: {
       {
         event: 'confirm',
         data: {
+          message_id: MESSAGE_ID,
           tools: [
             {
               name: 'page_form',

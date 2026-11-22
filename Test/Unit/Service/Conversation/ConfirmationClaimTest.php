@@ -10,6 +10,8 @@ use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationAlreadyHandledException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationExpiredException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmationNotAcknowledgedException;
+use MagoAssistant\Mago\Model\Conversation\ConfirmationSelectionMismatchException;
+use MagoAssistant\Mago\Model\Conversation\ConfirmationSelectionRequiredException;
 use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Model\Conversation\ConversationNotFoundException;
 use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
@@ -132,6 +134,90 @@ final class ConfirmationClaimTest extends TestCase
         self::assertSame($messageId, $message['entity_id']);
     }
 
+    /**
+     * Issue #332: a card for one action sends no ticked ids, and "no ids" meant "run them all"
+     */
+    #[Test]
+    public function itLeavesATickListPendingWhenTheRequestTickedNothing(): void
+    {
+        $messageId = $this->proposal(
+            ['id' => 'call_1', 'name' => 'cms_data', 'input' => ['action' => 'update_block', 'identifier' => 'promo_a']],
+            ['id' => 'call_2', 'name' => 'cms_data', 'input' => ['action' => 'update_block', 'identifier' => 'promo_b']]
+        );
+
+        $refusal = $this->unacknowledgedConfirmRefusal($messageId);
+
+        self::assertInstanceOf(ConfirmationSelectionRequiredException::class, $refusal);
+        self::assertSame(
+            1,
+            $this->repository->getMessageById($messageId)['pending_confirmation'],
+            'A confirm without tool_call_ids claimed a two-action tick list, so both actions run unticked'
+        );
+    }
+
+    /**
+     * #332 review: an empty selection claimed the proposal, skipped every action and reported success
+     */
+    #[Test]
+    public function itLeavesAProposalPendingWhenTheSelectionIsEmpty(): void
+    {
+        $messageId = $this->proposal(
+            ['id' => 'call_1', 'name' => 'cms_data', 'input' => ['action' => 'update_block']],
+            ['id' => 'call_2', 'name' => 'cms_data', 'input' => ['action' => 'update_block']]
+        );
+
+        $refusal = $this->refusalOf(new ConfirmRequest($messageId, false, []));
+
+        self::assertInstanceOf(ConfirmationSelectionMismatchException::class, $refusal);
+        self::assertSame(1, $this->repository->getMessageById($messageId)['pending_confirmation']);
+    }
+
+    #[Test]
+    public function itLeavesASingleCallProposalPendingWhenTheSelectionIsEmpty(): void
+    {
+        $refusal = $this->refusalOf(new ConfirmRequest($this->messageId, false, []));
+
+        self::assertInstanceOf(ConfirmationSelectionMismatchException::class, $refusal);
+        self::assertSame(1, $this->repository->getMessageById($this->messageId)['pending_confirmation']);
+    }
+
+    #[Test]
+    public function itLeavesAProposalPendingWhenTheSelectionNamesOnlyUnknownCalls(): void
+    {
+        $refusal = $this->refusalOf(new ConfirmRequest($this->messageId, false, ['nope']));
+
+        self::assertInstanceOf(ConfirmationSelectionMismatchException::class, $refusal);
+        self::assertSame(1, $this->repository->getMessageById($this->messageId)['pending_confirmation']);
+    }
+
+    #[Test]
+    public function itLeavesAProposalPendingWhenTheSelectionMixesKnownAndUnknownCalls(): void
+    {
+        $messageId = $this->proposal(
+            ['id' => 'call_1', 'name' => 'cms_data', 'input' => ['action' => 'update_block']],
+            ['id' => 'call_2', 'name' => 'cms_data', 'input' => ['action' => 'update_block']]
+        );
+
+        $refusal = $this->refusalOf(new ConfirmRequest($messageId, false, ['call_1', 'nope']));
+
+        self::assertInstanceOf(ConfirmationSelectionMismatchException::class, $refusal);
+        self::assertSame(1, $this->repository->getMessageById($messageId)['pending_confirmation']);
+    }
+
+    #[Test]
+    public function itConfirmsATickListForExactlyTheTickedCalls(): void
+    {
+        $messageId = $this->proposal(
+            ['id' => 'call_1', 'name' => 'cms_data', 'input' => ['action' => 'update_block', 'identifier' => 'promo_a']],
+            ['id' => 'call_2', 'name' => 'cms_data', 'input' => ['action' => 'update_block', 'identifier' => 'promo_b']]
+        );
+
+        $message = $this->claim->claimToConfirm(new ConfirmRequest($messageId, false, ['call_2']), self::ADMIN_USER_ID);
+
+        self::assertSame($messageId, $message['entity_id']);
+        self::assertSame(0, $this->repository->getMessageById($messageId)['pending_confirmation']);
+    }
+
     #[Test]
     public function itRefusesASecondConfirmOfTheSameProposal(): void
     {
@@ -228,8 +314,13 @@ final class ConfirmationClaimTest extends TestCase
 
     private function unacknowledgedConfirmRefusal(int $messageId): ?\Throwable
     {
+        return $this->refusalOf(new ConfirmRequest($messageId, false, null));
+    }
+
+    private function refusalOf(ConfirmRequest $request): ?\Throwable
+    {
         try {
-            $this->claim->claimToConfirm(new ConfirmRequest($messageId, false, null), self::ADMIN_USER_ID);
+            $this->claim->claimToConfirm($request, self::ADMIN_USER_ID);
         } catch (\Throwable $exception) {
             return $exception;
         }
