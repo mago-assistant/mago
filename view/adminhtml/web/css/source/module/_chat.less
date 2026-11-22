@@ -666,6 +666,31 @@ html:has(body.mago-active) {
     padding: @mago-size__2 0;
 }
 
+// #312: past five, tags and done trace lines fold behind a toggle (chat-panel.js foldTools).
+// The +N toggle also carries .mago-tool-tag, whose chip look (declared below) wins.
+.mago-chat-panel .mago-message:not(.is-tools-expanded) .is-folded {
+    display: none;
+}
+
+.mago-tool-more {
+    align-self: flex-start;
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: var(--mago-accent-ink, #B84000);
+    cursor: pointer;
+
+    &:hover {
+        text-decoration: underline;
+    }
+
+    &:focus-visible {
+        outline: @mago-size__2 solid var(--mago-accent, #FF7A33);
+        outline-offset: @mago-size__2;
+    }
+}
+
 // Tool tags — small neutral chips above the answer
 .mago-tool-tags {
     display: flex;

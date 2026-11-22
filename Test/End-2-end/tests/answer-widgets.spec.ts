@@ -123,3 +123,11 @@ test('Keeps a tone it does not know out of the widget\'s classes', async ({page}
   await expect(answer.locator('.mago-delta')).toHaveAttribute('class', 'mago-delta is-up');
   await expect(answer.locator('.mago-skill, .mago-irreversible')).toHaveCount(0);
 });
+
+test('Shows "&" and ">" in a widget as they were written', async ({page}) => {
+  await chatMock.install(page, widgetAnswer({type: 'callout', tone: 'info', text: 'Sturen & bediening > Koeling'}));
+  await chatPanel.openOnDashboard(page);
+  await chatPanel.askAndAwaitReply(page, 'Which categories are empty?');
+
+  await expect(chatPanel.lastAssistantMessage(page).locator('.mago-callout-text')).toHaveText('Sturen & bediening > Koeling');
+});

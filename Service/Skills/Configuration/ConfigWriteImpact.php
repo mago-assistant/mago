@@ -16,7 +16,8 @@ use Magento\Config\Model\Config\TypePool;
  *
  * Settings config_writer refuses outright (BlockedConfigPaths: base URLs, the admin URL, the mail
  * server, the addresses customer mail goes to, two-factor and admin login security, head and
- * footer scripts) never reach the card, so they need no reason here.
+ * footer scripts, and the search engine, shipping carrier and New Relic endpoints) never reach
+ * the card, so they need no reason here.
  */
 final class ConfigWriteImpact
 {

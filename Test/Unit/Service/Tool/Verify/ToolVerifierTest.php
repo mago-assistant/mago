@@ -16,6 +16,8 @@ use MagoAssistant\Mago\Service\Tool\Verify\CheckStatus;
 use MagoAssistant\Mago\Service\Tool\Verify\ToolCheck;
 use MagoAssistant\Mago\Service\Tool\Verify\ToolVerifier;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAclResourceProvider;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeAction;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeSkill;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeTool;
 use MagoAssistant\Mago\Service\Acl\ToolAccess;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
@@ -211,6 +213,64 @@ final class ToolVerifierTest extends TestCase
             ['The tool returned an error: VIES is unreachable'],
             $this->messagesWith(CheckStatus::Warning, $run->checks)
         );
+    }
+
+    /**
+     * OpenAI rejects the whole tool for a boolean "required" on a property
+     */
+    #[Test]
+    public function itFailsARequiredFlagOnAProperty(): void
+    {
+        $tool = $this->tool()->withParameterSchema([
+            'type' => 'object',
+            'properties' => [
+                'vat_number' => ['type' => 'string', 'required' => true],
+                'lines' => ['type' => 'array', 'items' => [
+                    'type' => 'object',
+                    'properties' => ['sku' => ['type' => 'string', 'required' => true]],
+                    'required' => ['sku'],
+                ]],
+            ],
+            'required' => ['vat_number'],
+        ]);
+
+        $failures = $this->messagesWith(CheckStatus::Failure, $this->verifier()->inspect($tool, ['action' => 'check']));
+
+        self::assertCount(1, $failures);
+        self::assertStringContainsString('vat_number, lines[].sku', $failures[0]);
+    }
+
+    /**
+     * A skill's combined schema keeps the first declaration of a shared parameter; the flag of a later
+     * action still reaches the provider when that action is offered on its own.
+     */
+    #[Test]
+    public function itFindsARequiredFlagThatTheCombinedSkillSchemaHides(): void
+    {
+        $skill = new FakeSkill('cms_fake', new FakeAuthorization(), [
+            'get' => new FakeAction('get', true, ['identifier' => ['type' => 'string']]),
+            'create' => new FakeAction('create', false, ['identifier' => ['type' => 'string', 'required' => true]]),
+        ]);
+
+        $failures = $this->messagesWith(CheckStatus::Failure, $this->verifier()->inspect($skill, ['action' => 'get']));
+
+        self::assertStringContainsString('identifier (action create)', implode("\n", $failures));
+    }
+
+    #[Test]
+    public function noBuiltInActionDeclaresARequiredFlag(): void
+    {
+        $offenders = [];
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(__DIR__ . '/../../../../../Service'));
+        foreach ($files as $file) {
+            if ($file->getExtension() === 'php'
+                && preg_match("/'required'\\s*=>\\s*(true|false)\\b/", (string)file_get_contents($file->getPathname()))
+            ) {
+                $offenders[] = $file->getFilename();
+            }
+        }
+
+        self::assertSame([], $offenders);
     }
 
     private function verifier(): ToolVerifier

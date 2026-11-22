@@ -135,11 +135,11 @@ class FeedClient
     private function get(string $url): ?string
     {
         try {
+            // No FOLLOWLOCATION: the feed lives at one fixed address, so an answer that redirects
+            // elsewhere must not make the server call wherever it points. A 3xx lands in the
+            // non-200 branch below.
             $this->curl->setOptions([
-                CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
-                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
-                CURLOPT_MAXREDIRS => 3,
                 CURLOPT_TIMEOUT => self::TIMEOUT,
                 CURLOPT_CONNECTTIMEOUT => 2,
                 CURLOPT_MAXFILESIZE => self::MAX_BODY_BYTES,

@@ -314,18 +314,16 @@
         </arguments>
     </type>
 
-    <!-- Docs downloads: a shared Guzzle client reuses a few handles across hundreds of files (#248) -->
+    <!-- Docs downloads: a shared Guzzle client reuses a few handles across hundreds of files (#248).
+         Redirects stay off: this client only ever asks GitHub, so an answer pointing elsewhere must
+         not make the server call that host. A renamed docs repository fails with a logged HTTP 301
+         until the admin updates the repository setting. -->
     <virtualType name="MagoAssistant\Mago\Service\Docs\GitHubGuzzleClient" type="GuzzleHttp\Client">
         <arguments>
             <argument name="config" xsi:type="array">
                 <item name="timeout" xsi:type="number">30</item>
                 <item name="connect_timeout" xsi:type="number">10</item>
-                <item name="allow_redirects" xsi:type="array">
-                    <item name="max" xsi:type="number">5</item>
-                    <item name="protocols" xsi:type="array">
-                        <item name="https" xsi:type="string">https</item>
-                    </item>
-                </item>
+                <item name="allow_redirects" xsi:type="boolean">false</item>
             </argument>
         </arguments>
     </virtualType>
@@ -376,6 +374,7 @@
             <argument name="commandRegistry" xsi:type="object">MagoAssistant\Mago\Service\Command\CommandRegistry\Proxy</argument>
             <argument name="commandRunner" xsi:type="object">MagoAssistant\Mago\Service\Command\CommandRunner\Proxy</argument>
             <argument name="formPolicy" xsi:type="object">MagoAssistant\Mago\Service\Form\FormPolicy\Proxy</argument>
+            <argument name="blockedFormFields" xsi:type="object">MagoAssistant\Mago\Service\Form\BlockedFormFields\Proxy</argument>
             <argument name="exampleQuestions" xsi:type="object">MagoAssistant\Mago\Service\Welcome\ExampleQuestions\Proxy</argument>
         </arguments>
     </type>
@@ -448,7 +447,10 @@
 
         BlockedConfigPaths: the settings config_writer never changes from the chat (storefront and
         admin URLs, mail server, every address customer mail goes to, two-factor and admin login security,
-        storefront head and footer scripts). A module adds glob patterns (* and ?) for settings of
+        storefront head and footer scripts, and the search engine, shipping carrier and New Relic
+        endpoints their clients send requests and stored credentials to). BlockedFormFields applies
+        the same list to the Content > Design > Configuration form, so page_form refuses the fields
+        storing a blocked design setting too. A module adds glob patterns (* and ?) for settings of
         its own; the defaults stay:
 
         <type name="MagoAssistant\Mago\Service\Skills\Configuration\BlockedConfigPaths">

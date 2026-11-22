@@ -451,7 +451,8 @@ class ChatService implements ChatServiceInterface
      * values they are approving, not opaque tokens; the persisted tool_calls stay tokenised and are
      * re-checked on the confirm round-trip. describeRisk() reads the same copy, because looking an
      * impact up by mago://order_1 finds nothing and the card then loses its list for precisely the
-     * irreversible actions it exists to spell out.
+     * irreversible actions it exists to spell out; the lines it returns echo those rehydrated
+     * values, so they are concealed back to tokens before they are folded onto the stored call.
      *
      * @param array<int, array<string, mixed>> $toolCalls
      * @param int|null $adminUserId
@@ -482,10 +483,33 @@ class ChatService implements ChatServiceInterface
                 $details['sensitive'] = true;
             }
             $confirmTools[] = $details;
-            $describedCalls[] = $tc + $details;
+            $describedCalls[] = $tc + $this->withConcealedImpacts($details);
         }
 
         return [$confirmTools, $describedCalls];
+    }
+
+    /**
+     * The details as they may be persisted: the impact and caution lines were built from rehydrated
+     * values the admin must see on the card, but the stored tool_calls stay tokenised (#97 decision
+     * 1), so any vaulted value in those lines is swapped back to its token first. Load and the panel
+     * put the values back when a reloaded conversation rebuilds the card.
+     *
+     * @param array<string, mixed> $details
+     * @return array<string, mixed>
+     */
+    private function withConcealedImpacts(array $details): array
+    {
+        if (!isset($details['impacts'])) {
+            return $details;
+        }
+
+        $details['impacts'] = array_map(
+            fn (string $line): string => $this->privacyService->concealText($line),
+            $details['impacts']
+        );
+
+        return $details;
     }
 
     /**
@@ -497,12 +521,23 @@ class ChatService implements ChatServiceInterface
         $refusals = [];
         foreach ($toolCalls as $toolCall) {
             $tool = $this->toolRegistry->getTool($toolCall['name'], $adminUserId);
-            if (!$tool instanceof ValidatingToolInterface || $tool->isReadOnlyAction($toolCall['input'] ?? [])) {
+            if (!$tool || $tool->isReadOnlyAction($toolCall['input'] ?? [])) {
                 continue;
             }
             // A denied call is answered with its denial when executed; its validation may already
             // reach the service the admin was not granted.
             if ($this->getDenialReason($tool, $toolCall['input'] ?? [], $adminUserId) !== null) {
+                continue;
+            }
+            // Before the card, for every write: the card would look right while a broken character is saved.
+            $controlCharacter = $this->toolCallGate->findControlCharacter(
+                $this->inputForAction($tool, $toolCall['input'] ?? [])
+            );
+            if ($controlCharacter !== null) {
+                $refusals[$toolCall['id']] = $this->toolCallGate->controlCharacterRefusal($controlCharacter);
+                continue;
+            }
+            if (!$tool instanceof ValidatingToolInterface) {
                 continue;
             }
             $refusal = $tool->findRefusal($toolCall['input'] ?? []);
@@ -945,6 +980,13 @@ class ChatService implements ChatServiceInterface
             if (!$tool->isReadOnlyAction($input) && $this->privacyService->containsSensitiveToken($input)) {
                 return ['error' => 'This action would write an admin URL into data. Ask the '
                     . 'administrator to enter it directly on the form or in the request.'];
+            }
+            // Also on the paths without a pre-card refusal (REST, a confirmed call).
+            $controlCharacter = $tool->isReadOnlyAction($input)
+                ? null
+                : $this->toolCallGate->findControlCharacter($input);
+            if ($controlCharacter !== null) {
+                return $this->toolCallGate->controlCharacterRefusal($controlCharacter);
             }
             if (!$tool->isReadOnlyAction($input) && $this->privacyService->containsCustomerWrittenToken($input)) {
                 return ['error' => 'This action would copy text a customer wrote (a review, its title or '

