@@ -11,6 +11,7 @@ use Magento\Backend\App\Action\Context;
 use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\Controller\Result\JsonFactory;
 use Magento\Framework\Controller\ResultInterface;
+use Magento\Framework\Serialize\Serializer\Json;
 use MagoAssistant\Mago\Api\ConversationRepositoryInterface;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Flag\FlagRepository;
@@ -26,7 +27,8 @@ class Load extends Action implements HttpPostActionInterface
         private readonly JsonFactory $jsonFactory,
         private readonly PrivacyService $privacyService,
         private readonly FlagRepository $flagRepository,
-        private readonly ErrorReporter $errorReporter
+        private readonly ErrorReporter $errorReporter,
+        private readonly Json $json
     ) {
         parent::__construct($context);
     }
@@ -80,8 +82,52 @@ class Load extends Action implements HttpPostActionInterface
      */
     private function tokenValuesOf(array $messages): array
     {
-        return $this->privacyService->tokenValues(
-            implode("\n", array_filter(array_column($messages, 'content'), 'is_string'))
-        );
+        return $this->privacyService->tokenValues(implode("\n", array_merge(
+            array_filter(array_column($messages, 'content'), 'is_string'),
+            $this->impactLinesOf($messages)
+        )));
+    }
+
+    /**
+     * The impact and caution lines stored on a confirmation row are tokenised like message content
+     * (#97 decision 1), so their values have to ride along for the panel to put back when it
+     * rebuilds the card.
+     *
+     * @param array<int, array<string, mixed>> $messages
+     * @return array<int, string>
+     */
+    private function impactLinesOf(array $messages): array
+    {
+        $lines = [];
+        foreach ($messages as $message) {
+            foreach ($this->toolCallsOf($message) as $toolCall) {
+                $lines = array_merge(
+                    $lines,
+                    array_filter((array)($toolCall['impacts'] ?? []), 'is_string')
+                );
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param array<string, mixed> $message
+     * @return array<int, array<string, mixed>>
+     */
+    private function toolCallsOf(array $message): array
+    {
+        if (!is_string($message['tool_calls'] ?? null) || $message['tool_calls'] === '') {
+            return [];
+        }
+
+        try {
+            $decoded = $this->json->unserialize($message['tool_calls']);
+        } catch (\InvalidArgumentException $e) {
+            // A half-written or legacy row must not take the whole conversation load down.
+            return [];
+        }
+
+        return is_array($decoded) ? array_filter($decoded, 'is_array') : [];
     }
 }
