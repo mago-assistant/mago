@@ -64,6 +64,30 @@
     }
 }
 
+// The Mago mark on a tile, Sunset to Deep Orange: the chat bar's mark and the header toggle
+.mago-mark-tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: @mago-size__28;
+    height: @mago-size__28;
+    border-radius: @mago-size__8;
+    background: linear-gradient(135deg, var(--mago-sunset, #FF7A33), var(--mago-deep, #E65000));
+    color: #FFFFFF;
+    transition: filter 0.15s;
+
+    svg {
+        width: @mago-size__16;
+        height: @mago-size__16;
+    }
+}
+
+.mago-dock-tile svg {
+    width: @mago-size__18;
+    height: @mago-size__18;
+}
+
 .mago-sr-only {
     position: absolute;
     width: @mago-size__1;
@@ -132,27 +156,21 @@ html:has(body.mago-active) {
     border: none;
     border-radius: @mago-size__8;
     background: transparent;
-    // Colored rather than the neutral ink the other header icons use, so it
-    // stands out as Mago's own brand rather than blending into the toolbar.
-    // Follows the same admin-configurable accent color as the chat panel.
-    color: var(--mago-accent, var(--mago-deep, #E65000));
+    // The colour is the tile's: the same gradient mark as the chat bar
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition: background 0.15s;
 
     &:hover {
         background: rgba(var(--mago-accent-rgb, 230, 80, 0), 0.10);
     }
 
-    // Mirrors how the notifications dropdown marks itself active, so it is
-    // unmistakable that clicking again closes the panel.
+    // A firmer tint behind the tile while the panel is open, so it is clear that clicking again closes it
     &.is-active {
-        background: var(--mago-accent, var(--mago-deep, #E65000));
-        color: var(--mago-accent-text, #FFFFFF);
+        background: rgba(var(--mago-accent-rgb, 230, 80, 0), 0.20);
     }
 
-    svg {
-        width: @notifications-action-icon__size;
-        height: @notifications-action-icon__size;
+    &:hover .mago-mark-tile {
+        filter: brightness(1.06);
     }
 }
 
@@ -1204,17 +1222,11 @@ body.mago-active.mago-fullsize .page-wrapper {
     }
 }
 
-// The panel header's mark: Sunset to Deep Orange
+// The chat bar's mark is the full-size tile
 .mago-dock-tile {
-    display: flex;
-    align-items: center;
-    justify-content: center;
     width: @mago-size__32;
     height: @mago-size__32;
     border-radius: @mago-size__9;
-    background: linear-gradient(135deg, var(--mago-sunset, #FF7A33), var(--mago-deep, #E65000));
-    color: #FFFFFF;
-    transition: filter 0.15s;
 
     .mago-dock-mark:hover & {
         filter: brightness(1.06);
@@ -1351,7 +1363,7 @@ body.mago-active.mago-fullsize .page-wrapper {
 
 @media (prefers-reduced-motion: reduce) {
     .mago-dock-btn,
-    .mago-dock-tile {
+    .mago-mark-tile {
         transition: none;
     }
 }
