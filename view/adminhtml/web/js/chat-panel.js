@@ -508,14 +508,29 @@ define([
             if (!text) {
                 return;
             }
-            dockInput.value = '';
-            input.value = text;
-            // While a reply is still coming in, the text waits in the panel's field instead of going lost.
+            // A draft in the panel's field is never overwritten. While a reply is still coming in, the bar
+            // text waits in the panel's field when that is empty, or stays in the bar when it holds a draft.
+            const draft = input.value;
             if (busy) {
+                if (draft.trim()) {
+                    return;
+                }
+                dockInput.value = '';
+                input.value = text;
                 input.dispatchEvent(new Event('input'));
                 return;
             }
+            dockInput.value = '';
+            input.value = text;
             send();
+            if (!draft) {
+                return;
+            }
+            // Put back without an input event, which would reopen the slash menu for a draft starting with "/"
+            input.value = draft;
+            autoGrow();
+            sendBtn.classList.toggle('is-idle', !draft.trim());
+            updatePrivacyHint(draft);
         });
         qs('#mago-dock-open').addEventListener('click', openFromDock);
         qs('#mago-dock-mark').addEventListener('click', openFromDock);

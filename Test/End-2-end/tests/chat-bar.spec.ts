@@ -34,6 +34,20 @@ test.describe('Chat bar', () => {
     await expect(chatPanel.chatBarInput(page)).toHaveValue('');
   });
 
+  test('it keeps a draft in the panel\'s field when the bar sends', async ({page}) => {
+    await chatPanel.gotoDashboardWithChatBar(page);
+
+    await chatPanel.open(page);
+    await chatPanel.input(page).fill('Which orders are still unpaid');
+    await chatPanel.input(page).press('Escape');
+    await chatPanel.chatBarInput(page).fill('Which products contain candle?');
+    await chatPanel.chatBarInput(page).press('Enter');
+
+    await expect(chatPanel.userMessages(page).first()).toContainText('Which products contain candle?');
+    await expect(chatPanel.userMessages(page)).toHaveCount(1);
+    await expect(chatPanel.input(page)).toHaveValue('Which orders are still unpaid');
+  });
+
   test('it only opens the panel when the bar is empty', async ({page}) => {
     const streamRequests = chatMock.countRequestsTo(page, /\/mago\/chat\/stream/);
     await chatPanel.gotoDashboardWithChatBar(page);
@@ -120,7 +134,7 @@ test.describe('Chat bar voice input', () => {
 
     await chatPanel.chatBarMicrophone(page).click();
     await speech.hear(page, 'Which products contain candle');
-    await chatPanel.chatBar(page).evaluate((form: HTMLFormElement) => form.requestSubmit());
+    await chatPanel.chatBarInput(page).press('Enter');
 
     await expect(chatPanel.userMessages(page).first()).toContainText('Which products contain candle');
     expect((await speech.log(page)).aborted).toBe(1);

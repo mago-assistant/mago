@@ -253,6 +253,7 @@ $starterIcons = [
         title="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
         aria-label="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
         aria-controls="mago-chat"
+        aria-expanded="false"
     >
         <span class="mago-mark-tile mago-dock-tile" aria-hidden="true">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="34 30 188 188" fill="currentColor">
@@ -305,8 +306,9 @@ $starterIcons = [
         id="mago-dock-open"
         class="mago-dock-btn"
         title="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
-        aria-label="<?= $escaper->escapeHtmlAttr(__('Open %1', $assistantName)) ?>"
+        aria-label="<?= $escaper->escapeHtmlAttr(__('Open the %1 panel', $assistantName)) ?>"
         aria-controls="mago-chat"
+        aria-expanded="false"
     >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
     </button>
@@ -314,7 +316,7 @@ $starterIcons = [
 <?php endif; ?>
 
 <script>
-window.MAGO_CONFIG =<?= /* @noEscape */ $block->getJsConfig() ?>;
+window.MAGO_CONFIG = <?= /* @noEscape */ $block->getJsConfig() ?>;
 window.MAGO_CONFIG.adminUser = '<?= $escaper->escapeJs($adminName) ?>';
 window.MAGO_CONFIG.assistantName = '<?= $escaper->escapeJs($assistantName) ?>';
 window.MAGO_CONFIG.formKey = '<?= $escaper->escapeJs($block->getFormKey()) ?>';
