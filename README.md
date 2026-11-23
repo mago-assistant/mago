@@ -132,6 +132,13 @@ chatting: the route's ACL resources are checked against that admin's role, and n
 HTTP. There is no internal URL to configure and no admin token is created. The former `Internal API
 URL` and `Verify TLS Certificate` settings are removed, along with their saved values.
 
+### Display mode: button, chat bar or both
+
+`Stores > Configuration > Mago Assistant > Chat Settings > Display Mode` sets how admins open the
+chat: the **Button** in the admin header, the **Chat Bar** (an "Ask Mago" field at the bottom
+centre of every admin page; what you type there opens the panel and is sent from it), or
+**Button and Chat Bar** (the default). The chat bar hides while the panel is open.
+
 ### Voice input (off by default)
 
 `Stores > Configuration > Mago Assistant > Voice Input > Enabled` adds a microphone button next to

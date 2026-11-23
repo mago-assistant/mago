@@ -112,6 +112,30 @@ class RepositoryTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, string}>
+     */
+    public static function displayModes(): array
+    {
+        return [
+            'button only' => ['button', RepositoryInterface::DISPLAY_MODE_BUTTON],
+            'chat bar only' => ['chat_bar', RepositoryInterface::DISPLAY_MODE_CHAT_BAR],
+            'both' => ['both', RepositoryInterface::DISPLAY_MODE_BOTH],
+            // An unknown or missing value must never leave admins without a way into the chat
+            'unknown' => ['sidebar', RepositoryInterface::DISPLAY_MODE_BOTH],
+            'not configured' => ['', RepositoryInterface::DISPLAY_MODE_BOTH],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('displayModes')]
+    public function itReadsTheDisplayModeAndFallsBackToBoth(string $stored, string $expected): void
+    {
+        $config = $stored === '' ? [] : [RepositoryInterface::XML_PATH_DISPLAY_MODE => $stored];
+
+        self::assertSame($expected, $this->repository($config)->getDisplayMode());
+    }
+
+    /**
      * @return array<string, array{string}>
      */
     public static function invalidColors(): array

@@ -306,10 +306,14 @@ define([
     var histList = qs('#mago-history-list');
     var inputArea = qs('#mago-input-area');
     var slashMenu = qs('#mago-slash-menu');
+    // The slash menu serves the panel's input and the chat bar's: the field it was opened from, and
+    // the container it renders in next to that field.
+    var slashField = input;
+    var slashHost = slashMenu;
 
-    // A theme without the header container renders the panel without its
-    // toggle, so bail out before anything binds to a missing element.
-    if (!toggle || !chat) {
+    // The header toggle and the chat bar are each optional (Chat Settings > Display Mode), and a theme
+    // without the header container renders no toggle. With neither there is no way in, so bail out.
+    if (!chat || (!toggle && !qs('#mago-dock'))) {
         return;
     }
 
@@ -410,6 +414,9 @@ define([
     // The header icon is the only way in or out of the panel, so its tooltip,
     // aria state and active style all have to follow whatever it will do next.
     function syncToggleLabel() {
+        if (!toggle) {
+            return;
+        }
         var open = chat.classList.contains('is-open');
         var label = open ? toggle.getAttribute('data-label-close') : toggle.getAttribute('data-label-open');
         if (label) {
@@ -452,7 +459,11 @@ define([
         }
     }
 
+    // Where the focus goes when the panel closes: the chat bar when it was opened from there.
+    let returnFocusTo = null;
+
     function openPanel() {
+        returnFocusTo = null;
         chat.inert = false;
         chat.classList.add('is-open');
         document.body.classList.add('mago-active');
@@ -476,16 +487,111 @@ define([
         saveState();
         // Off screen but still in the DOM, the closed panel would otherwise stay in the tab order.
         chat.inert = true;
-        if (hadFocus) toggle.focus();
+        const focusTarget = returnFocusTo || toggle || qs('#mago-dock-input');
+        if (hadFocus && focusTarget) focusTarget.focus();
+        returnFocusTo = null;
     }
 
-    toggle.onclick = function() {
-        if (chat.classList.contains('is-open')) {
-            closePanel();
-        } else {
+    // Chat bar at the bottom of the page: what is typed there is sent from the panel, as if typed in it.
+    const dock = qs('#mago-dock');
+    if (dock) {
+        const dockInput = qs('#mago-dock-input');
+        const openFromDock = () => {
             openPanel();
+            returnFocusTo = dockInput;
+        };
+        let dockVoice = null;
+        dock.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (slashField === dockInput) hideSlashMenu();
+            // A recording still running would keep writing into the bar after its text was sent
+            if (dockVoice) dockVoice.cancel();
+            const text = dockInput.value.trim();
+            openFromDock();
+            if (!text) {
+                return;
+            }
+            // A draft in the panel's field is never overwritten. While a reply is still coming in, the bar
+            // text waits in the panel's field when that is empty, or stays in the bar when it holds a draft.
+            const draft = input.value;
+            if (busy) {
+                if (draft.trim()) {
+                    return;
+                }
+                dockInput.value = '';
+                input.value = text;
+                input.dispatchEvent(new Event('input'));
+                return;
+            }
+            dockInput.value = '';
+            input.value = text;
+            send();
+            if (!draft) {
+                return;
+            }
+            // Put back without an input event, which would reopen the slash menu for a draft starting with "/"
+            input.value = draft;
+            autoGrow();
+            sendBtn.classList.toggle('is-idle', !draft.trim());
+            updatePrivacyHint(draft);
+        });
+        qs('#mago-dock-open').addEventListener('click', openFromDock);
+        qs('#mago-dock-mark').addEventListener('click', openFromDock);
+
+        // A narrow window has no room for the full placeholder: the short one, at the CSS's breakpoint (@screen__m)
+        const narrow = window.matchMedia('(max-width: 768px)');
+        const fullPlaceholder = dockInput.placeholder;
+        const fitPlaceholder = () => {
+            dockInput.placeholder = narrow.matches ? dockInput.dataset.placeholderShort : fullPlaceholder;
+        };
+        fitPlaceholder();
+        narrow.addEventListener('change', fitPlaceholder);
+        dockInput.addEventListener('input', () => {
+            const value = dockInput.value;
+            if (value.charAt(0) === '/') {
+                showSlashMenu(value.substring(1), dockInput);
+            } else if (slashField === dockInput) {
+                hideSlashMenu();
+            }
+        });
+        dockInput.addEventListener('keydown', (e) => {
+            if (slashField === dockInput) handleSlashKey(e, () => dock.requestSubmit());
+        });
+
+        // Voice input in the bar, when it is on (#141). The consent card and any error need the panel,
+        // so those open it; without consent yet, recording then starts from the panel's own microphone.
+        if (config.voiceInput) {
+            dockVoice = createVoiceInput({
+                input: dockInput,
+                button: qs('#mago-dock-mic'),
+                lang: config.voiceLocale,
+                t: t,
+                requireConsent: (start) => {
+                    if (hasVoiceConsent()) {
+                        start();
+                        return;
+                    }
+                    openFromDock();
+                    requireVoiceConsent(() => qs('#mago-mic').click());
+                },
+                onError: (sentence) => {
+                    openFromDock();
+                    addTextMsg('assistant', sentence);
+                }
+            });
         }
-    };
+        dock.hidden = false;
+    }
+
+    if (toggle) {
+        toggle.onclick = function() {
+            if (chat.classList.contains('is-open')) {
+                closePanel();
+            } else {
+                openPanel();
+            }
+        };
+    }
     qs('#mago-close').onclick = closePanel;
     qs('#mago-expand').onclick = function() {
         setFullsize(!chat.classList.contains('is-fullsize'));
@@ -549,7 +655,10 @@ define([
         return item.full.indexOf(q) !== -1 || item.description.toLowerCase().indexOf(q) !== -1;
     }
 
-    function showSlashMenu(filter) {
+    function showSlashMenu(filter, field) {
+        if (slashActive && field !== slashField) hideSlashMenu();
+        slashField = field || input;
+        slashHost = slashField === input ? slashMenu : qs('#mago-dock-slash-menu');
         var q = (filter || '').toLowerCase();
         filteredItems = slashItems.filter(function(item) { return matchesSlashItem(item, q); });
         if (!filteredItems.length) {
@@ -558,7 +667,7 @@ define([
         }
         slashIndex = 0;
         slashActive = true;
-        slashMenu.innerHTML = '';
+        slashHost.innerHTML = '';
         // S14 skill menu: one row per entry with its risk colour. Commands and skills
         // get a group heading inside the one menu when both kinds survive the filter.
         var hasCommands = filteredItems.some(function(i) { return i.type === 'command'; });
@@ -577,10 +686,10 @@ define([
             }),
             onSelect: function(entry, i) { selectSlashItem(filteredItems[i]); }
         });
-        slashMenu.appendChild(slashMenuNode);
-        slashMenu.classList.add('is-visible');
-        input.setAttribute('aria-controls', slashMenuNode.magoListId);
-        input.setAttribute('aria-activedescendant', slashMenuNode.magoItems[0].id);
+        slashHost.appendChild(slashMenuNode);
+        slashHost.classList.add('is-visible');
+        slashField.setAttribute('aria-controls', slashMenuNode.magoListId);
+        slashField.setAttribute('aria-activedescendant', slashMenuNode.magoItems[0].id);
         if (filteredItems.length !== announcedSlashCount) {
             announcedSlashCount = filteredItems.length;
             announce(filteredItems.length === 1
@@ -633,33 +742,34 @@ define([
         slashActive = false;
         slashMenuNode = null;
         announcedSlashCount = null;
-        slashMenu.classList.remove('is-visible');
-        slashMenu.innerHTML = '';
-        input.removeAttribute('aria-controls');
-        input.removeAttribute('aria-activedescendant');
+        slashHost.classList.remove('is-visible');
+        slashHost.innerHTML = '';
+        slashField.removeAttribute('aria-controls');
+        slashField.removeAttribute('aria-activedescendant');
     }
 
     function selectSlashItem(item) {
-        input.value = item.type === 'command'
+        var field = slashField;
+        field.value = item.type === 'command'
             ? '/' + item.full + ' '
             : 'Use the ' + item.skill.name + ' skill to ';
-        autoGrow();
+        if (field === input) autoGrow();
         hideSlashMenu();
-        input.focus();
+        field.focus();
     }
 
     // The input already holds a complete command ("/cache flush") or a bare command name
     // ("/cache", which the backend answers with its usage), so Enter should send, not complete.
     function isTypedCommand(item) {
         if (!item || item.type !== 'command') return false;
-        var typed = input.value.trim().toLowerCase();
+        var typed = slashField.value.trim().toLowerCase();
         return typed === '/' + item.full || typed === '/' + item.command;
     }
 
     function updateSlashHighlight() {
         if (!slashMenuNode) return;
         slashMenuNode.magoSetActive(slashIndex);
-        input.setAttribute('aria-activedescendant', slashMenuNode.magoItems[slashIndex].id);
+        slashField.setAttribute('aria-activedescendant', slashMenuNode.magoItems[slashIndex].id);
     }
 
     function autoGrow() {
@@ -696,43 +806,51 @@ define([
         updatePrivacyHint(v);
         if (v.charAt(0) === '/') {
             var filter = v.substring(1);
-            showSlashMenu(filter);
+            showSlashMenu(filter, input);
         } else {
             hideSlashMenu();
         }
     });
 
-    input.onkeydown = function(e) {
-        if (slashActive) {
-            if (e.keyCode === 38) { // up
-                e.preventDefault();
-                slashIndex = Math.max(0, slashIndex - 1);
-                updateSlashHighlight();
-                return;
-            }
-            if (e.keyCode === 40) { // down
-                e.preventDefault();
-                slashIndex = Math.min(filteredItems.length - 1, slashIndex + 1);
-                updateSlashHighlight();
-                return;
-            }
-            if (e.keyCode === 13 && isTypedCommand(filteredItems[slashIndex])) { // enter on a complete command runs it
-                e.preventDefault();
-                hideSlashMenu();
-                send();
-                return;
-            }
-            if (e.keyCode === 13 || e.keyCode === 9) { // enter or tab
-                e.preventDefault();
-                if (filteredItems[slashIndex]) selectSlashItem(filteredItems[slashIndex]);
-                return;
-            }
-            if (e.keyCode === 27) { // escape
-                e.preventDefault();
-                hideSlashMenu();
-                return;
-            }
+    /**
+     * Arrow keys, Enter, Tab and Escape while the slash menu is open, for whichever field it serves.
+     * Returns true when the key was the menu's; run() sends a complete command as typed.
+     */
+    function handleSlashKey(e, run) {
+        if (!slashActive) return false;
+        if (e.keyCode === 38) { // up
+            e.preventDefault();
+            slashIndex = Math.max(0, slashIndex - 1);
+            updateSlashHighlight();
+            return true;
         }
+        if (e.keyCode === 40) { // down
+            e.preventDefault();
+            slashIndex = Math.min(filteredItems.length - 1, slashIndex + 1);
+            updateSlashHighlight();
+            return true;
+        }
+        if (e.keyCode === 13 && isTypedCommand(filteredItems[slashIndex])) { // enter on a complete command runs it
+            e.preventDefault();
+            hideSlashMenu();
+            run();
+            return true;
+        }
+        if (e.keyCode === 13 || e.keyCode === 9) { // enter or tab
+            e.preventDefault();
+            if (filteredItems[slashIndex]) selectSlashItem(filteredItems[slashIndex]);
+            return true;
+        }
+        if (e.keyCode === 27) { // escape
+            e.preventDefault();
+            hideSlashMenu();
+            return true;
+        }
+        return false;
+    }
+
+    input.onkeydown = function(e) {
+        if (handleSlashKey(e, send)) return;
         if (e.keyCode === 13 && !e.shiftKey) { e.preventDefault(); send(); }
     };
     sendBtn.onclick = send;
@@ -792,7 +910,11 @@ define([
                 removeCard();
                 proceed();
             },
-            onLater: removeCard
+            onLater: function () {
+                removeCard();
+                // The card had the focus; without this it is lost and Escape no longer closes the panel
+                input.focus();
+            }
         });
         card.classList.add('mago-voice-consent');
         holder.querySelector('.mago-message-content').appendChild(card);

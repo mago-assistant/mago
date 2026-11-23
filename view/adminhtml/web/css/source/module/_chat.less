@@ -38,6 +38,32 @@
     color: var(--mago-ink-muted, #736B65);
 }
 
+// Slim, warm scrollbars for everything inside the element: the panel, and the chat bar's slash menu
+.mago-scrollbars() {
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(55, 51, 48, 0.18) transparent;
+    }
+
+    ::-webkit-scrollbar {
+        width: @mago-size__8;
+        height: @mago-size__8;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: rgba(55, 51, 48, 0.14);
+        border-radius: @mago-size__4;
+
+        &:hover {
+            background: rgba(55, 51, 48, 0.26);
+        }
+    }
+}
+
 .mago-sr-only {
     position: absolute;
     width: @mago-size__1;
@@ -159,28 +185,7 @@ html:has(body.mago-active) {
     }
 
     // Slim, warm scrollbars so the panel keeps its light, airy feel
-    * {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(55, 51, 48, 0.18) transparent;
-    }
-
-    ::-webkit-scrollbar {
-        width: @mago-size__8;
-        height: @mago-size__8;
-    }
-
-    ::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: rgba(55, 51, 48, 0.14);
-        border-radius: @mago-size__4;
-
-        &:hover {
-            background: rgba(55, 51, 48, 0.26);
-        }
-    }
+    .mago-scrollbars();
 
     button {
         font-family: var(--mago-font);
@@ -1127,6 +1132,229 @@ html:has(body.mago-active) {
 
 body.mago-active.mago-fullsize .page-wrapper {
     display: none !important;
+}
+
+@mago-dock-width: @mago-size__320 + @mago-size__100 + @mago-size__40;
+
+// Chat bar: fixed at the bottom of every admin page, built from the panel's own parts (the header's
+// gradient tile, its square buttons, its focus border). Typing there opens the panel and sends the message
+// from it, so the bar itself holds no conversation. Hidden while the panel is open.
+.mago-dock {
+    position: fixed;
+    // Centred in the content area beside the 8.8rem admin menu, the same width the panel rule above
+    // subtracts. A percentage of a fixed element leaves the scrollbar out, 100vw would not.
+    left: ~"calc(50% + 4.4rem)";
+    bottom: @mago-size__20;
+    // Above the fixed page actions and the header, below the admin menu's fly-out (@menu__z-index - 2)
+    z-index: @menu__z-index - 3;
+    transform: translateX(-50%);
+    width: ~"min(@{mago-dock-width}, calc(100% - 8.8rem - @{mago-size__32}))";
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: @mago-size__6;
+    padding: @mago-size__6;
+    background: var(--mago-panel, #FFFFFF);
+    color: var(--mago-ink, #373330);
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+    border-radius: @mago-size__16;
+    box-shadow: 0 @mago-size__8 @mago-size__24 rgba(55, 51, 48, 0.14);
+    font-family: var(--mago-font);
+    font-size: @mago-font-size__13;
+    letter-spacing: var(--mago-tracking, -0.01em);
+
+    &[hidden],
+    body.mago-active & {
+        display: none;
+    }
+
+    // The panel's focus border: the ink orange, doubled by a ring
+    &:focus-within {
+        border-color: var(--mago-accent-ink, #B84000);
+        box-shadow:
+            0 0 0 @mago-size__1 var(--mago-accent-ink, #B84000),
+            0 @mago-size__8 @mago-size__24 rgba(55, 51, 48, 0.16);
+    }
+}
+
+// The menu itself limits its height and scrolls; the wrapper only places it above the bar, with the
+// panel's scrollbars.
+.mago-dock .mago-dock-slash-menu {
+    left: 0;
+    right: 0;
+    bottom: ~"calc(100% + @{mago-size__8})";
+    .mago-scrollbars();
+}
+
+.mago-dock-mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: @mago-size__40;
+    height: @mago-size__40;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: @mago-size__10;
+    cursor: pointer;
+
+    &:focus-visible {
+        outline: @mago-size__2 solid var(--mago-accent-ink, #B84000);
+        outline-offset: @mago-size__1;
+    }
+}
+
+// The panel header's mark: Sunset to Deep Orange
+.mago-dock-tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: @mago-size__32;
+    height: @mago-size__32;
+    border-radius: @mago-size__9;
+    background: linear-gradient(135deg, var(--mago-sunset, #FF7A33), var(--mago-deep, #E65000));
+    color: #FFFFFF;
+    transition: filter 0.15s;
+
+    .mago-dock-mark:hover & {
+        filter: brightness(1.06);
+    }
+}
+
+.mago-dock-input {
+    flex: 1;
+    min-width: 0;
+    height: @mago-size__40;
+    padding: 0 @mago-size__6;
+    background: transparent;
+    color: inherit;
+    border: 0;
+    font: inherit;
+    font-size: @mago-font-size__14;
+
+    &::placeholder {
+        color: var(--mago-ink-muted, #736B65);
+    }
+
+    // The bar's own border shows focus; a second ring on the field would sit inside it.
+    &:focus {
+        outline: none;
+        box-shadow: none;
+    }
+}
+
+// "/ for skills", only while the field is empty
+.mago-dock-hint {
+    display: flex;
+    align-items: center;
+    gap: @mago-size__6;
+    flex-shrink: 0;
+    margin-right: @mago-size__6;
+    font-size: @mago-font-size__12;
+    color: var(--mago-ink-muted, #736B65);
+    white-space: nowrap;
+
+    kbd {
+        display: inline-block;
+        min-width: @mago-size__18;
+        box-sizing: border-box;
+        padding: @mago-size__1 @mago-size__5;
+        background: var(--mago-surface, #F7F5F3);
+        color: var(--mago-ink-soft, #6B645F);
+        border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+        border-radius: @mago-size__5;
+        font: inherit;
+        font-size: @mago-font-size__11;
+        font-weight: 600;
+        text-align: center;
+    }
+
+    .mago-dock-input:not(:placeholder-shown) ~ & {
+        display: none;
+    }
+}
+
+.mago-dock-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: @mago-size__40;
+    height: @mago-size__40;
+    padding: 0;
+    background: transparent;
+    color: var(--mago-ink-soft, #6B645F);
+    border: 0;
+    border-radius: @mago-size__10;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+
+    &:hover {
+        background: var(--mago-surface, #F7F5F3);
+        color: var(--mago-ink, #373330);
+    }
+
+    &:focus-visible {
+        outline: @mago-size__2 solid var(--mago-accent-ink, #B84000);
+        outline-offset: @mago-size__1;
+    }
+
+    // display: flex above would otherwise keep a hidden button (the microphone) on screen
+    &[hidden] {
+        display: none;
+    }
+}
+
+// The panel's square microphone and send buttons
+.mago-dock-square {
+    background: var(--mago-surface, #F7F5F3);
+    color: var(--mago-ink-muted, #736B65);
+}
+
+.mago-dock-mic {
+    border: @mago-size__1 solid var(--mago-hairline, #E9E5E1);
+
+    &.is-listening,
+    &.is-listening:hover {
+        background: #D92D20;
+        color: #FFFFFF;
+        border-color: transparent;
+        box-shadow: 0 0 0 @mago-size__5 rgba(217, 45, 32, 0.18);
+    }
+}
+
+// Send is quiet until there is something to send
+.mago-dock-input:not(:placeholder-shown) ~ .mago-dock-send {
+    background: var(--mago-accent, #FF7A33);
+    color: var(--mago-accent-text, #FFFFFF);
+    box-shadow: 0 @mago-size__2 @mago-size__8 rgba(var(--mago-accent-rgb), 0.35);
+
+    &:hover {
+        background: var(--mago-accent-hover, #E65000);
+    }
+}
+
+.mago-dock-divider {
+    flex-shrink: 0;
+    width: @mago-size__1;
+    height: @mago-size__20;
+    background: var(--mago-hairline, #E9E5E1);
+}
+
+// Narrow window: the hint and the microphone go; voice input stays in the panel
+@media (max-width: @screen__m) {
+    .mago-dock-hint,
+    .mago-dock-mic {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mago-dock-btn,
+    .mago-dock-tile {
+        transition: none;
+    }
 }
 
 // Responsive - full width on small screens
