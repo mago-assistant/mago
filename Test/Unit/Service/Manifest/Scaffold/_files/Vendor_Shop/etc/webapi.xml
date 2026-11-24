@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © Mago Assistant
+ */
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Webapi:etc/webapi.xsd">
+    <route url="/V1/guest-carts/:cartId" method="GET">
+        <service class="Vendor\Shop\Api\CartInterface" method="get"/>
+        <resources><resource ref="anonymous"/></resources>
+    </route>
+</routes>

@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Console\Command;
 
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
+use MagoAssistant\Mago\Service\Manifest\ManifestTool;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Service\Tool\Verify\AdminAreaInterface;
 use MagoAssistant\Mago\Service\Tool\Verify\ToolCheck;
@@ -69,7 +70,10 @@ class VerifyTool extends Command
         $tool = $this->toolRegistry->getToolByName($toolName);
         if ($tool === null) {
             $output->writeln('<error>No tool "' . $toolName . '" in the ToolRegistry. Check the di.xml item,'
-                . ' bin/magento module:status, and what getName() returns.</error>');
+                . ' bin/magento module:status, and what getName() returns. For a tool from etc/mago_tools.xml:'
+                . ' clean the config cache and read var/log/mago-error.log (ManifestTools), where a manifest that'
+                . ' was left out is named with the reason; a name a built-in tool already has is left out too.'
+                . '</error>');
             return Command::FAILURE;
         }
 
@@ -77,6 +81,12 @@ class VerifyTool extends Command
         $checks = $this->toolVerifier->inspect($tool, $params);
         $this->writeChecks($output, $checks);
         $this->writeJson($output, 'Definition sent to the model', $this->toolRegistry->getToolDefinition($tool, null));
+
+        if ($tool instanceof ManifestTool && !is_string($params['action'] ?? null)) {
+            $output->writeln('<comment>No action named, so nothing was called. Pass \'{"action": "..."}\' to run'
+                . ' one.</comment>');
+            return $this->exitCode($checks);
+        }
 
         if (!$tool->isReadOnlyAction($params) && !$input->getOption(self::OPTION_ALLOW_WRITE)) {
             $output->writeln('<comment>Skipped execute(): this call writes. Pass --allow-write to run it'

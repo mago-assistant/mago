@@ -10,6 +10,8 @@ use MagoAssistant\Mago\Api\Acl;
 use MagoAssistant\Mago\Api\Tool\ActionScopedToolInterface;
 use MagoAssistant\Mago\Api\Tool\ToolInterface;
 use MagoAssistant\Mago\Service\Acl\ToolAccess;
+use MagoAssistant\Mago\Service\Manifest\ManifestChecker;
+use MagoAssistant\Mago\Service\Manifest\ManifestTool;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Privacy\PrivacyFilter;
 
@@ -31,7 +33,8 @@ class ToolVerifier
     public function __construct(
         private readonly PrivacyFilter $privacyFilter,
         private readonly AclResourceIndex $aclResources,
-        private readonly ToolAccess $toolAccess
+        private readonly ToolAccess $toolAccess,
+        private readonly ?ManifestChecker $manifestChecker = null
     ) {
     }
 
@@ -49,8 +52,38 @@ class ToolVerifier
             ...$this->checkAcls($tool, [], 'without input'),
             ...($params === [] ? $this->checkInputNeeded($tool) : $this->checkAcls($tool, $params, 'for this call')),
             $this->checkAccess($tool, $params),
-            ...$this->checkClassification($tool->getFieldClassification($this->actionOf($params))),
+            ...$this->checkOwnClassification($tool, $params),
+            ...$this->checkManifest($tool, $params),
         ];
+    }
+
+    /**
+     * A manifest tool classifies per action, and its checker reports on each of them; without an
+     * action named there is no classification to judge here.
+     *
+     * @param array<string,mixed> $params
+     * @return ToolCheck[]
+     */
+    private function checkOwnClassification(ToolInterface $tool, array $params): array
+    {
+        if ($tool instanceof ManifestTool && $this->manifestChecker !== null) {
+            return [];
+        }
+
+        return $this->checkClassification($tool->getFieldClassification($this->actionOf($params)));
+    }
+
+    /**
+     * A manifest tool's routes, when the verifier was given the checker for them.
+     *
+     * @param array<string,mixed> $params
+     * @return ToolCheck[]
+     */
+    private function checkManifest(ToolInterface $tool, array $params): array
+    {
+        return $tool instanceof ManifestTool && $this->manifestChecker !== null
+            ? $this->manifestChecker->check($tool, $params)
+            : [];
     }
 
     /**

@@ -7,15 +7,21 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Tool;
 
 use Magento\Framework\AuthorizationInterface;
+use Magento\Framework\Serialize\Serializer\Json;
+use MagoAssistant\Mago\Api\Acl;
+use MagoAssistant\Mago\Api\Tool\ToolProviderInterface;
+use MagoAssistant\Mago\Logger\ErrorLogger;
+use MagoAssistant\Mago\Service\Error\ErrorReporter;
+use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
 use MagoAssistant\Mago\Service\Skills\PermissionChecker;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAction;
-use MagoAssistant\Mago\Test\Unit\Fakes\FakeAvailabilityAwareTool;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeAuthorization;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeAvailabilityAwareTool;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeLogger;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakePermissionChecker;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeSkill;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeTool;
-use MagoAssistant\Mago\Api\Acl;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -334,6 +340,118 @@ final class ToolRegistryTest extends TestCase
         self::assertSame(['stock_level_msi' => $available], $registry->getEnabledTools(self::ADMIN_USER_ID));
         self::assertNull($registry->getToolByName('stock_level'));
         self::assertNull($registry->getTool('stock_level', self::ADMIN_USER_ID));
+    }
+
+    #[Test]
+    public function providersAddTheirToolsAfterTheOnesListedInDi(): void
+    {
+        $provided = new FakeTool('rma_manager', ['list'], ['list']);
+        $registry = new ToolRegistry(null, [$this->cacheManager], [$this->provider($provided)]);
+
+        self::assertSame(['cache_manager', 'rma_manager'], array_keys($registry->getEnabledTools(self::ADMIN_USER_ID)));
+        self::assertSame($provided, $registry->getToolByName('rma_manager'));
+    }
+
+    /**
+     * A manifest cannot take over a built-in tool by reusing its name, nor can a later provider take
+     * over an earlier one's tool.
+     */
+    #[Test]
+    public function aProvidedToolWithATakenNameIsLeftOut(): void
+    {
+        $shadow = new FakeTool('cache_manager', ['flush_everything'], []);
+        $first = new FakeTool('rma_manager', ['list'], ['list']);
+        $second = new FakeTool('rma_manager', ['delete'], []);
+        $providers = [$this->provider($shadow, $first), $this->provider($second)];
+        $registry = new ToolRegistry(null, [$this->cacheManager], $providers);
+
+        self::assertSame($this->cacheManager, $registry->getToolByName('cache_manager'));
+        self::assertSame($first, $registry->getToolByName('rma_manager'));
+        self::assertCount(2, $registry->getAllTools());
+    }
+
+    #[Test]
+    public function aProvidedToolThatIsNotAvailableIsDroppedLikeAnyOther(): void
+    {
+        $unavailable = new FakeAvailabilityAwareTool('rma_manager', false);
+        $registry = new ToolRegistry(null, [$this->cacheManager], [$this->provider($unavailable)]);
+
+        self::assertNull($registry->getToolByName('rma_manager'));
+        self::assertSame([$this->cacheManager], array_values($registry->getAllTools()));
+    }
+
+    #[Test]
+    public function aProviderThatThrowsOrReturnsSomethingElseLosesOnlyItsOwnTools(): void
+    {
+        $throwing = new class implements ToolProviderInterface {
+            public function getTools(): array
+            {
+                throw new \RuntimeException('log directory not writable');
+            }
+        };
+        $sloppy = new class implements ToolProviderInterface {
+            public function getTools(): array
+            {
+                return ['not a tool', null];
+            }
+        };
+        $good = new FakeTool('rma_manager', ['list'], ['list']);
+
+        $registry = new ToolRegistry(null, [$this->cacheManager], [$throwing, $sloppy, $this->provider($good)]);
+
+        self::assertSame(['cache_manager', 'rma_manager'], array_keys($registry->getEnabledTools(self::ADMIN_USER_ID)));
+    }
+
+    /**
+     * Providers are an addition: the tools listed in di.xml are kept exactly as before, keys and
+     * all, also when two of them carry one name.
+     */
+    #[Test]
+    public function theToolsListedInDiAreKeptAsTheyWereWithOrWithoutProviders(): void
+    {
+        $twin = new FakeTool('cache_manager', ['other'], []);
+        $tools = ['cache' => $this->cacheManager, 'twin' => $twin];
+
+        $without = new ToolRegistry(null, $tools);
+        $with = new ToolRegistry(null, $tools, [$this->provider(new FakeTool('rma_manager', ['list'], ['list']))]);
+
+        self::assertSame($tools, $without->getAllTools());
+        self::assertSame(['cache', 'twin', 0], array_keys($with->getAllTools()));
+        self::assertSame($this->cacheManager, $with->getToolByName('cache_manager'), 'the first, as before');
+    }
+
+    #[Test]
+    public function whatAProviderThrewIsLogged(): void
+    {
+        $throwing = new class implements ToolProviderInterface {
+            public function getTools(): array
+            {
+                throw new \RuntimeException('provider broke');
+            }
+        };
+        $logger = new FakeLogger();
+        $reporter = new ErrorReporter(new ErrorLogger($logger, new Json()), new PiiHeuristic());
+
+        $registry = new ToolRegistry(null, [$this->cacheManager], [$throwing], $reporter);
+
+        self::assertCount(1, $registry->getAllTools());
+        self::assertStringContainsString('ToolProvider', implode("\n", $logger->getMessages()));
+        self::assertStringContainsString('provider broke', implode("\n", $logger->getMessages()));
+    }
+
+    private function provider(\MagoAssistant\Mago\Api\Tool\ToolInterface ...$tools): ToolProviderInterface
+    {
+        return new class ($tools) implements ToolProviderInterface {
+            /** @param \MagoAssistant\Mago\Api\Tool\ToolInterface[] $tools */
+            public function __construct(private readonly array $tools)
+            {
+            }
+
+            public function getTools(): array
+            {
+                return $this->tools;
+            }
+        };
     }
 
     /**

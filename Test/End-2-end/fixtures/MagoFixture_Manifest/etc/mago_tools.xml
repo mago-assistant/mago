@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © Mago Assistant
+ *
+ * A module without a line of PHP beyond its registration: the End-2-end suite installs it to prove
+ * that a manifest alone puts a tool in the chat. It offers Magento's own CMS block routes.
+ */
+-->
+<config version="1">
+    <tool name="fixture_blocks" acl="Magento_Cms::block" module="MagoFixture_Manifest" title="Fixture blocks"
+          description="Find and create CMS blocks through a manifest, for the End-2-end suite.">
+        <action name="search" description="Find CMS blocks by identifier" method="GET" path="cmsBlock/search" readonly="true">
+            <param name="identifier" type="string" description="Part of the block identifier" in="criteria" condition="like" wrap="%"/>
+            <param name="limit" type="integer" in="page_size" default="10"/>
+            <field name="id" class="public"/>
+            <field name="identifier" class="public"/>
+            <field name="title" class="public"/>
+            <field name="active" class="public"/>
+            <fields class="strip"/>
+        </action>
+        <action name="create" description="Create a CMS block; it is inactive unless active is true" method="POST" path="cmsBlock" body="block">
+            <param name="identifier" type="string" description="Unique identifier" required="true"/>
+            <param name="title" type="string" description="Title" required="true"/>
+            <param name="content" type="string" description="HTML content"/>
+            <param name="active" type="boolean" default="false"/>
+            <field name="id" class="public"/>
+            <field name="identifier" class="public"/>
+            <field name="title" class="public"/>
+            <field name="active" class="public"/>
+            <fields class="strip"/>
+        </action>
+    </tool>
+</config>
