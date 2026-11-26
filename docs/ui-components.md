@@ -185,7 +185,10 @@ changes in place, it does not move.
   page; a refusal shows as a danger callout under the row;
 - `error` events render as a danger callout (W18);
 - the slash menu is the S14 skill menu, coloured green for read-only skills and
-  orange for skills that write;
+  orange for skills that write. A `/` at the start lists commands and skills;
+  a `/` after a space mid-sentence lists skills only and the pick replaces
+  the `/word` with "the <skill> skill". The "/ for skills" hint on the welcome
+  screen types the `/` for the admin, after any question already typed;
 - ```` ```mago ```` fenced blocks in an answer render as widgets. Chips and
   suggestion cards send their label as the next question; the S10 value prompt
   sends the typed or picked value;

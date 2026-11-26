@@ -86,6 +86,97 @@ test('Filters skills in the slash menu and fills the input on selection', async 
   await expect(chatPanel.userMessages(page)).toHaveCount(0);
 });
 
+test('Opens the slash menu from the skills hint on the welcome screen', async ({page}) => {
+  await chatMock.install(page, lookupProduct);
+  await chatPanel.openOnDashboard(page);
+
+  await chatPanel.skillsHint(page).click();
+
+  await expect(chatPanel.slashMenu(page)).toHaveClass(/is-visible/);
+  await expect(chatPanel.slashItems(page).first()).toBeVisible();
+  await expect(chatPanel.input(page)).toHaveValue('/');
+  await expect(chatPanel.input(page)).toBeFocused();
+
+  await chatPanel.input(page).pressSequentially('coupon');
+
+  await expect(chatPanel.slashItems(page).first()).toContainText('/coupon_manager');
+});
+
+test('Puts the skill picked from the skills hint at the end of a typed question', async ({page}) => {
+  await chatMock.install(page, lookupProduct);
+  await chatPanel.openOnDashboard(page);
+  await chatPanel.input(page).fill('Make sure to use');
+
+  await chatPanel.skillsHint(page).click();
+
+  await expect(chatPanel.input(page)).toHaveValue('Make sure to use /');
+  await expect(chatPanel.slashItems(page).filter({hasText: /\/cache \w/})).toHaveCount(0);
+
+  await chatPanel.slashItems(page).filter({hasText: '/coupon_manager'}).click();
+
+  await expect(chatPanel.input(page)).toHaveValue('Make sure to use the coupon_manager skill ');
+  await expect(chatPanel.slashMenu(page)).not.toHaveClass(/is-visible/);
+  await expect(chatPanel.userMessages(page)).toHaveCount(0);
+});
+
+test('Offers skills for a slash typed in the middle of a sentence', async ({page}) => {
+  await chatMock.install(page, lookupProduct);
+  await chatPanel.openOnDashboard(page);
+
+  await chatPanel.input(page).pressSequentially('Make sure to use /coupon');
+
+  await expect(chatPanel.slashItems(page).first()).toContainText('/coupon_manager');
+  await expect(chatPanel.slashItems(page).filter({hasText: /\/cache \w/})).toHaveCount(0);
+
+  await chatPanel.input(page).press('Enter');
+
+  await expect(chatPanel.input(page)).toHaveValue('Make sure to use the coupon_manager skill ');
+  await expect(chatPanel.userMessages(page)).toHaveCount(0);
+});
+
+test('Replaces only the typed slash word when the caret moved before the pick', async ({page}) => {
+  await chatMock.install(page, lookupProduct);
+  await chatPanel.openOnDashboard(page);
+  await chatPanel.input(page).pressSequentially('Make sure to use /coupon');
+
+  await chatPanel.input(page).press('Home');
+  await chatPanel.input(page).press('Enter');
+
+  await expect(chatPanel.input(page)).toHaveValue('Make sure to use the coupon_manager skill ');
+});
+
+test('Sends a question ending in a path instead of picking a skill whose description mentions it', async ({page}) => {
+  await chatMock.install(page, lookupProduct);
+  await chatPanel.openOnDashboard(page);
+
+  await chatPanel.input(page).pressSequentially('Why are there 404s on /checkout');
+
+  await expect(chatPanel.slashMenu(page)).not.toHaveClass(/is-visible/);
+});
+
+test('Leaves a slash inside a word alone', async ({page}) => {
+  await chatMock.install(page, lookupProduct);
+  await chatPanel.openOnDashboard(page);
+
+  await chatPanel.input(page).pressSequentially('Show new and/or');
+
+  await expect(chatPanel.slashMenu(page)).not.toHaveClass(/is-visible/);
+});
+
+test('Fills the start-of-message skill prompt again after a mid-sentence menu closed', async ({page}) => {
+  await chatMock.install(page, lookupProduct);
+  await chatPanel.openOnDashboard(page);
+  await chatPanel.input(page).fill('Which products sold best');
+  await chatPanel.skillsHint(page).click();
+  await chatPanel.input(page).press('Escape');
+  await chatPanel.input(page).fill('');
+
+  await chatPanel.input(page).pressSequentially('/coupon');
+  await chatPanel.input(page).press('Enter');
+
+  await expect(chatPanel.input(page)).toHaveValue('Use the coupon_manager skill to ');
+});
+
 test('Surfaces a streamed error instead of failing silently', async ({page}) => {
   await chatMock.install(page, streamFailure);
 

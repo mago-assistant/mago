@@ -205,7 +205,9 @@ $starterIcons = [
             <div id="mago-addons" class="mago-addons-section" hidden></div>
 
             <div class="mago-welcome-hint">
-                <kbd>/</kbd> <?= $escaper->escapeHtml(__('for skills')) ?>
+                <button type="button" id="mago-skills-hint" class="mago-welcome-hint-button" title="<?= $escaper->escapeHtmlAttr(__('Show the skills you can use')) ?>">
+                    <kbd>/</kbd> <?= $escaper->escapeHtml(__('for skills')) ?>
+                </button>
             </div>
         </div>
         <div id="mago-loading" class="mago-thinking" style="display:none;">

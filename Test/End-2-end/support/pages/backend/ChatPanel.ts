@@ -525,6 +525,10 @@ export default class ChatPanel {
     return page.locator('#mago-slash-menu .mago-slash-item');
   }
 
+  skillsHint(page: Page): Locator {
+    return page.locator('#mago-skills-hint');
+  }
+
   private async waitForToggleBound(page: Page, timeout: number): Promise<void> {
     try {
       await page.waitForFunction(() => {
