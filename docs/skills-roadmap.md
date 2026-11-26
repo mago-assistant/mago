@@ -23,7 +23,7 @@ Overview of all Magento admin areas, current skill coverage, and planned additio
 | Skill | Actions |
 |-------|---------|
 | `sales_data` | revenue_summary, top_products, top_refunded, recent_orders, order_count, lookup_order, search_orders, customer_orders |
-| `product_data` | search, get_by_sku, count, low_stock |
+| `product_data` | search, get_by_sku, count, low_stock, attribute_fill_rate |
 | `category_data` | empty_categories, uncategorized_products |
 | `dead_stock` | obsolete, slow_moving, with CSV export |
 | `customer_data` | count, recent_signups, top_spenders, lookup_customer |

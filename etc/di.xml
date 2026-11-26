@@ -411,6 +411,7 @@
                 <item name="get_by_sku" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\ProductData\GetBySkuAction</item>
                 <item name="count" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\ProductData\CountAction</item>
                 <item name="low_stock" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\ProductData\LowStockAction</item>
+                <item name="attribute_fill_rate" xsi:type="object">MagoAssistant\Mago\Service\Skills\Analytics\ProductData\AttributeFillRateAction</item>
             </argument>
         </arguments>
     </type>

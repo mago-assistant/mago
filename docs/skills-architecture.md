@@ -463,7 +463,7 @@ The module ships with these tools, grouped by skill area:
 | Tool | Class | Read-only | Description |
 |------|-------|-----------|-------------|
 | `sales_data` | `Service\Skills\Analytics\SalesData` | Yes | Revenue summaries, top products, recent orders, order counts by status. Supports period filters (`today`, `7days`, `30days`, custom date ranges). |
-| `product_data` | `Service\Skills\Analytics\ProductData` | Yes | Product search, lookup by SKU, inventory counts, low-stock alerts. |
+| `product_data` | `Service\Skills\Analytics\ProductData` | Yes | Product search, lookup by SKU, inventory counts, low-stock alerts. `attribute_fill_rate`: per product attribute, how many of the products that can have it (attribute set holds it, product type in its `apply_to`) have a value, least filled first by fill rate, with CSV export of every attribute. NULL, blank strings and `no_selection` are empty; `0` and "No" are a value. By default merchant-created attributes, every product and the default scope; `include_system`, `only_enabled`, `attribute_set` (name or id) and `store` (store view value with default fallback, products in its website) change that. Static attributes, `tier_price`, `quantity_and_stock_status` and `gallery` are left out. |
 | `customer_data` | `Service\Skills\Analytics\CustomerData` | Yes | Customer counts, recent signups, top spenders. **Never returns PII** — only aggregates and IDs. |
 
 ### Catalog

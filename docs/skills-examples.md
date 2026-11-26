@@ -68,7 +68,7 @@ Show orders above 500 euro from last month
 ```
 
 ### product_data (read-only)
-Search products, check stock, and get product details.
+Search products, check stock, get product details, and check how well attributes are filled.
 
 ```
 How many products do I have?
@@ -77,6 +77,8 @@ Show me the product with SKU ABC-123
 Which products are low on stock?
 Show products under 10 stock
 Find all disabled products
+Which attributes are populated for the least number of SKUs?
+How complete are the attributes of the Bag attribute set, including Magento's own attributes?
 ```
 
 ### category_data (read-only)
