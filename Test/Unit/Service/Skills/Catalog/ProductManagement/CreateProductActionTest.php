@@ -56,6 +56,7 @@ final class CreateProductActionTest extends TestCase
 
         $this->action($apiClient)->execute([
             'sku' => 'shirt-2',
+            'details_asked' => true,
             'name' => 'Shirt',
             'product_type' => 'simple',
             'price' => 10,
@@ -87,6 +88,97 @@ final class CreateProductActionTest extends TestCase
     }
 
     #[Test]
+    public function aNameOnlyRequestAsksForThePriceAndEveryRelevantFieldInOneForm(): void
+    {
+        $refusal = $this->action(new FakeInternalApiClient())->findRefusal(
+            ['sku' => 'SNEAKER', 'name' => 'Sneaker', 'product_type' => 'simple']
+        );
+
+        self::assertNotNull($refusal);
+        self::assertSame(
+            ['price', 'qty', 'weight', 'description', 'short_description', 'category', 'website'],
+            $refusal['ask_fields']
+        );
+        self::assertSame(['price'], $refusal['missing_required']);
+        self::assertStringContainsString('"type":"productForm"', $refusal['hint']);
+        self::assertStringContainsString('"required":["price"]', $refusal['hint']);
+        self::assertStringContainsString('details_asked: true', $refusal['hint']);
+    }
+
+    #[Test]
+    public function aNameAndPriceAloneStillGetTheOptionalFieldsAskedOnce(): void
+    {
+        $refusal = $this->action(new FakeInternalApiClient())->findRefusal(
+            ['sku' => 'SNEAKER', 'name' => 'Sneaker', 'product_type' => 'simple', 'price' => 49.95]
+        );
+
+        self::assertNotNull($refusal);
+        self::assertSame([], $refusal['missing_required']);
+        self::assertSame(
+            ['qty', 'weight', 'description', 'short_description', 'category', 'website'],
+            $refusal['ask_fields']
+        );
+        self::assertStringContainsString('"required":[]', $refusal['hint']);
+    }
+
+    #[Test]
+    public function aRequestCarryingMoreThanNameAndPriceIsCreatedWithoutAsking(): void
+    {
+        $apiClient = $this->apiClientForNewSku('sneaker-2')->withPagedItems('GET', 'products', []);
+
+        $result = $this->action($apiClient)->execute([
+            'sku' => 'sneaker-2',
+            'name' => 'Sneaker',
+            'product_type' => 'simple',
+            'price' => 49.95,
+            'qty' => 10,
+        ], self::ADMIN_USER_ID);
+
+        self::assertTrue($result['success']);
+    }
+
+    #[Test]
+    public function aPriceLeftEmptyInTheFormIsTheOnlyThingAskedAgain(): void
+    {
+        $refusal = $this->action(new FakeInternalApiClient())->findRefusal([
+            'sku' => 'SNEAKER',
+            'name' => 'Sneaker',
+            'product_type' => 'simple',
+            'qty' => 10,
+            'details_asked' => true,
+        ]);
+
+        self::assertNotNull($refusal);
+        self::assertSame(['price'], $refusal['missing_required']);
+        self::assertArrayNotHasKey('ask_fields', $refusal);
+    }
+
+    #[Test]
+    public function onceTheFormWasAnsweredANameAndPriceAreEnough(): void
+    {
+        self::assertNull($this->action(new FakeInternalApiClient())->findRefusal([
+            'sku' => 'SNEAKER',
+            'name' => 'Sneaker',
+            'product_type' => 'simple',
+            'price' => 49.95,
+            'details_asked' => true,
+        ]));
+    }
+
+    #[Test]
+    public function theFormOnlyOffersFieldsTheProductTypeUses(): void
+    {
+        $action = $this->action(new FakeInternalApiClient());
+
+        $virtual = $action->findRefusal(['sku' => 'V', 'name' => 'Service', 'product_type' => 'virtual']);
+        $grouped = $action->findRefusal(['sku' => 'G', 'name' => 'Set', 'product_type' => 'grouped']);
+
+        self::assertSame(['price', 'qty', 'description', 'short_description', 'category', 'website'], $virtual['ask_fields'] ?? null);
+        self::assertSame(['description', 'short_description', 'category', 'website'], $grouped['ask_fields'] ?? null);
+        self::assertSame([], $grouped['missing_required'] ?? null);
+    }
+
+    #[Test]
     public function aSimilarNameIsReportedWhenPriceIsAlreadyGiven(): void
     {
         $apiClient = $this->apiClientForNewSku('boots-2')
@@ -94,6 +186,7 @@ final class CreateProductActionTest extends TestCase
 
         $result = $this->action($apiClient)->execute([
             'sku' => 'boots-2',
+            'details_asked' => true,
             'name' => 'Laarzen',
             'product_type' => 'simple',
             'price' => 59.95,
@@ -116,6 +209,7 @@ final class CreateProductActionTest extends TestCase
 
         $result = $this->action($apiClient)->execute([
             'sku' => 'boots-3',
+            'details_asked' => true,
             'name' => 'Laarzen',
             'product_type' => 'simple',
             'price' => 59.95,
@@ -137,6 +231,7 @@ final class CreateProductActionTest extends TestCase
 
         $result = $this->action($apiClient)->execute([
             'sku' => 'boots-4',
+            'details_asked' => true,
             'name' => 'Laarzen',
             'product_type' => 'simple',
             'price' => 59.95,
@@ -157,6 +252,7 @@ final class CreateProductActionTest extends TestCase
 
         $result = $this->action($apiClient)->execute([
             'sku' => 'boots-5',
+            'details_asked' => true,
             'name' => 'Laarzen',
             'product_type' => 'simple',
             'price' => 59.95,
@@ -176,6 +272,7 @@ final class CreateProductActionTest extends TestCase
 
         $result = $this->action($apiClient)->execute([
             'sku' => 'boots-6',
+            'details_asked' => true,
             'name' => 'Laarzen',
             'product_type' => 'simple',
             'price' => 59.95,

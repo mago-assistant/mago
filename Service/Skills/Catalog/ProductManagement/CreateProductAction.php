@@ -94,8 +94,9 @@ class CreateProductAction implements ActionInterface, ValidatingActionInterface
             'website_ids' => [
                 'type' => 'array',
                 'items' => ['type' => 'integer'],
-                'description' => 'Website IDs (default: [1]). Match a named website against the [Store scope] '
-                    . 'section already in the system prompt; never ask the user for an ID.',
+                'description' => 'Website IDs. ONLY if the user named a website; omit otherwise (the default '
+                    . 'website is used). Match a named website against the [Store scope] section already in the '
+                    . 'system prompt; never ask the user for an ID.',
             ],
             'custom_attributes' => [
                 'type' => 'object',
@@ -106,6 +107,11 @@ class CreateProductAction implements ActionInterface, ValidatingActionInterface
             'ignore_similar' => [
                 'type' => 'boolean',
                 'description' => 'Set true to create even though similar products were reported on the previous attempt.',
+            ],
+            'details_asked' => [
+                'type' => 'boolean',
+                'description' => 'Set true once the user answered the product form (or explicitly asked to create '
+                    . 'the product without further details). Never ask for details again after that.',
             ],
             'grouped_skus' => [
                 'type' => 'array',
@@ -154,6 +160,7 @@ class CreateProductAction implements ActionInterface, ValidatingActionInterface
             'id' => [PiiClass::PUBLIC],
             'missing' => [PiiClass::PUBLIC],
             'missing_required' => [PiiClass::PUBLIC],
+            'ask_fields' => [PiiClass::PUBLIC],
             'sku_exists' => [PiiClass::PUBLIC],
             'next_step' => [PiiClass::PUBLIC],
             'hint' => [PiiClass::PUBLIC],
@@ -171,21 +178,22 @@ class CreateProductAction implements ActionInterface, ValidatingActionInterface
 Only pass values the user actually gave. Never invent qty, weight, descriptions, categories or
 other attributes to make the product look complete; leave them out and the store's defaults apply.
 Deriving a SKU from the name (uppercase, dashes) and assuming product_type "simple" is fine, say so.
-As soon as you have a name, CALL create_product — do not pre-emptively ask about price (or anything
-else) in plain text first. Price is required for simple, virtual, downloadable, configurable and
-fixed-price bundle products; if it's missing, that is the only thing checked yet and comes back
-immediately as "missing_required" (no SKU/name lookups happen until you have a price). Once price is
-there, the call checks the SKU and name and returns "sku_exists" and/or "similar_products" together
-(never one after the other) if either is found, instead of creating anything, with a hint to follow.
-Ask the user everything a response raises in ONE message — never one question per turn, and never a
-second round for something the same response already told you about — then call create_product again
-with every answer at once (price filled in, a different sku if needed, ignore_similar: true if they
-confirmed despite the similar names). Grouped products and dynamic bundles derive price from children
-— child products must exist first (create them with separate create_product calls).
+As soon as you have a name, CALL create_product with everything the user gave — do not ask anything
+in plain text first. Price is required for simple, virtual, downloadable, configurable and
+fixed-price bundle products. When the price is missing, or the request carries nothing beyond a name
+and price, the call returns "ask_fields" instead of creating anything: ask for all of them at once
+with the productForm widget the hint spells out (one short sentence, then the form; never a text
+list and never one field per turn). The user's answer arrives as one message with a line per field;
+then call create_product again with every value from it and details_asked: true, and do not ask for
+details again. Past that point, a SKU that already exists and a similar product name are checked
+and returned together ("sku_exists" / "similar_products"); ask about those in ONE message and call
+again with every answer at once (a different sku if needed, ignore_similar: true if they confirmed).
+Grouped products and dynamic bundles derive price from children — child products must exist first
+(create them with separate create_product calls).
 Configurable parents are created without variants; add them afterwards with add_configurable_variants.
 Downloadable links with type "url" are used; for uploaded files the admin must use the admin panel.
-The result reports everything that was left empty under "missing" AFTER the product is created — this
-is an FYI for the user to fill in later via the admin edit link, not something to ask about beforehand.
+The result reports what is still empty under "missing" AFTER the product is created (always images,
+which only the admin form can upload) — mention it in one line with the edit link, do not ask about it.
 TEXT;
     }
 
@@ -194,6 +202,10 @@ TEXT;
      * to confirm the write and a refusal never shows a confirmation card for something that was
      * never going to happen. The SKU-exists and similar-name checks need a database round trip and
      * stay in execute(), after confirmation.
+     *
+     * A request with no price, or with nothing beyond a name and price, is asked about once, for
+     * every relevant field at the same time; once the user answered (details_asked) only a price
+     * they still left out can stop it.
      *
      * @param array<string, mixed> $params
      * @return array<string, mixed>|null
@@ -211,17 +223,80 @@ TEXT;
             return ['error' => 'Invalid product_type. Allowed: ' . implode(', ', self::TYPES)];
         }
 
-        if ($this->missingPrice($type, $params)) {
-            return [
+        $missingPrice = $this->missingPrice($type, $params);
+
+        if (!empty($params['details_asked'])) {
+            return $missingPrice ? [
                 'not_created' => true,
                 'similar_products' => [],
                 'missing_required' => ['price'],
-                'hint' => 'The price is still missing. Ask the user for it in one short message, then call '
-                    . 'create_product again with every answer at once.',
-            ];
+                'hint' => 'The user answered the form but left the price empty. Ask only for the price in one '
+                    . 'short sentence, then call create_product again with details_asked: true.',
+            ] : null;
         }
 
-        return null;
+        $optional = $this->unansweredOptionalFields($type, $params);
+        if (!$missingPrice && count($optional) < count($this->optionalFields($type))) {
+            return null;
+        }
+
+        $askFields = array_merge($missingPrice ? ['price'] : [], $optional);
+
+        return [
+            'not_created' => true,
+            'similar_products' => [],
+            'missing_required' => $missingPrice ? ['price'] : [],
+            'ask_fields' => $askFields,
+            'hint' => 'Ask the user ONCE for everything, nothing before and nothing after: one short sentence, then '
+                . 'one ```mago block {"type":"productForm","fields":' . json_encode($askFields)
+                . ',"required":' . json_encode($missingPrice ? ['price'] : [])
+                . '} (leave "website" out when the [Store scope] section lists one website). When the user '
+                . 'answers, call create_product again with every value they gave and details_asked: true; resolve '
+                . 'a category name with list_categories first.',
+        ];
+    }
+
+    /**
+     * Fields worth asking about for this type, in the order the form shows them
+     *
+     * @param string $type
+     * @return list<string>
+     */
+    private function optionalFields(string $type): array
+    {
+        $fields = [];
+        if (in_array($type, ['simple', 'virtual', 'downloadable'], true)) {
+            $fields[] = 'qty';
+        }
+        if ($type === 'simple') {
+            $fields[] = 'weight';
+        }
+
+        return array_merge($fields, ['description', 'short_description', 'category', 'website']);
+    }
+
+    /**
+     * The optional fields the request does not carry yet
+     *
+     * @param string $type
+     * @param array<string, mixed> $params
+     * @return list<string>
+     */
+    private function unansweredOptionalFields(string $type, array $params): array
+    {
+        $given = [
+            'qty' => isset($params['qty']),
+            'weight' => isset($params['weight']),
+            'description' => !empty($params['description']),
+            'short_description' => !empty($params['short_description']),
+            'category' => !empty($params['category_ids']),
+            'website' => !empty($params['website_ids']),
+        ];
+
+        return array_values(array_filter(
+            $this->optionalFields($type),
+            static fn (string $field): bool => !$given[$field]
+        ));
     }
 
     public function execute(array $params, int $adminUserId): array
@@ -239,11 +314,9 @@ TEXT;
         $name = trim((string)($params['name'] ?? ''));
         $type = (string)($params['product_type'] ?? '');
 
-        $existingId = null;
-        $skuExists = $this->productExists($sku, $adminUserId);
-        if ($skuExists) {
-            $existingId = $this->findIdBySku($sku, $adminUserId);
-        }
+        $existing = $this->apiClient->get('products/' . urlencode($sku), [], $adminUserId);
+        $skuExists = !isset($existing['error']);
+        $existingId = isset($existing['id']) ? (int)$existing['id'] : null;
         $similar = empty($params['ignore_similar']) ? $this->findSimilar($name, $adminUserId) : [];
 
         if ($skuExists || $similar) {
@@ -282,7 +355,7 @@ TEXT;
         }
 
         $priceType = $params['bundle_price_type'] ?? 'dynamic';
-        $priceless = $type === 'grouped' || ($type === 'bundle' && $priceType === 'dynamic');
+        $priceless = $this->isPriceless($type, $params);
 
         $product = [
             'sku' => $sku,
@@ -431,23 +504,26 @@ TEXT;
 
     private function missingPrice(string $type, array $params): bool
     {
-        $priceType = $params['bundle_price_type'] ?? 'dynamic';
-        $priceless = $type === 'grouped' || ($type === 'bundle' && $priceType === 'dynamic');
+        return !$this->isPriceless($type, $params) && !isset($params['price']);
+    }
 
-        return !$priceless && !isset($params['price']);
+    /**
+     * Grouped products and dynamic bundles take their price from the children
+     *
+     * @param string $type
+     * @param array<string, mixed> $params
+     * @return bool
+     */
+    private function isPriceless(string $type, array $params): bool
+    {
+        return $type === 'grouped'
+            || ($type === 'bundle' && ($params['bundle_price_type'] ?? 'dynamic') === 'dynamic');
     }
 
     private function missingChildrenMessage(array $missing): string
     {
         return 'These child products do not exist yet: ' . implode(', ', $missing)
             . '. Offer to create them as simple products (name and price needed for each), then create the parent again.';
-    }
-
-    private function findIdBySku(string $sku, int $adminUserId): ?int
-    {
-        $result = $this->apiClient->get('products/' . urlencode($sku), [], $adminUserId);
-
-        return isset($result['id']) ? (int)$result['id'] : null;
     }
 
     private function productExists(string $sku, int $adminUserId): bool

@@ -2261,6 +2261,74 @@
     line-height: 1.3;
 }
 
+// Product form (W22)
+.mago-form {
+    display: flex;
+    flex-direction: column;
+    gap: @mago-size__16;
+
+    &.is-sent {
+        opacity: .6;
+    }
+}
+
+.mago-form-rows {
+    display: flex;
+    flex-direction: column;
+    gap: @mago-size__12;
+}
+
+.mago-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: @mago-size__6;
+    margin: 0;
+}
+
+.mago-form-label {
+    display: flex;
+    align-items: baseline;
+    gap: @mago-size__6;
+    font-size: @mago-font-size__13;
+    font-weight: 600;
+    color: var(--mago-ink, #373330);
+}
+
+.mago-form-required {
+    font-size: @mago-font-size__11-5;
+    font-weight: 500;
+    color: var(--mago-accent-ink, #B84000);
+}
+
+.mago-field {
+    &.is-multiline {
+        align-items: stretch;
+
+        .mago-field-input {
+            resize: vertical;
+            min-height: @mago-size__52;
+        }
+    }
+
+    &.is-invalid {
+        border-color: var(--mago-danger, #B8402A);
+        box-shadow: 0 0 0 @mago-size__3 var(--mago-danger-bg, #FDF5F3);
+    }
+}
+
+.mago-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: @mago-size__12;
+}
+
+.mago-form-note {
+    font-size: @mago-font-size__12-5;
+    color: var(--mago-ink-muted, #736B65);
+}
+
 // Undo (S11)
 .mago-undo-row {
     display: flex;

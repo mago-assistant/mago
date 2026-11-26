@@ -191,6 +191,7 @@ TEXT;
                 'visible' => false,
                 'custom_attributes' => $resolved,
                 'ignore_similar' => true,
+                'details_asked' => true,
             ], $adminUserId);
 
             if (isset($result['error']) || !empty($result['not_created'])) {

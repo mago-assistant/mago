@@ -25,7 +25,7 @@ final class AnswerWidgetsTest extends TestCase
         'stackedColumns', 'heatmap', 'funnel', 'entityList', 'table', 'record', 'confirmWrite', 'toolTrace',
         'callout', 'suggestions', 'choices', 'answerFooter', 'empty', 'skeleton', 'skillAsk', 'skillRunning',
         'skillLine', 'skillFailed', 'readLine', 'skillIrreversible', 'skillBulk', 'skillPlan', 'paramPrompt',
-        'undoCallout', 'sessionLog', 'skillMenu',
+        'undoCallout', 'sessionLog', 'skillMenu', 'productForm',
     ];
 
     #[Test]

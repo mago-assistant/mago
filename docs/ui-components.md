@@ -34,7 +34,8 @@ colour. Outside the panel, put the widgets inside an element with class
 
 Labels default to English and can be overridden per call through `labels`
 (`MagoUI.skillAsk({..., labels: {allow: 'Toestaan'}})`) or globally through
-`MagoUI.labels`.
+`MagoUI.labels`. A widget drawn from an answer (`renderJson`) never takes
+`labels` from its spec: the panel's words are the only ones shown.
 
 ## Widgets from an answer
 
@@ -81,7 +82,7 @@ and the `widgets` argument of `AnswerWidgets` in its `di.xml`; see
 [examples/Vendor_MagoStockAlert](examples/Vendor_MagoStockAlert) for a working
 module.
 
-## Widgets (W01–W21)
+## Widgets (W01–W22)
 
 | # | Builder | Options |
 |---|---------|---------|
@@ -105,6 +106,7 @@ module.
 | W18 | `callout` | `tone: warn\|danger\|ok\|info`, `text`, `action: {label, href, onClick}` |
 | W19 | `suggestions` | `cards: [{label, icon, href, onClick}]`, `chips: [{label, onClick}]` |
 | W19b | `choices` | `options: [{label, onClick}]`, `other` (label, default "Something else…"; `false` hides it), `onOther` |
+| W22 | `productForm` | `fields: [price\|qty\|weight\|description\|short_description\|category\|website]`, `required: [...]`, `values: {key: value}`, `currency` (symbol, max 3 characters) |
 | W20 | `answerFooter` | `primary: {label, href, onClick, external}`, `onCopy`, `onFeedback(vote)` |
 | W21 | `empty`, `skeleton` | `title`, `text`, `icon` / `widths` |
 
@@ -112,6 +114,17 @@ module.
 options are buttons, and inside an answer the chat panel sends a picked option's
 label as the next message (`data-mago-send`) and focuses the input for "other"
 (`data-mago-focus`).
+
+`productForm` is the one question `create_product` asks when a request has no
+price or nothing beyond a name: every relevant field at once, so the admin gives
+the whole product in one answer. It is the only answer widget with inputs, and it
+can only draw the fixed fields above, labelled by the panel (translatable through
+`ChatPanel::getPanelTranslations()`); the model picks which fields appear, which
+are required and what is prefilled (one line, at most 300 characters, so nothing
+hides out of view), never what a field is called. The panel's
+submit sends one `Label: value` line per filled field as the next message, points
+at an empty required field instead of sending, and locks the form once sent.
+Enter in a one-line field sends it too.
 
 Chart colours follow the ramp: the first (highest) item is the accent, the next
 ones peach, and from four items on the last one is grey ("the remainder").

@@ -63,6 +63,19 @@ define([
     var commands = config.commands || [];
     // Widget and skill-card builders (js/mago-ui.js); loaded before this file by panel.phtml.
     var UI = window.MagoUI;
+    // The product form (W22) is drawn from an answer, so its labels are set here, globally.
+    UI.labels.formFields = {
+        price: t('Price'),
+        qty: t('Stock'),
+        weight: t('Weight'),
+        description: t('Description'),
+        short_description: t('Short description'),
+        category: t('Category'),
+        website: t('Website')
+    };
+    UI.labels.formRequired = t('required');
+    UI.labels.formNote = t('Fill in what you know, the rest can wait.');
+    UI.labels.formSubmit = t('Send');
     // A ```mago fenced block holds a widget spec ({"type": "stat", ...} or a
     // list of them) and renders as the matching widget. While the block is
     // still streaming in, the JSON is incomplete and a skeleton holds its place;
@@ -1415,6 +1428,31 @@ define([
         send();
     }
 
+    // W22: an empty required field is pointed at instead of sent; a sent form locks, so the same
+    // answer cannot go out twice.
+    function submitForm(form) {
+        if (!form || busy || form.classList.contains('is-sent')) return;
+        var answer = UI.formAnswer(form);
+        Array.prototype.forEach.call(form.querySelectorAll('.mago-form-input'), function(field) {
+            field.removeAttribute('aria-invalid');
+            field.parentNode.classList.remove('is-invalid');
+        });
+        if (answer.missing.length) {
+            answer.missing.forEach(function(field) {
+                field.setAttribute('aria-invalid', 'true');
+                field.parentNode.classList.add('is-invalid');
+            });
+            answer.missing[0].focus();
+            return;
+        }
+        if (!answer.text) return;
+        form.classList.add('is-sent');
+        Array.prototype.forEach.call(form.querySelectorAll('input, textarea, button'), function(control) {
+            control.disabled = true;
+        });
+        askFromWidget(answer.text);
+    }
+
     msgs.addEventListener('click', function(e) {
         var scope = e.target.closest('.mago-message-content');
         if (!scope) return;
@@ -1422,6 +1460,12 @@ define([
         if (focusEl && scope.contains(focusEl)) {
             e.preventDefault();
             input.focus();
+            return;
+        }
+        var formSubmit = e.target.closest('.mago-form-submit');
+        if (formSubmit && scope.contains(formSubmit)) {
+            e.preventDefault();
+            submitForm(formSubmit.closest('[' + UI.formAttr + ']'));
             return;
         }
         var sendEl = e.target.closest('[' + UI.sendAttr + ']');
@@ -1445,10 +1489,19 @@ define([
     });
 
     msgs.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && e.target.classList.contains('mago-field-input') && e.target.closest('.mago-message-content')) {
-            e.preventDefault();
-            if (e.target.value.trim()) askFromWidget(e.target.value.trim());
+        if (e.key !== 'Enter' || !e.target.classList.contains('mago-field-input') || !e.target.closest('.mago-message-content')) {
+            return;
         }
+        var form = e.target.closest('[' + UI.formAttr + ']');
+        if (form) {
+            // Enter in a description starts a new line; in a one-line field it sends the form.
+            if (e.target.tagName === 'TEXTAREA') return;
+            e.preventDefault();
+            submitForm(form);
+            return;
+        }
+        e.preventDefault();
+        if (e.target.value.trim()) askFromWidget(e.target.value.trim());
     });
 
     // An answered write comes back as the card it ended on: the S03 line with its request and

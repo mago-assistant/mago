@@ -103,7 +103,19 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         ofSelected: '%1 of %2',
         allArguments: 'Show all arguments',
         fullValue: 'Show full value',
-        somethingElse: 'Something else…'
+        somethingElse: 'Something else…',
+        formFields: {
+            price: 'Price',
+            qty: 'Stock',
+            weight: 'Weight',
+            description: 'Description',
+            short_description: 'Short description',
+            category: 'Category',
+            website: 'Website'
+        },
+        formRequired: 'required',
+        formNote: 'Fill in what you know, the rest can wait.',
+        formSubmit: 'Send'
     };
 
     /* ------------------------------------------------------------------ */
@@ -1104,6 +1116,106 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         ]);
     }
 
+    // W22 Product form: the one question create_product asks when a request has no price or nothing
+    // beyond a name, so the admin gives the whole product in one go. An answer may draw it although
+    // it holds inputs, because only these fixed fields exist and the panel names them: the model
+    // picks keys and prefills values, never what a field is called, so it cannot ask for anything
+    // else (a password, a token). The chat panel sends the filled-in fields as the next message.
+    // {fields: ['price', ...], required: ['price'], values: {key: value}, currency: '€'}
+    var FORM_FIELDS = {
+        price: {inputmode: 'decimal'},
+        qty: {inputmode: 'numeric'},
+        weight: {inputmode: 'decimal'},
+        description: {multiline: true},
+        short_description: {multiline: true},
+        category: {},
+        website: {}
+    };
+    var FORM_ATTR = 'data-mago-form';
+    var FORM_KEY_ATTR = 'data-mago-form-key';
+    var FORM_REQUIRED_ATTR = 'data-mago-form-required';
+    var FORM_VALUE_MAX = 2000;
+    var FORM_PREFILL_MAX = 300;
+
+    function productForm(opts) {
+        // Never labels(opts): a spec that could rename "Price" to "Admin password" turns this into a phishing form.
+        var L = labels();
+        var names = L.formFields || {};
+        var required = Array.isArray(opts.required) ? opts.required : [];
+        var values = opts.values && typeof opts.values === 'object' ? opts.values : {};
+        var currency = typeof opts.currency === 'string' ? opts.currency.slice(0, 3) : '';
+        var keys = (Array.isArray(opts.fields) ? opts.fields : []).filter(function (key, i, all) {
+            return typeof key === 'string' && Object.prototype.hasOwnProperty.call(FORM_FIELDS, key)
+                && all.indexOf(key) === i;
+        });
+        if (!keys.length) {
+            return null;
+        }
+        var rows = keys.map(function (key) {
+            var def = FORM_FIELDS[key];
+            var label = names[key] || key;
+            var isRequired = required.indexOf(key) !== -1;
+            // A prefill is the model's text sent on as the admin's own words: keep it short and in view.
+            // One line, no padding: the answer flattens newlines anyway, and runs of blanks could push text out of view.
+            var value = values[key] === undefined || values[key] === null
+                ? '' : String(values[key]).replace(/\s+/g, ' ').trim().slice(0, FORM_PREFILL_MAX);
+            var input = el(def.multiline ? 'textarea' : 'input', 'mago-field-input mago-form-input');
+            // Attributes rather than properties: an answer widget reaches the page as HTML.
+            if (def.multiline) {
+                input.setAttribute('rows', String(Math.min(6, Math.max(2, Math.ceil(value.length / 55)))));
+                input.textContent = value;
+            } else {
+                input.setAttribute('type', 'text');
+                input.setAttribute('value', value);
+                if (def.inputmode) {
+                    input.setAttribute('inputmode', def.inputmode);
+                }
+            }
+            input.setAttribute('name', key);
+            input.setAttribute('maxlength', String(FORM_VALUE_MAX));
+            input.setAttribute(FORM_KEY_ATTR, label);
+            if (isRequired) {
+                input.setAttribute('aria-required', 'true');
+                input.setAttribute(FORM_REQUIRED_ATTR, '');
+            }
+            return el('label', 'mago-form-row', [
+                el('span', 'mago-form-label', [
+                    label,
+                    isRequired ? el('span', 'mago-form-required', L.formRequired) : null
+                ]),
+                el('span', 'mago-field' + (def.multiline ? ' is-multiline' : ''), [
+                    key === 'price' && currency ? el('span', 'mago-field-prefix', currency) : null,
+                    input
+                ])
+            ]);
+        });
+        var node = el('div', 'mago-widget mago-form', [
+            el('div', 'mago-form-rows', rows),
+            el('div', 'mago-form-actions', [
+                el('span', 'mago-form-note', L.formNote),
+                button(L.formSubmit, 'is-primary mago-form-submit')
+            ])
+        ]);
+        node.setAttribute(FORM_ATTR, '');
+        return node;
+    }
+
+    // What a filled-in product form says as a message: one "Label: value" line per filled field,
+    // and the required fields still empty, so the panel can point at them instead of sending.
+    function formAnswer(form) {
+        var lines = [];
+        var missing = [];
+        Array.prototype.forEach.call(form.querySelectorAll('[' + FORM_KEY_ATTR + ']'), function (input) {
+            var value = String(input.value || '').trim().slice(0, FORM_VALUE_MAX);
+            if (value) {
+                lines.push(input.getAttribute(FORM_KEY_ATTR) + ': ' + value.replace(/\s*\n\s*/g, ' '));
+            } else if (input.hasAttribute(FORM_REQUIRED_ATTR)) {
+                missing.push(input);
+            }
+        });
+        return {text: lines.join('\n'), missing: missing};
+    }
+
     // W20 Answer footer: primary exit plus feedback.
     // {primary: {label, href, onClick, external}, onCopy, onFeedback(vote)}
     function answerFooter(opts) {
@@ -1793,6 +1905,7 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         callout: callout,
         suggestions: suggestions,
         choices: choices,
+        productForm: productForm,
         answerFooter: answerFooter,
         empty: empty,
         skeleton: skeleton,
@@ -1816,12 +1929,13 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
     // bulk, progress, trace, done, the missing-value prompt with its input field) are left out: a
     // model-drawn copy would look exactly like the real thing, and an input the model labels
     // "re-enter your password" would be a phishing form. Suggestions and choices stay: a click
-    // only sends their visible label as the admin's next message. A type another module
-    // registers is an answer widget by definition.
+    // only sends their visible label as the admin's next message. The product form is the one
+    // exception with inputs: its fields and their labels are fixed here, not by the model. A type
+    // another module registers is an answer widget by definition.
     var ANSWER_TYPES = [
         'stat', 'stats', 'sparkline', 'meter', 'ring', 'composition', 'rankedBars', 'columns', 'lines',
         'stackedColumns', 'heatmap', 'funnel', 'entityList', 'table', 'record', 'callout', 'suggestions',
-        'choices', 'empty'
+        'choices', 'productForm', 'empty'
     ];
 
     // Build a widget from a plain spec: {type: 'stat', label: ..., ...}.
@@ -1936,6 +2050,15 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         allowHtml = false;
         try {
             specs.forEach(function (s) {
+                // Labels are the panel's words, never the model's.
+                if (s && typeof s === 'object') {
+                    s = Object.keys(s).reduce(function (copy, key) {
+                        if (key !== 'labels' && key !== '__proto__') {
+                            copy[key] = s[key];
+                        }
+                        return copy;
+                    }, {});
+                }
                 var node = s && ANSWER_TYPES.indexOf(s.type) !== -1 ? render(s) : null;
                 if (node instanceof Node) {
                     wrap.appendChild(node);
@@ -1974,6 +2097,8 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
         safeHref: safeHref,
         sendAttr: SEND_ATTR,
         focusAttr: FOCUS_ATTR,
+        formAttr: FORM_ATTR,
+        formAnswer: formAnswer,
         types: Object.keys(BUILDERS)
     };
     Object.keys(BUILDERS).forEach(function (k) { MagoUI[k] = BUILDERS[k]; });
