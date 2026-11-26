@@ -74,6 +74,7 @@ class GetRuleAction implements ActionInterface
             'is_value_processed' => [PiiClass::PUBLIC],
             'attribute_scope' => [PiiClass::PUBLIC],
             'aggregator' => [PiiClass::PUBLIC],
+            'conditions_readable' => [PiiClass::PUBLIC],
         ];
     }
 
@@ -119,6 +120,7 @@ class GetRuleAction implements ActionInterface
                     'website_ids' => $rule->getWebsiteIds(),
                     'customer_group_ids' => $rule->getCustomerGroupIds(),
                     'conditions' => $rule->getConditions()->asArray(),
+                    'conditions_readable' => trim($rule->getConditions()->asStringRecursive()),
                     'admin_url' => $this->secureAdminUrl->getUrl(
                         'catalog_rule/promo_catalog/edit',
                         ['id' => (int)$rule->getId()]

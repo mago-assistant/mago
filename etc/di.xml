@@ -203,6 +203,7 @@
                 <item name="list_rules" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\ListRulesAction</item>
                 <item name="get_rule" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\GetRuleAction</item>
                 <item name="create_rule" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\CreateRuleAction</item>
+                <item name="update_rule" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\UpdateRuleAction</item>
                 <item name="deactivate_rule" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\DeactivateRuleAction</item>
                 <item name="apply_rules" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\ApplyRulesAction</item>
             </argument>

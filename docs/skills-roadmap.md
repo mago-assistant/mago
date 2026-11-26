@@ -61,11 +61,16 @@ Cart price rules and coupon code management.
 Catalog-level price rules (automatic discounts without coupon).
 
 - `list_rules` — list active catalog price rules
-- `create_rule` — create new catalog price rule
+- `get_rule` — rule details, with its conditions in words (`conditions_readable`)
+- `create_rule` — create new catalog price rule, restricted by category, SKU or attribute value
+  (`conditions` with `conditions_match` all/any and is/is not)
+- `update_rule` — change only the fields passed; `conditions` replaces the whole condition set
 - `deactivate_rule` — disable a rule
-- `apply_rules` — trigger rule application
+- `apply_rules` — with `rule_id`, recalculate that rule's prices right away (also on "Update by
+  Schedule" indexers); without it, mark every rule for the full reindex cron runs
 - **Magento ACL:** `Magento_CatalogRule::promo_catalog`
-- **Use cases:** "Set 10% off all products in category Shoes", "Show active catalog discounts"
+- **Use cases:** "Set 10% off all products in category Shoes", "10% off all 8MP turret cameras for two
+  weeks", "Extend the winter sale by a week", "Show active catalog discounts"
 
 #### `url_rewrite_manager`
 SEO URL management.

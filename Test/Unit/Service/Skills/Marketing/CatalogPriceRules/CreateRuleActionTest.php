@@ -14,11 +14,20 @@ use MagoAssistant\Mago\Logger\ErrorLogger;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiHeuristic;
 use MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\CreateRuleAction;
+use MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\ProductMatches;
+use MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\PromoAttribute;
+use MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\RuleConditionReview;
+use MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules\RuleConditions;
 use MagoAssistant\Mago\Service\Skills\Marketing\DiscountRuleCautions;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeBackendUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeCatalogRuleServices;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeLogger;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeMatchingProducts;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakePromoAttributes;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeRulePriceReindexer;
+use MagoAssistant\Mago\Test\Unit\Fakes\FakeStoreManager;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -42,8 +51,14 @@ class CreateRuleActionTest extends TestCase
 
     private CreateRuleAction $action;
 
+    private FakeMatchingProducts $matchingProducts;
+
     protected function setUp(): void
     {
+        $this->matchingProducts = new FakeMatchingProducts(
+            new ProductMatches(34, ['CAM-1' => 'Turret 8MP', 'CAM-2' => 'Turret 8MP outdoor'])
+        );
+
         $this->catalogRuleRepository = $this->createMock(CatalogRuleRepositoryInterface::class);
 
         $this->rule = $this->createMock(Rule::class);
@@ -58,7 +73,26 @@ class CreateRuleActionTest extends TestCase
             'secureAdminUrl' => $secureAdminUrl,
             'errorReporter' => new ErrorReporter(new ErrorLogger(new FakeLogger(), new Json()), new PiiHeuristic()),
             'cautions' => new DiscountRuleCautions(new FakeInternalApiClient()),
+            'storeManager' => new FakeStoreManager(),
+            'conditionReview' => $this->conditionReview(),
+            'reindexer' => new FakeRulePriceReindexer(),
         ]);
+    }
+
+    private function conditionReview(): RuleConditionReview
+    {
+        return new RuleConditionReview(
+            new RuleConditions(
+                new FakePromoAttributes(
+                    new PromoAttribute(140, 'resolution', 'Resolution', 'select', true, ['3' => '8MP']),
+                    new PromoAttribute(141, 'camera_type', 'Camera type', 'select', true, ['7' => 'Turret']),
+                    new PromoAttribute(83, 'manufacturer', 'Manufacturer', 'select', false, ['5' => 'Acme'])
+                ),
+                new SecureAdminUrl(new FakeBackendUrl())
+            ),
+            $this->matchingProducts,
+            new ErrorReporter(new ErrorLogger(new FakeLogger(), new Json()), new PiiHeuristic())
+        );
     }
 
     /**
@@ -186,7 +220,8 @@ class CreateRuleActionTest extends TestCase
             self::ADMIN_USER_ID
         );
 
-        self::assertSame('Sets the price of every product in category 5 to 1.', $cautions[0]);
+        self::assertSame('Sets the price of every matching product to 1.', $cautions[0]);
+        self::assertSame('Only products where the category is one of 5.', $cautions[1]);
     }
 
     #[Test]
@@ -236,5 +271,74 @@ class CreateRuleActionTest extends TestCase
         );
 
         self::assertSame('Takes 10% off the price of every product.', $cautions[0]);
+    }
+
+    /**
+     * Issue #329: "10% off all 8MP turret cameras" without a category holding exactly those
+     */
+    #[Test]
+    public function theCardNamesTheConditionsAndHowManyProductsTheyMatch(): void
+    {
+        $cautions = $this->action->getCautions(
+            [
+                'discount_type' => 'percent',
+                'discount_amount' => 10,
+                'website_ids' => [1],
+                'conditions' => [
+                    ['attribute' => 'Resolution', 'values' => ['8MP']],
+                    ['attribute' => 'Camera type', 'values' => ['Turret']],
+                ],
+            ],
+            self::ADMIN_USER_ID
+        );
+
+        self::assertSame('Takes 10% off the price of every matching product.', $cautions[0]);
+        self::assertSame('Only products where all of: Resolution is 8MP; Camera type is Turret.', $cautions[1]);
+        self::assertSame(
+            'Matches 34 products right now, for example CAM-1 (Turret 8MP), CAM-2 (Turret 8MP outdoor).',
+            $cautions[2]
+        );
+        self::assertSame([[1]], $this->matchingProducts->askedWebsiteIds());
+    }
+
+    #[Test]
+    public function anAttributeNotUsedForPromoRulesIsRefusedBeforeTheCard(): void
+    {
+        $refusal = $this->action->findRefusal(['conditions' => [['attribute' => 'manufacturer', 'values' => ['Acme']]]]);
+
+        self::assertStringContainsString('Use for Promo Rule Conditions', $refusal['error'] ?? '');
+    }
+
+    #[Test]
+    public function conditionsThatMatchNoProductAreRefusedBeforeTheCard(): void
+    {
+        $this->matchingProducts = new FakeMatchingProducts(new ProductMatches(0, []));
+        $action = $this->actionWith(['storeManager' => new FakeStoreManager(), 'conditionReview' => $this->conditionReview()]);
+
+        $refusal = $action->findRefusal([
+            'website_ids' => [1],
+            'conditions' => [['attribute' => 'resolution', 'values' => ['8MP']]],
+        ]);
+
+        self::assertStringContainsString('match no products', $refusal['error'] ?? '');
+    }
+
+    #[Test]
+    public function aRuleWithoutConditionsIsNeverRefusedForItsConditions(): void
+    {
+        $refusal = $this->action->findRefusal(['name' => 'Spring sale', 'discount_type' => 'percent']);
+
+        self::assertNull($refusal);
+        self::assertSame([], $this->matchingProducts->askedWebsiteIds());
+    }
+
+    #[Test]
+    public function aRefusedConditionIsNotSaved(): void
+    {
+        $this->catalogRuleRepository->expects(self::never())->method('save');
+
+        $result = $this->create(['conditions' => [['attribute' => 'megapixels', 'values' => ['8']]]]);
+
+        self::assertStringContainsString('No product attribute has the code or label "megapixels"', $result['error']);
     }
 }

@@ -6,19 +6,18 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
-use Magento\CatalogRule\Model\Rule\Condition\Combine;
-use Magento\CatalogRule\Model\Rule\Condition\Product;
 use Magento\Customer\Model\ResourceModel\Group\CollectionFactory as CustomerGroupCollectionFactory;
 use Magento\Framework\DataObject;
 use Magento\Store\Model\StoreManagerInterface;
 use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
+use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Skills\Marketing\DiscountRuleCautions;
 use MagoAssistant\Mago\Service\Skills\Marketing\RuleIds;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class CreateRuleAction implements CautionedActionInterface
+class CreateRuleAction implements CautionedActionInterface, ValidatingActionInterface
 {
     public function __construct(
         private readonly CatalogRuleServices $catalogRules,
@@ -26,7 +25,9 @@ class CreateRuleAction implements CautionedActionInterface
         private readonly CustomerGroupCollectionFactory $customerGroupCollectionFactory,
         private readonly SecureAdminUrl $secureAdminUrl,
         private readonly ErrorReporter $errorReporter,
-        private readonly DiscountRuleCautions $cautions
+        private readonly DiscountRuleCautions $cautions,
+        private readonly RuleConditionReview $conditionReview,
+        private readonly RulePriceReindexer $reindexer
     ) {
     }
 
@@ -42,49 +43,7 @@ class CreateRuleAction implements CautionedActionInterface
 
     public function getParameterSchema(): array
     {
-        return [
-            'name' => [
-                'type' => 'string',
-                'description' => 'Rule name (required)',
-            ],
-            'discount_type' => [
-                'type' => 'string',
-                'description' => 'Discount type: "percent", "fixed", "to_percent", or "to_fixed"',
-            ],
-            'discount_amount' => [
-                'type' => 'number',
-                'description' => 'Discount amount, greater than 0. For "percent" and "to_percent" '
-                    . 'this is a percentage and must be at most 100.',
-            ],
-            'from_date' => [
-                'type' => 'string',
-                'description' => 'Start date (YYYY-MM-DD format, optional)',
-            ],
-            'to_date' => [
-                'type' => 'string',
-                'description' => 'End date (YYYY-MM-DD format, optional)',
-            ],
-            'website_ids' => [
-                'type' => 'array',
-                'description' => 'Website IDs to apply rule to (default: all websites)',
-            ],
-            'customer_group_ids' => [
-                'type' => 'array',
-                'description' => 'Customer group IDs (default: all groups)',
-            ],
-            'category_ids' => [
-                'type' => 'array',
-                'description' => 'Category IDs to restrict the rule to (optional)',
-            ],
-            'priority' => [
-                'type' => 'integer',
-                'description' => 'Rule priority / sort order (default: 0)',
-            ],
-            'stop_further_rules' => [
-                'type' => 'boolean',
-                'description' => 'Stop processing subsequent rules (default: false)',
-            ],
-        ];
+        return RuleFields::schema();
     }
 
     public function getAclResource(): ?string
@@ -110,9 +69,10 @@ class CreateRuleAction implements CautionedActionInterface
 
     public function getInstructions(): string
     {
-        return 'After creating a rule, remind the user that apply_rules must be run for changes to take effect. '
-            . 'Discount types: "percent" = X% off, "fixed" = X amount off, '
-            . '"to_percent" = set price to X% of original, "to_fixed" = set price to X.';
+        return 'Discount types: "percent" = X% off, "fixed" = X amount off, '
+            . '"to_percent" = set price to X% of original, "to_fixed" = set price to X. '
+            . 'To reach products by attribute values or SKUs, pass conditions; there is no need for a '
+            . 'category holding exactly those products.';
     }
 
     /**
@@ -125,6 +85,7 @@ class CreateRuleAction implements CautionedActionInterface
     {
         return array_values(array_filter([
             $this->describeDiscount($params),
+            ...$this->conditionReview->describe($params, $this->websiteIdsFor($params)),
             ...$this->cautions->describeScope(
                 RuleIds::fromInput($params['website_ids'] ?? null),
                 RuleIds::fromInput($params['customer_group_ids'] ?? null),
@@ -133,6 +94,15 @@ class CreateRuleAction implements CautionedActionInterface
                 $adminUserId
             ),
         ]));
+    }
+
+    /**
+     * Conditions on an unknown, ambiguous or non-promo attribute, or that match no product, are
+     * refused before the card: the admin is never asked to approve a rule that would not save as shown.
+     */
+    public function findRefusal(array $params): ?array
+    {
+        return $this->conditionReview->findRefusal($params, $this->websiteIdsFor($params), $this->toolName());
     }
 
     public function execute(array $params, int $adminUserId): array
@@ -156,16 +126,14 @@ class CreateRuleAction implements CautionedActionInterface
             return ['error' => 'discount_amount must be greater than 0'];
         }
 
-        $discountTypeMap = [
-            'percent' => 'by_percent',
-            'fixed' => 'by_fixed',
-            'to_percent' => 'to_percent',
-            'to_fixed' => 'to_fixed',
-        ];
-
-        $simpleAction = $discountTypeMap[$discountType] ?? null;
+        $simpleAction = RuleFields::DISCOUNT_TYPES[$discountType] ?? null;
         if (!$simpleAction) {
             return ['error' => 'Invalid discount_type. Use: percent, fixed, to_percent, or to_fixed'];
+        }
+
+        $refusal = $this->findRefusal($params);
+        if ($refusal !== null) {
+            return $refusal;
         }
 
         try {
@@ -191,22 +159,9 @@ class CreateRuleAction implements CautionedActionInterface
                 $rule->setData('to_date', $params['to_date']);
             }
 
-            $categoryIds = RuleIds::fromInput($params['category_ids'] ?? null) ?? [];
-            if (!empty($categoryIds)) {
-                $conditions = [
-                    'type' => Combine::class,
-                    'aggregator' => 'all',
-                    'value' => '1',
-                    'conditions' => [
-                        [
-                            'type' => Product::class,
-                            'attribute' => 'category_ids',
-                            'operator' => '()',
-                            'value' => implode(',', $categoryIds),
-                        ],
-                    ],
-                ];
-                $rule->getConditions()->loadArray($conditions);
+            $conditions = $this->conditionReview->build($params);
+            if (!$conditions->isEmpty()) {
+                $rule->getConditions()->loadArray($conditions->toMagentoArray());
             }
 
             // The admin's save controller runs this and CatalogRuleRepositoryInterface::save() does
@@ -224,14 +179,14 @@ class CreateRuleAction implements CautionedActionInterface
                 'rule_id' => $ruleId,
                 'name' => $name,
                 'message' => 'Catalog price rule "' . $name . '" created successfully. '
-                    . 'Run apply_rules to activate the changes.',
+                    . $this->reindexer->describeAfterSave($ruleId),
                 'admin_url' => $this->secureAdminUrl->getUrl(
                     'catalog_rule/promo_catalog/edit',
                     ['id' => $ruleId]
                 ),
             ];
         } catch (\Exception $e) {
-            $error = $this->errorReporter->reportToolFailure('catalog_price_rules create_rule', $e);
+            $error = $this->errorReporter->reportToolFailure($this->toolName(), $e);
             return ['error' => 'Failed to create catalog price rule: ' . $error];
         }
     }
@@ -244,11 +199,7 @@ class CreateRuleAction implements CautionedActionInterface
     private function describeDiscount(array $params): string
     {
         $amount = $this->cautions->formatAmount((float)($params['discount_amount'] ?? 0));
-        $categoryIds = RuleIds::fromInput($params['category_ids'] ?? null) ?? [];
-        $products = $categoryIds === []
-            ? 'every product'
-            : 'every product in ' . (count($categoryIds) === 1 ? 'category ' : 'categories ')
-                . implode(', ', $categoryIds);
+        $products = $this->conditionReview->restrictsProducts($params) ? 'every matching product' : 'every product';
 
         return match ($params['discount_type'] ?? '') {
             'percent' => 'Takes ' . $amount . '% off the price of ' . $products . '.',
@@ -257,6 +208,24 @@ class CreateRuleAction implements CautionedActionInterface
             'to_fixed' => 'Sets the price of ' . $products . ' to ' . $amount . '.',
             default => '',
         };
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return int[] The websites the rule will apply on, read the way execute() reads them
+     */
+    private function websiteIdsFor(array $params): array
+    {
+        if (!$this->conditionReview->hasConditions($params)) {
+            return [];
+        }
+
+        return RuleIds::fromInput($params['website_ids'] ?? null) ?? $this->getAllWebsiteIds();
+    }
+
+    private function toolName(): string
+    {
+        return 'catalog_price_rules ' . $this->getName();
     }
 
     private function getAllWebsiteIds(): array

@@ -7,6 +7,8 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Service\Skills\Marketing\CatalogPriceRules;
 
 use Magento\CatalogRule\Api\CatalogRuleRepositoryInterface;
+use Magento\CatalogRule\Model\Indexer\Product\ProductRuleProcessor;
+use Magento\CatalogRule\Model\Indexer\Rule\RuleProductProcessor;
 use Magento\CatalogRule\Model\ResourceModel\Rule\Collection;
 use Magento\CatalogRule\Model\Rule;
 use Magento\CatalogRule\Model\Rule\Job;
@@ -48,5 +50,15 @@ class CatalogRuleServices
     public function getJob(): Job
     {
         return $this->objectManager->get(Job::class);
+    }
+
+    public function getRuleProductProcessor(): RuleProductProcessor
+    {
+        return $this->objectManager->get(RuleProductProcessor::class);
+    }
+
+    public function getProductRuleProcessor(): ProductRuleProcessor
+    {
+        return $this->objectManager->get(ProductRuleProcessor::class);
     }
 }

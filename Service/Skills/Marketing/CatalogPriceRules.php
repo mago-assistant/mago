@@ -47,7 +47,12 @@ class CatalogPriceRules extends AbstractSkill implements AvailabilityAwareToolIn
     {
         return 'Catalog price rules differ from cart price rules: they modify the displayed product price '
             . 'on category/product pages, while cart price rules apply at checkout. '
-            . 'After creating or deactivating a rule, always suggest running apply_rules to activate changes. '
+            . 'Rules can reach products by category, SKU or attribute value (conditions); the confirmation card '
+            . 'shows how many products match, so restate the conditions in plain words before calling. '
+            . 'When an attribute or option name is refused as ambiguous or unknown, ask the user which one '
+            . 'they mean instead of guessing. '
+            . 'After creating, updating or deactivating a rule, follow the result message: when prices still '
+            . 'wait for the indexer, propose apply_rules with that rule_id so they change right away. '
             . 'Include admin_url links in results.';
     }
 }
