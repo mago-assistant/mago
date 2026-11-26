@@ -62,6 +62,12 @@ final class AnswerWidgetsTest extends TestCase
     }
 
     #[Test]
+    public function itTellsTheModelToScalePercentagesToAHundred(): void
+    {
+        self::assertStringContainsString('"max":100', $this->answerWidgets()->toPromptSection());
+    }
+
+    #[Test]
     public function everyExampleShapeIsValidJson(): void
     {
         $section = $this->answerWidgets()->toPromptSection();
