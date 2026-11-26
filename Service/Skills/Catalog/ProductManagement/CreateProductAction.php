@@ -89,12 +89,15 @@ class CreateProductAction implements ActionInterface, ValidatingActionInterface
             'category_ids' => [
                 'type' => 'array',
                 'items' => ['type' => 'integer'],
-                'description' => 'Category IDs to assign the product to. ONLY if the user named categories; omit otherwise.',
+                'description' => 'Category IDs to assign the product to. ONLY if the user named categories; omit '
+                    . 'otherwise. Resolve names to IDs with "list_categories"; never ask the user for an ID.',
             ],
             'website_ids' => [
                 'type' => 'array',
                 'items' => ['type' => 'integer'],
-                'description' => 'Website IDs (default: [1])',
+                'description' => 'Website IDs. ONLY if the user named a website; omit otherwise (the default '
+                    . 'website is used). Match a named website against the [Store scope] section already in the '
+                    . 'system prompt; never ask the user for an ID.',
             ],
             'custom_attributes' => [
                 'type' => 'object',
@@ -105,6 +108,11 @@ class CreateProductAction implements ActionInterface, ValidatingActionInterface
             'ignore_similar' => [
                 'type' => 'boolean',
                 'description' => 'Set true to create even though similar products were reported on the previous attempt.',
+            ],
+            'details_asked' => [
+                'type' => 'boolean',
+                'description' => 'Set true once the user answered the product form (or explicitly asked to create '
+                    . 'the product without further details). Never ask for details again after that.',
             ],
             'grouped_skus' => [
                 'type' => 'array',
@@ -153,6 +161,9 @@ class CreateProductAction implements ActionInterface, ValidatingActionInterface
             'sku' => [PiiClass::PUBLIC],
             'id' => [PiiClass::PUBLIC],
             'missing' => [PiiClass::PUBLIC],
+            'missing_required' => [PiiClass::PUBLIC],
+            'ask_fields' => [PiiClass::PUBLIC],
+            'sku_exists' => [PiiClass::PUBLIC],
             'next_step' => [PiiClass::PUBLIC],
             'hint' => [PiiClass::PUBLIC],
             'not_created' => [PiiClass::PUBLIC],
@@ -169,16 +180,39 @@ class CreateProductAction implements ActionInterface, ValidatingActionInterface
 Only pass values the user actually gave. Never invent qty, weight, descriptions, categories or
 other attributes to make the product look complete; leave them out and the store's defaults apply.
 Deriving a SKU from the name (uppercase, dashes) and assuming product_type "simple" is fine, say so.
-The result lists what was left empty under "missing" — repeat that to the user so they can follow up.
-Required: sku, name, product_type. Price is required for simple, virtual, downloadable, configurable
-and fixed-price bundle products. Grouped products and dynamic bundles derive price from children —
-child products must exist first (create them with separate create_product calls).
+As soon as you have a name, CALL create_product with everything the user gave — do not ask anything
+in plain text first. Price is required for simple, virtual, downloadable, configurable and
+fixed-price bundle products. When the price is missing, or the request carries nothing beyond a name
+and price, the call returns "ask_fields" instead of creating anything: ask for all of them at once
+with the productForm widget the hint spells out (one short sentence, then the form; never a text
+list and never one field per turn). The user's answer arrives as one message with a line per field;
+then call create_product again with every value from it and details_asked: true, and do not ask for
+details again. Past that point, a SKU that already exists and a similar product name are checked
+and returned together ("sku_exists" / "similar_products"); ask about those in ONE message and call
+again with every answer at once (a different sku if needed, ignore_similar: true if they confirmed).
+Grouped products and dynamic bundles derive price from children — child products must exist first
+(create them with separate create_product calls).
 Configurable parents are created without variants; add them afterwards with add_configurable_variants.
 Downloadable links with type "url" are used; for uploaded files the admin must use the admin panel.
 Link urls must be https to a hostname from the store's downloadable_domains.
+The result reports what is still empty under "missing" AFTER the product is created (always images,
+which only the admin form can upload) — mention it in one line with the edit link, do not ask about it.
 TEXT;
     }
 
+    /**
+     * Pure param checks only - no database access, so this runs before the administrator is asked
+     * to confirm the write and a refusal never shows a confirmation card for something that was
+     * never going to happen. The SKU-exists and similar-name checks need a database round trip and
+     * stay in execute(), after confirmation.
+     *
+     * A request with no price, or with nothing beyond a name and price, is asked about once, for
+     * every relevant field at the same time; once the user answered (details_asked) only a price
+     * they still left out can stop it.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>|null
+     */
     public function findRefusal(array $params): ?array
     {
         foreach ((array)($params['downloadable_links'] ?? []) as $link) {
@@ -192,20 +226,6 @@ TEXT;
             }
         }
 
-        return null;
-    }
-
-    public function execute(array $params, int $adminUserId): array
-    {
-        $refusal = $this->findRefusal($params);
-        if ($refusal !== null) {
-            return $refusal;
-        }
-
-        if (!$adminUserId) {
-            return ['error' => 'Admin user context is required'];
-        }
-
         $sku = trim((string)($params['sku'] ?? ''));
         $name = trim((string)($params['name'] ?? ''));
         $type = (string)($params['product_type'] ?? '');
@@ -217,40 +237,139 @@ TEXT;
             return ['error' => 'Invalid product_type. Allowed: ' . implode(', ', self::TYPES)];
         }
 
-        if ($this->productExists($sku, $adminUserId)) {
-            return [
-                'error' => 'A product with SKU "' . $sku . '" already exists.',
-                'hint' => 'Do not invent a variant SKU. Tell the user it exists and ask whether they meant this product '
-                    . '(they may want to edit it) or a new one with a different SKU.',
-                '_links' => [
+        $missingPrice = $this->missingPrice($type, $params);
+
+        if (!empty($params['details_asked'])) {
+            return $missingPrice ? [
+                'not_created' => true,
+                'similar_products' => [],
+                'missing_required' => ['price'],
+                'hint' => 'The user answered the form but left the price empty. Ask only for the price in one '
+                    . 'short sentence, then call create_product again with details_asked: true.',
+            ] : null;
+        }
+
+        $optional = $this->unansweredOptionalFields($type, $params);
+        if (!$missingPrice && count($optional) < count($this->optionalFields($type))) {
+            return null;
+        }
+
+        $askFields = array_merge($missingPrice ? ['price'] : [], $optional);
+
+        return [
+            'not_created' => true,
+            'similar_products' => [],
+            'missing_required' => $missingPrice ? ['price'] : [],
+            'ask_fields' => $askFields,
+            'hint' => 'Ask the user ONCE for everything, nothing before and nothing after: one short sentence, then '
+                . 'one ```mago block {"type":"productForm","fields":' . json_encode($askFields)
+                . ',"required":' . json_encode($missingPrice ? ['price'] : [])
+                . '} (leave "website" out when the [Store scope] section lists one website). When the user '
+                . 'answers, call create_product again with every value they gave and details_asked: true; resolve '
+                . 'a category name with list_categories first.',
+        ];
+    }
+
+    /**
+     * Fields worth asking about for this type, in the order the form shows them
+     *
+     * @param string $type
+     * @return list<string>
+     */
+    private function optionalFields(string $type): array
+    {
+        $fields = [];
+        if (in_array($type, ['simple', 'virtual', 'downloadable'], true)) {
+            $fields[] = 'qty';
+        }
+        if ($type === 'simple') {
+            $fields[] = 'weight';
+        }
+
+        return array_merge($fields, ['description', 'short_description', 'category', 'website']);
+    }
+
+    /**
+     * The optional fields the request does not carry yet
+     *
+     * @param string $type
+     * @param array<string, mixed> $params
+     * @return list<string>
+     */
+    private function unansweredOptionalFields(string $type, array $params): array
+    {
+        $given = [
+            'qty' => isset($params['qty']),
+            'weight' => isset($params['weight']),
+            'description' => !empty($params['description']),
+            'short_description' => !empty($params['short_description']),
+            'category' => !empty($params['category_ids']),
+            'website' => !empty($params['website_ids']),
+        ];
+
+        return array_values(array_filter(
+            $this->optionalFields($type),
+            static fn (string $field): bool => !$given[$field]
+        ));
+    }
+
+    public function execute(array $params, int $adminUserId): array
+    {
+        if (!$adminUserId) {
+            return ['error' => 'Admin user context is required'];
+        }
+
+        $refusal = $this->findRefusal($params);
+        if ($refusal !== null) {
+            return $refusal;
+        }
+
+        $sku = trim((string)($params['sku'] ?? ''));
+        $name = trim((string)($params['name'] ?? ''));
+        $type = (string)($params['product_type'] ?? '');
+
+        $existing = $this->apiClient->get('products/' . urlencode($sku), [], $adminUserId);
+        $skuExists = !isset($existing['error']);
+        $existingId = isset($existing['id']) ? (int)$existing['id'] : null;
+        $similar = empty($params['ignore_similar']) ? $this->findSimilar($name, $adminUserId) : [];
+
+        if ($skuExists || $similar) {
+            $raised = [];
+            if ($skuExists) {
+                $raised[] = 'SKU "' . $sku . '" already exists (ask whether they meant that product, or want '
+                    . 'a different SKU for a new one)';
+            }
+            if ($similar) {
+                $raised[] = 'products with a similar name already exist (confirm whether to create "' . $name
+                    . '" anyway)';
+            }
+
+            $response = [
+                'not_created' => true,
+                'similar_products' => $similar,
+                'missing_required' => [],
+                'hint' => 'Ask the user everything needed in ONE message, not one question per turn: '
+                    . implode(' and ', $raised) . ' - then call create_product again with every answer at once '
+                    . '(a different sku if needed, ignore_similar: true if they confirmed despite the similar names).',
+            ];
+            if ($skuExists) {
+                $response['sku_exists'] = true;
+                $response['_links'] = [
                     [
                         'label' => 'Edit existing ' . $sku,
                         'url' => $this->secureAdminUrl->getUrl(
                             'catalog/product/edit',
-                            ['id' => $this->findIdBySku($sku, $adminUserId) ?? '']
+                            ['id' => $existingId ?? '']
                         ),
                     ],
-                ],
-            ];
-        }
-
-        if (empty($params['ignore_similar'])) {
-            $similar = $this->findSimilar($name, $adminUserId);
-            if ($similar) {
-                return [
-                    'not_created' => true,
-                    'similar_products' => $similar,
-                    'hint' => 'Products with a similar name already exist. Ask the user whether to create "' . $name
-                        . '" anyway; if yes, call create_product again with ignore_similar: true.',
                 ];
             }
+
+            return $response;
         }
 
         $priceType = $params['bundle_price_type'] ?? 'dynamic';
-        $priceless = $type === 'grouped' || ($type === 'bundle' && $priceType === 'dynamic');
-        if (!$priceless && !isset($params['price'])) {
-            return ['error' => 'price is required for this product type'];
-        }
+        $priceless = $this->isPriceless($type, $params);
 
         $product = [
             'sku' => $sku,
@@ -397,17 +516,28 @@ TEXT;
         return $similar;
     }
 
+    private function missingPrice(string $type, array $params): bool
+    {
+        return !$this->isPriceless($type, $params) && !isset($params['price']);
+    }
+
+    /**
+     * Grouped products and dynamic bundles take their price from the children
+     *
+     * @param string $type
+     * @param array<string, mixed> $params
+     * @return bool
+     */
+    private function isPriceless(string $type, array $params): bool
+    {
+        return $type === 'grouped'
+            || ($type === 'bundle' && ($params['bundle_price_type'] ?? 'dynamic') === 'dynamic');
+    }
+
     private function missingChildrenMessage(array $missing): string
     {
         return 'These child products do not exist yet: ' . implode(', ', $missing)
             . '. Offer to create them as simple products (name and price needed for each), then create the parent again.';
-    }
-
-    private function findIdBySku(string $sku, int $adminUserId): ?int
-    {
-        $result = $this->apiClient->get('products/' . urlencode($sku), [], $adminUserId);
-
-        return isset($result['id']) ? (int)$result['id'] : null;
     }
 
     private function productExists(string $sku, int $adminUserId): bool

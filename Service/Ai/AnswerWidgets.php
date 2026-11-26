@@ -87,6 +87,12 @@ class AnswerWidgets
             . 'their own, e.g. "Something else…"), in the language of your answer.',
         'empty' => '{"type":"empty","title":"Nothing found","text":"Every product in Lighting has an image."} — an '
             . 'empty result, instead of a bare sentence.',
+        'productForm' => '{"type":"productForm","fields":["price","qty","description","category"],'
+            . '"required":["price"],"values":{"qty":"10"},"currency":"€"} — only when create_product returns '
+            . '"ask_fields": "fields" and "required" as its hint gives them, "values" for what the user '
+            . 'already said, "currency" the store\'s currency symbol only when you know it (leave it out '
+            . 'otherwise). The panel labels the fields itself; its submit '
+            . 'sends the filled-in values as the user\'s next message.',
     ];
 
     /**

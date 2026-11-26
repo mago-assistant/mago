@@ -560,6 +560,7 @@
             <argument name="actions" xsi:type="array">
                 <item name="list_attribute_sets" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement\ListAttributeSetsAction</item>
                 <item name="get_attribute_options" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement\GetAttributeOptionsAction</item>
+                <item name="list_categories" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement\ListCategoriesAction</item>
                 <item name="create_product" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement\CreateProductAction</item>
                 <item name="add_configurable_variants" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement\AddConfigurableVariantsAction</item>
             </argument>

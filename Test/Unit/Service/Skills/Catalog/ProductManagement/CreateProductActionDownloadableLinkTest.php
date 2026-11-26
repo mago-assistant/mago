@@ -92,6 +92,7 @@ final class CreateProductActionDownloadableLinkTest extends TestCase
                 'product_type' => 'downloadable',
                 'price' => 9.95,
                 'downloadable_links' => [['title' => 'E-book', 'url' => $url]],
+                'details_asked' => true,
             ],
             self::ADMIN_USER_ID
         );
