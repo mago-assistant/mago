@@ -113,6 +113,7 @@
                 <item name="url_rewrite_manager" xsi:type="object">MagoAssistant\Mago\Service\Skills\Seo\UrlRewriteManager</item>
                 <item name="review_manager" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ReviewManager</item>
                 <item name="product_management" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement</item>
+                <item name="product_links" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductLinks</item>
                 <item name="order_manager" xsi:type="object">MagoAssistant\Mago\Service\Skills\Sales\OrderManager</item>
                 <item name="cron_status" xsi:type="object">MagoAssistant\Mago\Service\Skills\System\CronStatus</item>
                 <item name="product_debug" xsi:type="object">MagoAssistant\Mago\Service\Skills\Debug\ProductDebug</item>
@@ -562,6 +563,20 @@
                 <item name="get_attribute_options" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement\GetAttributeOptionsAction</item>
                 <item name="create_product" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement\CreateProductAction</item>
                 <item name="add_configurable_variants" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductManagement\AddConfigurableVariantsAction</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!-- Skill Actions: ProductLinks -->
+    <preference for="MagoAssistant\Mago\Service\Skills\Catalog\ProductLinks\ProductLinkGatewayInterface"
+                type="MagoAssistant\Mago\Service\Skills\Catalog\ProductLinks\ProductLinkGateway"/>
+    <type name="MagoAssistant\Mago\Service\Skills\Catalog\ProductLinks">
+        <arguments>
+            <argument name="actions" xsi:type="array">
+                <item name="get_links" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductLinks\GetLinksAction</item>
+                <item name="add_links" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductLinks\AddLinksAction</item>
+                <item name="remove_links" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductLinks\RemoveLinksAction</item>
+                <item name="set_positions" xsi:type="object">MagoAssistant\Mago\Service\Skills\Catalog\ProductLinks\SetPositionsAction</item>
             </argument>
         </arguments>
     </type>

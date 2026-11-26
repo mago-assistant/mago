@@ -152,6 +152,7 @@ only appears in browsers with built-in speech recognition, such as Chrome, Edge 
 |------------|-------|--------|
 | Store Analytics | `sales_data`, `product_data`, `customer_data` | Read |
 | Catalog | `category_data` (enabled categories without live products, products without a category) | Read |
+| Catalog | `product_links` (related, up-sell and cross-sell products, also in bulk) | Read / Write |
 | Inventory | `dead_stock` (obsolete and slow-moving inventory) | Read |
 | Store Configuration | `config_reader`, `config_writer`, `cache_manager`, `indexer_manager` | Read / Write |
 | Content Management | `cms_data`, `content_generator` | Read / Write |

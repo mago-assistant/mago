@@ -144,7 +144,8 @@ for irreversible actions. Every discount write uses it: `coupon_manager` and
 websites, customer groups (guests called out) and dates it applies to; `create_coupon` says how
 many working codes it creates for which rule; `apply_rules` says it reprices every product from
 all active catalog rules. `review_manager` `approve` says the review goes live on its product
-page right away; an already approved review gets the plain card.
+page right away; an already approved review gets the plain card. `product_links` `add_links`,
+`remove_links` and `set_positions` list every link they add, remove or move, per product.
 `config_writer` uses it for storefront scripts, admin security, URLs, mail routing, developer,
 environment and sensitive settings, with the current and the new value (#245). The ACL still
 decides whether the admin may make the change at all.
@@ -471,6 +472,7 @@ The module ships with these tools, grouped by skill area:
 | Tool | Class | Read-only | Description |
 |------|-------|-----------|-------------|
 | `category_data` | `Service\Skills\Catalog\CategoryData` | Yes | `empty_categories`: enabled categories that show no products, per active store view or one store view (`store`). A product counts when it is enabled and visible in the catalog in that store view, assigned to its website and, when the store hides out-of-stock products, salable in the website's stock (legacy stock status, or the MSI stock index of the website's stock); an anchor category also counts the products of its enabled subcategories, as Magento's category product indexer does. Each row gives the reason (`no_products_assigned`, `no_live_products`, `out_of_stock_only`, `static_block_only`) and the store views it is empty in. `uncategorized_products`: products no enabled category below the store's root leads to, with the reason `no_category`, `root_only` (only the root, or categories of another root) or `disabled_categories_only`; by default only live products (enabled, in the website, visible in the catalog), `only_live: false` checks every product, and the answer flags `is_partial` when the list is cut. Gated by the Categories screen resource (`Magento_Catalog::categories`); `uncategorized_products` also needs `Magento_Catalog::products`. |
+| `product_links` | `Service\Skills\Catalog\ProductLinks` | No | Related, up-sell and cross-sell links (#326). `get_links`: the links of one product (`sku`) per type in position order, with totals and `is_partial`. `add_links`: links every `linked_skus` to every `skus` product, `two_way` also back (not for up-sells); a link that exists is skipped and keeps its position, a new one goes after the last. `remove_links`: the links to `linked_skus`, or every link of `link_type` when omitted; `two_way` also removes the links pointing back. `set_positions`: the listed links of one product first, in the order given, the others after in their current order. At most 50 products and 20 linked SKUs per call. Every write asks with the caution card, listing each link per product; the card, the refusal and the save use the same plan (`LinkPlanner`). Writes go one link at a time through `ProductLinkRepositoryInterface` in one transaction, without saving the product, then clear the product pages from the full page cache. Grouped children (`associated`) are refused. Gated by `Magento_Catalog::products`. |
 
 ### Inventory
 

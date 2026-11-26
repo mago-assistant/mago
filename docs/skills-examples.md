@@ -89,6 +89,17 @@ How many products have no categories assigned?
 Which products are only in disabled categories?
 ```
 
+### product_links (read / write)
+Related, up-sell and cross-sell products. Writes show every link they change on the confirmation card first.
+
+```
+Which related products does WJ10 have?
+Add 24-MB01 and 24-MB04 as cross-sells to all jackets in the Women category
+Relate these three products to each other: WJ10, WJ11, WJ12
+Remove all up-sells from the discontinued products
+Show 24-MB04 first in the related products of WJ10
+```
+
 ### stock_level / stock_level_msi (read-only)
 Stock of one product by SKU. Only one of the two is offered: `stock_level` reads the catalog stock item on stores without Multi-Source Inventory, `stock_level_msi` shows quantity per source and salable quantity per stock when MSI is enabled.
 

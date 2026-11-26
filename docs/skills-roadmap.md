@@ -39,6 +39,7 @@ Overview of all Magento admin areas, current skill coverage, and planned additio
 | `indexer_manager` | status, reindex, reindex_all, set_mode |
 | `cms_data` | list_pages, get_page, update_page, list_blocks, get_block, update_block |
 | `content_generator` | generate_description, generate_meta, generate_short_description |
+| `product_links` | get_links, add_links, remove_links, set_positions (#326) |
 
 ---
 
