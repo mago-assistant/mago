@@ -577,10 +577,14 @@ define(['MagoAssistant_Mago/js/safe-url'], function (safeUrl) {
     }
 
     // W07 Ranked bars: the default for "which / how many".
-    // {label, items: [{label, value, valueText}]}
+    // {label, max, items: [{label, value, valueText}]}
+    // Without max the bars scale to the largest value; with max (100 for percentages) the track
+    // is the whole range, so 5.8% does not fill it (#365). A value above max still fits the track.
     function rankedBars(opts) {
         var items = opts.items || [];
-        var max = maxOf(items.map(function (i) { return i.value; }));
+        var largest = maxOf(items.map(function (i) { return i.value; }));
+        var given = Number(opts.max);
+        var max = isFinite(given) && given > 0 ? Math.max(given, largest) : largest;
         return card('mago-ranked', [
             caption(opts.label),
             el('div', 'mago-ranked-rows', items.map(function (it, i) {

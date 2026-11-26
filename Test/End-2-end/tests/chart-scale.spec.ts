@@ -220,3 +220,35 @@ test('Keeps fourteen labelled columns inside the widget and labels every other d
   ]);
   await expect(widget.locator('.mago-column').nth(4)).toHaveAttribute('aria-label', 'Oct 6 · €601.00');
 });
+
+const fillRate = {
+  type: 'rankedBars',
+  label: 'Least filled attributes',
+  max: 100,
+  items: [
+    {label: 'mageos_shopping_feed_skip_submit', value: 5.8, valueText: '5.8%'},
+    {label: 'collar', value: 0, valueText: '0%'},
+  ],
+};
+
+test('Scales ranked bars to the max they are given instead of to the largest value', async ({page}) => {
+  await chatMock.install(page, widgetAnswer(fillRate));
+  await chatPanel.openOnDashboard(page);
+
+  await chatPanel.askAndAwaitReply(page, 'Which attributes are populated for the least number of SKUs?');
+
+  const fill = chatPanel.lastAssistantMessage(page).locator('.mago-ranked .mago-bar-fill').first();
+  await expect(fill).toHaveAttribute('style', /width: 5\.8%/);
+});
+
+test('Shows a long ranked bar label in full', async ({page}) => {
+  await chatMock.install(page, widgetAnswer(fillRate));
+  await chatPanel.openOnDashboard(page);
+
+  await chatPanel.askAndAwaitReply(page, 'Which attributes are populated for the least number of SKUs?');
+
+  const label = chatPanel.lastAssistantMessage(page).locator('.mago-ranked-label').first();
+  await expect(label).toHaveText('mageos_shopping_feed_skip_submit');
+  expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth && getComputedStyle(el).textOverflow !== 'ellipsis'))
+    .toBe(true);
+});

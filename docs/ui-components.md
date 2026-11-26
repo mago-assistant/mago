@@ -91,7 +91,7 @@ module.
 | W04 | `meter` | `label`, `value`, `max`, `valueText`, `note` |
 | W05 | `ring` | `label`, `percent`, `valueText`, `legend: [{label, value, color}]` |
 | W06 | `composition` | `label`, `segments: [{label, value, valueText, color}]` |
-| W07 | `rankedBars` | `label`, `items: [{label, value, valueText, color, onClick}]` |
+| W07 | `rankedBars` | `label`, `max` (optional, e.g. 100 for percentages; default the largest value), `items: [{label, value, valueText, color, onClick}]` |
 | W08 | `columns` | `label`, `currency`, `points: [{label, value, valueText, highlight}]` |
 | W09 | `lines` | `label`, `currency`, `series: [{label, points, style: solid\|dashed}]`, `xLabels` |
 | W10 | `stackedColumns` | `label`, `currency`, `series: [{label, color}]`, `points: [{label, values}]` |

@@ -49,7 +49,8 @@ class AnswerWidgets
             . '"value":222},{"label":"Hold","value":54}]} — 100% split over 3–4 parts.',
         'rankedBars' => '{"type":"rankedBars","label":"Orders per category","items":[{"label":"Accessories",'
             . '"value":61},{"label":"Lighting","value":38}]} — the default for "which / how many"; '
-            . 'highest first, at most 6 items.',
+            . 'highest first, at most 6 items. For percentages add "max":100 so the bars run from 0 to 100 '
+            . 'instead of to the largest value.',
         'columns' => '{"type":"columns","label":"Revenue per day","currency":"EUR","points":[{"label":"Mon",'
             . '"value":44},{"label":"Tue","value":58}]} — values over time, at most 14 points.',
         'lines' => '{"type":"lines","label":"Revenue, 30 days","currency":"EUR","series":[{"label":"now",'

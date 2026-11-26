@@ -701,10 +701,13 @@
     }
 }
 
+// One grid for every row, so the label column sizes to the longest label (up to 45%) and all
+// tracks still start at the same x; a label past that wraps instead of being cut off (#365).
 .mago-ranked-rows {
-    display: flex;
-    flex-direction: column;
-    gap: @mago-size__12;
+    display: grid;
+    grid-template-columns: fit-content(45%) minmax(0, 1fr) auto;
+    column-gap: @mago-size__12;
+    row-gap: @mago-size__12;
 
     .mago-caption + & {
         margin-top: @mago-size__16;
@@ -712,10 +715,16 @@
 }
 
 .mago-ranked-row {
-    display: flex;
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: @mago-size__88 minmax(0, 1fr) auto;
     align-items: center;
-    gap: @mago-size__12;
+    column-gap: @mago-size__12;
     border-radius: @mago-size__6;
+
+    @supports (grid-template-columns: subgrid) {
+        grid-template-columns: subgrid;
+    }
 
     &.is-clickable:hover .mago-ranked-label {
         color: var(--mago-accent-ink, #B84000);
@@ -725,15 +734,8 @@
 .mago-ranked-label {
     font-size: @mago-font-size__13;
     color: var(--mago-ink-soft, #6B645F);
-    width: @mago-size__88;
-    flex: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.mago-ranked-row .mago-bar-track {
-    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .mago-ranked-value {
