@@ -33,7 +33,29 @@ final class FakeBackendUrl implements UrlInterface
 
     public function getUrl($routePath = null, $routeParams = null): string
     {
-        return $this->baseUrl . $this->frontName . '/' . trim((string)$routePath, '/') . '/';
+        return $this->baseUrl . $this->frontName . '/' . trim((string)$routePath, '/') . '/'
+            . $this->routeParamsPath(is_array($routeParams) ? $routeParams : []);
+    }
+
+    /**
+     * Route params as Magento writes them into an admin URL: key/value/ per param, without the reserved
+     * ones starting with an underscore (_secure, _query, ...)
+     *
+     * @param array<string,mixed> $routeParams
+     */
+    private function routeParamsPath(array $routeParams): string
+    {
+        $routeParams = array_filter(
+            $routeParams,
+            static fn (string|int $key): bool => !str_starts_with((string)$key, '_'),
+            ARRAY_FILTER_USE_KEY
+        );
+
+        return implode('', array_map(
+            static fn (string $key, mixed $value): string => $key . '/' . (is_scalar($value) ? (string)$value : '') . '/',
+            array_keys($routeParams),
+            $routeParams
+        ));
     }
 
     public function getRouteUrl($routePath = null, $routeParams = null): string

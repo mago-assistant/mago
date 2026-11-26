@@ -32,7 +32,7 @@ class SearchAction implements ExportableActionInterface
 
     public function getDescription(): string
     {
-        return 'Search products by name/keyword';
+        return 'Search products by name, keyword or (partial) SKU';
     }
 
     public function getParameterSchema(): array
@@ -92,7 +92,7 @@ class SearchAction implements ExportableActionInterface
 
         $limit = ResultLimit::fromParams($params, self::DEFAULT_LIMIT, self::MAX_LIMIT);
         $result = $this->apiClient->get('products', $this->apiClient->buildSearchCriteria(
-            $this->nameFilter((string)$query),
+            $this->nameOrSkuFilter((string)$query),
             $limit
         ), $adminUserId);
 
@@ -133,7 +133,7 @@ class SearchAction implements ExportableActionInterface
         }
 
         $result = $this->apiClient->get('products', $this->apiClient->buildSearchCriteria(
-            $this->nameFilter($query),
+            $this->nameOrSkuFilter($query),
             1
         ), $adminUserId);
         if (isset($result['error'])) {
@@ -165,7 +165,7 @@ class SearchAction implements ExportableActionInterface
         $rowCount = 0;
         for ($page = 1; $rowCount < $maxRows; $page++) {
             $result = $this->apiClient->get('products', $this->apiClient->buildSearchCriteria(
-                $this->nameFilter($query),
+                $this->nameOrSkuFilter($query),
                 $pageSize,
                 $page,
                 [['field' => 'entity_id', 'direction' => 'ASC']]
@@ -187,11 +187,16 @@ class SearchAction implements ExportableActionInterface
     }
 
     /**
-     * @return list<array<string, string>>
+     * One filter group, so the name and SKU conditions are ORed
+     *
+     * @return list<list<array<string, string>>>
      */
-    private function nameFilter(string $query): array
+    private function nameOrSkuFilter(string $query): array
     {
-        return [['field' => 'name', 'value' => '%' . $query . '%', 'condition_type' => 'like']];
+        return [array_map(
+            static fn (string $field): array => ['field' => $field, 'value' => '%' . $query . '%', 'condition_type' => 'like'],
+            ['name', 'sku']
+        )];
     }
 
     /**
