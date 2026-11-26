@@ -16,7 +16,8 @@ class DeactivateRuleAction implements ActionInterface
     public function __construct(
         private readonly CatalogRuleServices $catalogRules,
         private readonly SecureAdminUrl $secureAdminUrl,
-        private readonly ErrorReporter $errorReporter
+        private readonly ErrorReporter $errorReporter,
+        private readonly RulePriceReindexer $reindexer
     ) {
     }
 
@@ -89,7 +90,7 @@ class DeactivateRuleAction implements ActionInterface
                 'rule_id' => $ruleId,
                 'name' => $ruleName,
                 'message' => 'Catalog price rule "' . $ruleName . '" has been deactivated. '
-                    . 'Run apply_rules to apply the changes to product prices.',
+                    . $this->reindexer->describeAfterSave($ruleId),
                 'admin_url' => $this->secureAdminUrl->getUrl(
                     'catalog_rule/promo_catalog/edit',
                     ['id' => $ruleId]

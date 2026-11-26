@@ -141,9 +141,19 @@ A skill action does the same by implementing `MagoAssistant\Mago\Api\Skill\Cauti
 (`getCautions(array $params, int $adminUserId)`); `AbstractSkill` passes the lines on, as it does
 for irreversible actions. Every discount write uses it: `coupon_manager` and
 `catalog_price_rules` `create_rule` name the discount, whether it needs a coupon, and the
-websites, customer groups (guests called out) and dates it applies to; `create_coupon` says how
-many working codes it creates for which rule; `apply_rules` says it reprices every product from
-all active catalog rules. `review_manager` `approve` says the review goes live on its product
+websites, customer groups (guests called out) and dates it applies to; a catalog rule with
+conditions also names them and how many products they match right now, with up to five examples
+(`MatchingProducts`, the same `Rule::getMatchingProductIds()` the indexer uses).
+`catalog_price_rules` `update_rule` lists each field it changes, old and new value, and says when it
+switches a rule on or off. Both refuse before the card (`findRefusal`) when a condition names an
+unknown or ambiguous attribute or option, an attribute without "Use for Promo Rule Conditions"
+(Magento itself would save it and match nothing), or matches no product at all; `create_coupon` says how
+many working codes it creates for which rule; `apply_rules` says either that it recalculates
+now the prices of the products one rule reaches (with `rule_id`, through `RulePriceReindexer`, which
+forces the catalog rule product and price indexers for just those products and cleans their page
+cache), or that it only marks every active rule for the full reindex cron runs. After a catalog rule
+save the result says whether prices are already recalculated ("Update on Save") or the model should
+propose `apply_rules` with that `rule_id`. `review_manager` `approve` says the review goes live on its product
 page right away; an already approved review gets the plain card.
 `config_writer` uses it for storefront scripts, admin security, URLs, mail routing, developer,
 environment and sensitive settings, with the current and the new value (#245). The ACL still
