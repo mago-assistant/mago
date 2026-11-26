@@ -64,7 +64,7 @@ final class DataSkillsAclTest extends TestCase
     {
         $skill = new ProductData(new FakeAuthorization(), $this->routeMap());
 
-        foreach (['count', 'get_by_sku', 'search'] as $action) {
+        foreach (['count', 'get_by_sku', 'search', 'attribute_fill_rate'] as $action) {
             self::assertSame('Magento_Catalog::products', $skill->getMagentoAcl(['action' => $action]), $action);
         }
     }

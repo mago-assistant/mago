@@ -1323,6 +1323,7 @@ class ChatService implements ChatServiceInterface
             'product_data.search' => 'Searching products...',
             'product_data.low_stock' => 'Checking low stock...',
             'product_data.get_by_sku' => 'Fetching product...',
+            'product_data.attribute_fill_rate' => 'Checking attribute fill rates...',
             'category_data.empty_categories' => 'Finding empty categories...',
             'category_data.uncategorized_products' => 'Finding products without a category...',
             'stock_level' => 'Checking stock...',
