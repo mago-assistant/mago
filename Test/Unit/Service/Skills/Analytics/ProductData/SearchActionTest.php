@@ -60,6 +60,47 @@ class SearchActionTest extends TestCase
         self::assertArrayNotHasKey('admin_url', $result['products'][1]);
     }
 
+    /**
+     * "Open MH02-S-Red": when get_by_sku is not used, a search for the SKU has to find the product too.
+     * Name and SKU sit in one filter group, so they are ORed.
+     */
+    #[Test]
+    public function itMatchesTheQueryOnNameOrSku(): void
+    {
+        $this->action(['items' => [], 'total_count' => 0])->execute(['query' => 'MH02-S-Red'], self::ADMIN_USER_ID);
+
+        $payload = $this->apiClient->callsOf(FakeInternalApiClient::GET)[0]['payload'];
+        self::assertSame(
+            [['name', '%MH02-S-Red%', 'like'], ['sku', '%MH02-S-Red%', 'like']],
+            $this->filtersOfFirstGroup($payload)
+        );
+        self::assertArrayNotHasKey('searchCriteria[filter_groups][1][filters][0][field]', $payload);
+    }
+
+    #[Test]
+    public function theExportCountMatchesOnSkuToo(): void
+    {
+        $this->action(['items' => [], 'total_count' => 3])->countExportRows(['query' => 'MH02'], self::ADMIN_USER_ID);
+
+        $payload = $this->apiClient->callsOf(FakeInternalApiClient::GET)[0]['payload'];
+        self::assertSame(['name', 'sku'], array_column($this->filtersOfFirstGroup($payload), 0));
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return list<array{mixed,mixed,mixed}> field, value and condition per filter
+     */
+    private function filtersOfFirstGroup(array $payload): array
+    {
+        $filters = [];
+        for ($index = 0; isset($payload['searchCriteria[filter_groups][0][filters][' . $index . '][field]']); $index++) {
+            $prefix = 'searchCriteria[filter_groups][0][filters][' . $index . ']';
+            $filters[] = [$payload[$prefix . '[field]'], $payload[$prefix . '[value]'], $payload[$prefix . '[conditionType]']];
+        }
+
+        return $filters;
+    }
+
     #[Test]
     public function itAsksForTwentyByDefaultAndClampsBetweenOneAndFifty(): void
     {
