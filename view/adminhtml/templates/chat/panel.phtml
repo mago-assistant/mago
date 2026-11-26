@@ -1,6 +1,7 @@
 <?php
 /** @var \MagoAssistant\Mago\Block\Adminhtml\ChatPanel $block */
 /** @var \Magento\Framework\Escaper $escaper */
+/** @var \Magento\Framework\View\Helper\SecureHtmlRenderer $secureRenderer */
 if (!$block->isVisible()) {
     return;
 }
@@ -26,6 +27,30 @@ if ($luminance < 0.3) {
 $assistantName = $block->getAssistantName();
 $adminName = $block->getAdminFirstName();
 $hasAccess = $block->canUseAssistant();
+// Only rendered for an admin without access, next to the locked launcher it opens
+$lockedScript = <<<'JS'
+(function () {
+    'use strict';
+    var launcher = document.getElementById('mago-launcher-locked');
+    var panel = document.getElementById('mago-locked');
+    var close = document.getElementById('mago-locked-close');
+    if (!launcher || !panel) {
+        return;
+    }
+    function setOpen(open) {
+        panel.hidden = !open;
+        launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    launcher.addEventListener('click', function () {
+        setOpen(panel.hidden);
+    });
+    if (close) {
+        close.addEventListener('click', function () {
+            setOpen(false);
+        });
+    }
+})();
+JS;
 $exampleQuestions = $block->getExampleQuestions();
 $starterIcons = [
     'stock' => '<path d="M3 7l6 6 4-4 8 8"/><path d="M21 11v6h-6"/>',
@@ -101,29 +126,7 @@ $starterIcons = [
         <p><?= $escaper->escapeHtml(__('Your account is not allowed to use the assistant. Ask your store administrator to grant you access, then reload this page.')) ?></p>
     </div>
 </div>
-<script>
-(function () {
-    'use strict';
-    var launcher = document.getElementById('mago-launcher-locked');
-    var panel = document.getElementById('mago-locked');
-    var close = document.getElementById('mago-locked-close');
-    if (!launcher || !panel) {
-        return;
-    }
-    function setOpen(open) {
-        panel.hidden = !open;
-        launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
-    }
-    launcher.addEventListener('click', function () {
-        setOpen(panel.hidden);
-    });
-    if (close) {
-        close.addEventListener('click', function () {
-            setOpen(false);
-        });
-    }
-})();
-</script>
+<?= /* @noEscape */ $secureRenderer->renderTag('script', [], $lockedScript, false) ?>
 <?php return; ?>
 <?php endif; ?>
 
@@ -233,15 +236,16 @@ $starterIcons = [
     </div>
 </aside>
 
-<script>
-window.MAGO_CONFIG = <?= /* @noEscape */ $block->getJsConfig() ?>;
-window.MAGO_CONFIG.adminUser = '<?= $escaper->escapeJs($adminName) ?>';
-window.MAGO_CONFIG.assistantName = '<?= $escaper->escapeJs($assistantName) ?>';
-window.MAGO_CONFIG.formKey = '<?= $escaper->escapeJs($block->getFormKey()) ?>';
-window.MAGO_CONFIG.skills = <?= /* @noEscape */ $block->getSkillsJson() ?>;
-window.MAGO_CONFIG.commands = <?= /* @noEscape */ $block->getCommandsJson() ?>;
-</script>
-<script>
+<?php
+// Rendered through the secure renderer so a page with an enforced CSP (Sales > Create New Order)
+// gets a hash for each script instead of blocking it and leaving MAGO_CONFIG undefined (#364).
+$configScript = 'window.MAGO_CONFIG = ' . /* @noEscape */ $block->getJsConfig() . ";\n"
+    . "window.MAGO_CONFIG.adminUser = '" . $escaper->escapeJs($adminName) . "';\n"
+    . "window.MAGO_CONFIG.assistantName = '" . $escaper->escapeJs($assistantName) . "';\n"
+    . "window.MAGO_CONFIG.formKey = '" . $escaper->escapeJs($block->getFormKey()) . "';\n"
+    . 'window.MAGO_CONFIG.skills = ' . /* @noEscape */ $block->getSkillsJson() . ";\n"
+    . 'window.MAGO_CONFIG.commands = ' . /* @noEscape */ $block->getCommandsJson() . ";\n";
+$loaderScript = <<<'JS'
 // Magento applies requirejs mixins only to modules required after its "mixins" module has
 // wrapped require(), and this inline script can run before that. Loading it first is what lets
 // another module extend mago-ui (MagoUI.register() from a mixin, see docs/widgets.md). Without a
@@ -255,4 +259,7 @@ window.MAGO_CONFIG.commands = <?= /* @noEscape */ $block->getCommandsJson() ?>;
     }
     require(['mixins'], loadPanel, loadPanel);
 })();
-</script>
+JS;
+?>
+<?= /* @noEscape */ $secureRenderer->renderTag('script', [], $configScript, false) ?>
+<?= /* @noEscape */ $secureRenderer->renderTag('script', [], $loaderScript, false) ?>

@@ -922,15 +922,20 @@ define([
                     pendingTools = pendingTools.concat(tools);
                 }
 
-                var isConfirmRow = m.role === 'assistant' && !(m.content || '').trim() && tools.length;
+                // A still-pending proposal can come with text before it ("I will add that note");
+                // live, that text and the card share one bubble, so the reload has to rebuild the
+                // card there too or the admin is left without Allow / Not now (#364).
+                var hasText = !!(m.content || '').trim();
+                var isPending = parseInt(m.pending_confirmation, 10) === 1;
+                var isConfirmRow = m.role === 'assistant' && tools.length && (!hasText || isPending);
                 if (isConfirmRow) {
                     addDateSep(m.created_at);
                     // No timestamp: live this bubble only ever holds the card, and the time of the
                     // turn is printed under the answer that follows it.
-                    var confirmEl = addMsg('assistant', '');
+                    var confirmEl = addMsg('assistant', hasText ? renderMd(m.content, tokens) : '');
                     replayTools(confirmEl, pendingTools, tools);
                     pendingTools = [];
-                    if (parseInt(m.pending_confirmation, 10) === 1) {
+                    if (isPending) {
                         showConfirmButtons(confirmEl, {messageId: m.entity_id}, tools);
                     } else {
                         restoreWriteResult(confirmEl, tools);
