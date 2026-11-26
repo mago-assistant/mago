@@ -131,7 +131,7 @@ class GetLinksAction implements ActionInterface
             fn (ProductLink $link): array => [
                 'link_type' => $link->type->value,
                 'sku' => $link->linkedSku,
-                'name' => $linkedProducts->find($link->linkedSku)?->name ?? '',
+                'name' => $linkedProducts->find($link->linkedSku)->name ?? '',
                 'status' => $this->status($linkedProducts->find($link->linkedSku)),
                 'position' => $link->position,
             ],

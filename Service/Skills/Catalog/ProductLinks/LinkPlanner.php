@@ -333,6 +333,6 @@ class LinkPlanner
 
     private function canonical(string $sku, CatalogProducts $products): string
     {
-        return $products->find($sku)?->sku ?? $sku;
+        return $products->find($sku)->sku ?? $sku;
     }
 }

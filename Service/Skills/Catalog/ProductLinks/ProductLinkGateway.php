@@ -108,7 +108,7 @@ class ProductLinkGateway implements ProductLinkGatewayInterface
             ->where('link.link_type_id = ?', $this->linkTypeId($type))
             ->order(['link.product_id ASC', 'position.value ASC', 'link.link_id ASC']);
 
-        return array_map(
+        return array_values(array_map(
             static fn (array $row): ProductLink => new ProductLink(
                 $skusByRow[(int)$row['product_id']],
                 $type,
@@ -116,7 +116,7 @@ class ProductLinkGateway implements ProductLinkGatewayInterface
                 (int)$row['position']
             ),
             $connection->fetchAll($select)
-        );
+        ));
     }
 
     /**
