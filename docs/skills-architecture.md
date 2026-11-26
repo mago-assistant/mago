@@ -141,7 +141,9 @@ A skill action does the same by implementing `MagoAssistant\Mago\Api\Skill\Cauti
 (`getCautions(array $params, int $adminUserId)`); `AbstractSkill` passes the lines on, as it does
 for irreversible actions. Every discount write uses it: `coupon_manager` and
 `catalog_price_rules` `create_rule` name the discount, whether it needs a coupon, and the
-websites, customer groups (guests called out) and dates it applies to; `create_coupon` says how
+websites, customer groups (guests called out) and dates it applies to; `coupon_manager`
+`create_rule` also spells out its conditions and actions with categories, attributes, options and
+countries by name, and `update_rule` shows each changed part before and after; `create_coupon` says how
 many working codes it creates for which rule; `apply_rules` says it reprices every product from
 all active catalog rules. `review_manager` `approve` says the review goes live on its product
 page right away; an already approved review gets the plain card.

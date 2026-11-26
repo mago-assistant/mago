@@ -52,10 +52,19 @@ Cart price rules and coupon code management.
 - `list_rules` — list active cart price rules
 - `get_rule` — get rule details
 - `create_coupon` — generate coupon code for existing rule
-- `create_rule` — create new cart price rule with conditions
+- `create_rule` — create new cart price rule with conditions (cart subtotal, item quantity, shipping
+  country, product found or not found in the cart), actions (which items get the discount), a
+  maximum quantity, a step and buy X get Y. Product rules can sit in one level of groups, and a
+  tree or group can require its rules to fail (the admin's "If ALL/ANY of these conditions are FALSE")
+- `update_rule` — change conditions, actions, discount settings, name, description or dates of a rule
+- `find_rule_targets` — look up category, promo attribute and option ids by name
 - `deactivate_rule` — disable a price rule
 - **Magento ACL:** `Magento_SalesRule::quote`
-- **Use cases:** "Create a 20% off coupon for the summer sale", "Show active discount rules", "Generate 100 unique coupon codes for campaign X"
+- **Use cases:** "Create a 20% off coupon for the summer sale", "Show active discount rules", "Generate 100 unique coupon codes for campaign X", "10% off when the subtotal is over €100", "Change rule 12 so it no longer applies to the Open Box category"
+- **Not supported:** a "cheapest item" discount (Magento has none; buy X get Y is offered instead),
+  payment or shipping method, postcode, region and weight conditions, product subselections, groups
+  inside groups, and groups of cart-level conditions;
+  `update_rule` refuses to replace conditions or actions it cannot read and points to the admin.
 
 #### `catalog_price_rules`
 Catalog-level price rules (automatic discounts without coupon).

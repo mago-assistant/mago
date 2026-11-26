@@ -18,7 +18,9 @@ class GetRuleAction implements ActionInterface
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl,
-        private readonly RuleState $ruleState
+        private readonly RuleState $ruleState,
+        private readonly RuleConditionReader $conditionReader,
+        private readonly RuleConditionDescriber $conditionDescriber
     ) {
     }
 
@@ -89,6 +91,23 @@ class GetRuleAction implements ActionInterface
             'operator' => [PiiClass::PUBLIC],
             'attribute_name' => [PiiClass::PUBLIC],
             'value' => [PiiClass::PUBLIC],
+            'discount_qty' => [PiiClass::PUBLIC],
+            'discount_step' => [PiiClass::PUBLIC],
+            'conditions' => [PiiClass::PUBLIC],
+            'actions' => [PiiClass::PUBLIC],
+            'conditions_summary' => [PiiClass::PUBLIC],
+            'actions_summary' => [PiiClass::PUBLIC],
+            'conditions_readable' => [PiiClass::PUBLIC],
+            'actions_readable' => [PiiClass::PUBLIC],
+            'conditions_note' => [PiiClass::PUBLIC],
+            'actions_note' => [PiiClass::PUBLIC],
+            'match' => [PiiClass::PUBLIC],
+            'rules' => [PiiClass::PUBLIC],
+            'field' => [PiiClass::PUBLIC],
+            'presence' => [PiiClass::PUBLIC],
+            'group' => [PiiClass::PUBLIC],
+            'is' => [PiiClass::PUBLIC],
+            'attribute' => [PiiClass::PUBLIC],
         ];
     }
 
@@ -149,14 +168,57 @@ class GetRuleAction implements ActionInterface
                 'website_ids' => $result['website_ids'] ?? [],
                 'customer_group_ids' => $result['customer_group_ids'] ?? [],
                 'simple_free_shipping' => (bool)($result['simple_free_shipping'] ?? false),
-                'condition' => $result['condition'] ?? null,
-                'action_condition' => $result['action_condition'] ?? null,
+                'discount_qty' => (int)($result['discount_qty'] ?? 0),
+                'discount_step' => (int)($result['discount_step'] ?? 0),
+                ...$this->tree(
+                    'conditions',
+                    'condition',
+                    $result,
+                    $this->conditionReader->readConditions($result['condition'] ?? null),
+                    $this->conditionDescriber->describeConditions(...),
+                    $adminUserId
+                ),
+                ...$this->tree(
+                    'actions',
+                    'action_condition',
+                    $result,
+                    $this->conditionReader->readActions($result['action_condition'] ?? null),
+                    $this->conditionDescriber->describeActions(...),
+                    $adminUserId
+                ),
                 'admin_url' => $this->secureAdminUrl->getUrl(
                     'sales_rule/promo_quote/edit',
                     ['id' => (int)($result['rule_id'] ?? 0)]
                 ),
             ],
         ];
+    }
+
+    /**
+     * A tree Mago can read comes back in the words update_rule takes, with a plain summary. One it
+     * cannot read comes back raw, flagged, so the model says it has to be changed in the admin.
+     *
+     * @param array<string, mixed> $rule
+     * @param array<string, mixed>|null $readable
+     * @param callable(array<string, mixed>, int): string $describe
+     * @return array<string, mixed>
+     */
+    private function tree(
+        string $key,
+        string $restKey,
+        array $rule,
+        ?array $readable,
+        callable $describe,
+        int $adminUserId
+    ): array {
+        return $readable === null
+            ? [
+                $key . '_readable' => false,
+                $key . '_note' => 'These ' . $key . ' hold parts Mago cannot read, so update_rule cannot change '
+                    . 'them. They can only be changed in the admin (admin_url).',
+                $restKey => $rule[$restKey] ?? null,
+            ]
+            : [$key => $readable, $key . '_summary' => $describe($readable, $adminUserId)];
     }
 
     /**

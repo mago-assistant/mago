@@ -181,6 +181,8 @@
                 <item name="get_rule" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\GetRuleAction</item>
                 <item name="create_coupon" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\CreateCouponAction</item>
                 <item name="create_rule" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\CreateRuleAction</item>
+                <item name="update_rule" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\UpdateRuleAction</item>
+                <item name="find_rule_targets" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\FindRuleTargetsAction</item>
                 <item name="deactivate_rule" xsi:type="object">MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\DeactivateRuleAction</item>
             </argument>
         </arguments>
