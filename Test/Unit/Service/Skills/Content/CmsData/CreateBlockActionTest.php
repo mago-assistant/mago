@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Content\CmsData;
 
+use MagoAssistant\Mago\Service\Skills\Content\CmsData\CmsWriteCautions;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\CreateBlockAction;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
@@ -79,6 +80,11 @@ class CreateBlockActionTest extends TestCase
             ->with('cms/block/edit', ['block_id' => 3])
             ->willReturn('https://admin.example/cms/block/edit/block_id/3/');
 
-        return new CreateBlockAction($apiClient, new StoreScopeContext($this->multiStoreManager()), $secureAdminUrl);
+        return new CreateBlockAction(
+            $apiClient,
+            new StoreScopeContext($this->multiStoreManager()),
+            $secureAdminUrl,
+            new CmsWriteCautions()
+        );
     }
 }

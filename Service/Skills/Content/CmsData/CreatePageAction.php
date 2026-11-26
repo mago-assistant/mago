@@ -6,18 +6,19 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Service\Skills\Content\CmsData;
 
-use MagoAssistant\Mago\Api\Skill\ActionInterface;
+use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
 use MagoAssistant\Mago\Service\Store\StoreScopeContext;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class CreatePageAction implements ActionInterface
+class CreatePageAction implements CautionedActionInterface
 {
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
         private readonly StoreScopeContext $scopeContext,
-        private readonly SecureAdminUrl $secureAdminUrl
+        private readonly SecureAdminUrl $secureAdminUrl,
+        private readonly CmsWriteCautions $cautions
     ) {
     }
 
@@ -93,6 +94,15 @@ class CreatePageAction implements ActionInterface
         return 'New pages belong to all store views unless store_id names one store view. On a multi-store '
             . 'installation, ask which store view the page is for when the user did not say and the content is '
             . 'store-specific (language, brand, region); otherwise create it for all store views.';
+    }
+
+    public function getCautions(array $params, int $adminUserId): array
+    {
+        return $this->cautions->forCreate(
+            CmsWriteCautions::PAGE,
+            $params,
+            $this->scopeContext->describeStoreTarget((int)($params['store_id'] ?? 0))
+        );
     }
 
     public function execute(array $params, int $adminUserId): array

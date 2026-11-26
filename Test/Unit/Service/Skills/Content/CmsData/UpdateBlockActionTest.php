@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Content\CmsData;
 
+use MagoAssistant\Mago\Service\Skills\Content\CmsData\CmsWriteCautions;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\GetBlockAction;
 use MagoAssistant\Mago\Service\Skills\Content\CmsData\UpdateBlockAction;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
@@ -36,7 +37,8 @@ class UpdateBlockActionTest extends TestCase
         return new UpdateBlockAction(
             $this->apiClient,
             new GetBlockAction($this->apiClient),
-            new SecureAdminUrl(new FakeBackendUrl())
+            new SecureAdminUrl(new FakeBackendUrl()),
+            new CmsWriteCautions()
         );
     }
 
