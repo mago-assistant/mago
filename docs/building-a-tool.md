@@ -42,7 +42,9 @@ The module is written to `app/code/<Vendor>/<Module>/`. An existing directory is
 To develop the tool as its own composer package (for example to publish it later), pass the module
 directory with `--path`, e.g. `--path=package-source/magento2-vies`. The command then prints the
 path repository and `composer require` steps to install it from there. `--class` and `--package`
-override the derived class and composer names.
+override the derived class and composer names. The generated `composer.json` requires
+`mago-assistant/magento2-mago` at the release line installed in the project (`^1.1` next to 1.1.x), so the
+printed `composer require` resolves; a dev branch or path checkout of Mago falls back to the current line.
 
 When the ACL resource belongs to the new module (`MagoAssistant_Vies::check`), the command also
 writes `etc/acl.xml` declaring it under the assistant's resource tree.
@@ -67,6 +69,11 @@ The methods, and what goes wrong with each:
   that no action of the tool declares is logged as a warning ("Tool Arguments Never Declared") in
   Mago's error log, debug mode or not; with debug logging on, every dropped key shows up as "Tool
   Arguments Dropped".
+  `required` is a list of property names on the object that holds them (`'required' => ['sku']`), never
+  a flag on a property (`'required' => true`): OpenAI rejects the whole tool for that ("True is not of
+  type 'array'"). Say in the description that a parameter is needed, and check it in `execute()`.
+  `mago:tool:verify` fails on a flag, also one that a skill's combined schema hides behind another
+  action's declaration of the same parameter.
 - `getMagentoAcl(array $input = [])`: an empty `$input` must return the most restrictive resource
   the tool can reach (fail closed). A tool that touches no Magento data returns
   `Acl::MAGO_PER_USER`, which gates it by the per-user skill permission alone. Never `''`: an
@@ -182,7 +189,7 @@ empty while their data patches stay marked as applied. Use a throwaway database 
 Access: an admin can use the tool when they hold `MagoAssistant_Mago::assistant_read` (or
 `assistant_write` for writes), unless a row in `mago_skill_permission` for that admin and tool
 says otherwise, and the Magento ACL resource from `getMagentoAcl()` allows it. A tool declaring
-`Acl::MAGO_PER_USER` instead needs that row, an explicit grant under Stores > Admin Assistant > Skills & Permissions, and
+`Acl::MAGO_PER_USER` instead needs that row, an explicit grant under Stores > Mago Assistant > Skills & Permissions, and
 is not covered by the module-wide resources. Without the row the model still sees the tool (its read actions only, when it
 has any) and relays the refusal; the slash legend and command menu leave it out. Return `MAGO_PER_USER` for the whole tool,
 not from a single action's `getActionAcl()`.

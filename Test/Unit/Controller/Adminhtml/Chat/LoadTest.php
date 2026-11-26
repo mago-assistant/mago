@@ -73,14 +73,47 @@ final class LoadTest extends TestCase
     }
 
     /**
+     * Audit 2026-11-02 finding 2: a pending confirmation row stores its impact lines tokenised, so
+     * the values behind those tokens must ride along too, or a reloaded card shows mago://order_1
+     * where the order number it cancels belongs.
+     */
+    #[Test]
+    public function itSendsTheValueOfATokenThatOnlyOccursInStoredImpactLines(): void
+    {
+        $vault = new ConversationVault();
+        $order = $vault->tokenise('000000549', 'order');
+
+        $this->loadMessages($vault, [[
+            'role' => 'assistant',
+            'content' => '',
+            'tool_calls' => (new Json())->serialize([[
+                'id' => 'call_1',
+                'name' => 'order_manager',
+                'input' => ['action' => 'cancel', 'order_number' => $order],
+                'irreversible' => true,
+                'impacts' => ['Order #' . $order . ' is canceled and cannot be reopened.'],
+            ]]),
+        ]]);
+
+        self::assertSame([$order => '000000549'], $this->response['tokens']);
+    }
+
+    /**
      * @param list<string> $contents
      */
     private function load(ConversationVault $vault, array $contents): void
     {
-        $messages = array_map(
+        $this->loadMessages($vault, array_map(
             static fn (string $content): array => ['role' => 'assistant', 'content' => $content],
             $contents
-        );
+        ));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $messages
+     */
+    private function loadMessages(ConversationVault $vault, array $messages): void
+    {
         $repository = new FakeConversationRepository(
             [self::CONVERSATION_ID => ['entity_id' => self::CONVERSATION_ID, 'admin_user_id' => self::ADMIN_ID, 'title' => 'Reviews']],
             [self::CONVERSATION_ID => $messages]
@@ -92,7 +125,8 @@ final class LoadTest extends TestCase
             $this->jsonFactory(),
             new PrivacyService(new PrivacyFilter($vault, new PiiHeuristic()), $vault, new PiiHeuristic()),
             (new \ReflectionClass(FlagRepository::class))->newInstanceWithoutConstructor(),
-            new ErrorReporter(new ErrorLogger(new FakeLogger(), new Json()), new PiiHeuristic())
+            new ErrorReporter(new ErrorLogger(new FakeLogger(), new Json()), new PiiHeuristic()),
+            new Json()
         );
 
         $controller->execute();

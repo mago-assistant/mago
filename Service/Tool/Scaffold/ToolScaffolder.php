@@ -8,6 +8,7 @@ namespace MagoAssistant\Mago\Service\Tool\Scaffold;
 
 use Magento\Framework\Exception\FileSystemException;
 use Magento\Framework\Filesystem\Driver\File;
+use MagoAssistant\Mago\Api\ModuleInfo\InstalledPackagesInterface;
 
 /**
  * Renders the files of a new tool module from the templates next to this class. The templates end
@@ -26,8 +27,17 @@ class ToolScaffolder
 
     private const ACL_TEMPLATE = ['acl.xml.tpl' => 'etc/acl.xml'];
 
+    private const MAGO_PACKAGE = 'mago-assistant/magento2-mago';
+
+    /**
+     * Release line a new module requires when the installed Mago has no release version (a dev branch
+     * or path checkout). ponytail: bump with each new minor or major release line.
+     */
+    private const FALLBACK_CONSTRAINT = '^1.1';
+
     public function __construct(
-        private readonly File $fileDriver
+        private readonly File $fileDriver,
+        private readonly InstalledPackagesInterface $installedPackages
     ) {
     }
 
@@ -66,6 +76,20 @@ class ToolScaffolder
             '{{acl}}' => $scaffold->acl,
             '{{access}}' => $scaffold->access->value,
             '{{is_read_only}}' => $scaffold->isReadOnly() ? 'true' : 'false',
+            '{{mago_constraint}}' => $this->magoConstraint(),
         ];
+    }
+
+    /**
+     * ^major.minor of the installed Mago, so the new module installs next to it right away
+     */
+    private function magoConstraint(): string
+    {
+        $version = $this->installedPackages->getVersion(self::MAGO_PACKAGE);
+        if (!preg_match('/^v?(\d+)\.(\d+)(?:\.|$)/', $version, $match)) {
+            return self::FALLBACK_CONSTRAINT;
+        }
+
+        return '^' . $match[1] . '.' . $match[2];
     }
 }

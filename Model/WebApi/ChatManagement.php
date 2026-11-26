@@ -15,6 +15,7 @@ use MagoAssistant\Mago\Api\WebApi\ChatManagementInterface;
 use MagoAssistant\Mago\Model\Conversation\ConfirmRequest;
 use MagoAssistant\Mago\Service\Ai\ChatService;
 use MagoAssistant\Mago\Service\Conversation\ConfirmationClaim;
+use MagoAssistant\Mago\Service\Conversation\ProposalSuperseder;
 use MagoAssistant\Mago\Service\Error\ErrorReporter;
 use MagoAssistant\Mago\Service\Privacy\PrivacyService;
 
@@ -27,7 +28,8 @@ class ChatManagement implements ChatManagementInterface
         private readonly Json $json,
         private readonly ErrorReporter $errorReporter,
         private readonly PrivacyService $privacyService,
-        private readonly ConfirmationClaim $confirmationClaim
+        private readonly ConfirmationClaim $confirmationClaim,
+        private readonly ProposalSuperseder $proposalSuperseder
     ) {
     }
 
@@ -54,6 +56,10 @@ class ChatManagement implements ChatManagementInterface
                     $this->privacyService->safeTitle($message)
                 );
             }
+            // A new message moves past every open proposal, here like in the Stream controller (#332)
+            if (!$isNewConversation) {
+                $this->proposalSuperseder->supersedePendingProposals($conversationId, $adminUserId);
+            }
             $this->conversationRepository->addMessage($conversationId, 'user', $message);
 
             $messages = $this->conversationRepository->getMessages($conversationId);
@@ -75,7 +81,7 @@ class ChatManagement implements ChatManagementInterface
             $toolCallsDisplay = [];
             foreach (($response['tool_calls'] ?? []) as $tc) {
                 $tc['input'] = $this->privacyService->rehydrateArguments($tc['input'] ?? []);
-                $toolCallsDisplay[] = $tc;
+                $toolCallsDisplay[] = $this->withDisplayImpacts($tc);
             }
 
             return $this->toJson([
@@ -118,6 +124,7 @@ class ChatManagement implements ChatManagementInterface
                 if (isset($message['content']) && is_string($message['content'])) {
                     $messages[$index]['content'] = $this->privacyService->displayText($message['content']);
                 }
+                $messages[$index]['tool_calls'] = $this->storedToolCallsForDisplay($message['tool_calls'] ?? null);
             }
             $conversation['messages'] = $messages;
 
@@ -125,6 +132,57 @@ class ChatManagement implements ChatManagementInterface
         } catch (\Throwable $e) {
             return $this->toJson(['error' => $this->errorReporter->report('ChatManagement::getConversation', $e)]);
         }
+    }
+
+    /**
+     * Stored tool calls with their impact and caution lines rehydrated. The lines are persisted
+     * concealed to vault tokens (audit 2026-11-02 finding 2), but a REST caller rebuilding a
+     * confirmation card from this response has no token map, so it must get the real values the
+     * way the admin panel does on reload; confirmAction's acknowledgement assumes the caller could
+     * read them. The input stays tokenised: it is the canonical copy a confirm re-reads from the
+     * store, and it was tokenised in this response before the lines were.
+     */
+    private function storedToolCallsForDisplay(mixed $storedToolCalls): mixed
+    {
+        if (!is_string($storedToolCalls) || $storedToolCalls === '') {
+            return $storedToolCalls;
+        }
+
+        try {
+            $toolCalls = $this->json->unserialize($storedToolCalls);
+        } catch (\InvalidArgumentException) {
+            return $storedToolCalls;
+        }
+        if (!is_array($toolCalls)) {
+            return $storedToolCalls;
+        }
+
+        return $this->json->serialize(array_map(
+            fn (mixed $toolCall): mixed => is_array($toolCall) ? $this->withDisplayImpacts($toolCall) : $toolCall,
+            $toolCalls
+        ));
+    }
+
+    /**
+     * One tool call with its impact and caution lines rehydrated for display. An unresolved token
+     * shows the neutral label, never raw token grammar (#97 decision 5); a non-string line in a
+     * stored row is dropped rather than fatal.
+     *
+     * @param array<string, mixed> $toolCall
+     * @return array<string, mixed>
+     */
+    private function withDisplayImpacts(array $toolCall): array
+    {
+        if (!isset($toolCall['impacts']) || !is_array($toolCall['impacts'])) {
+            return $toolCall;
+        }
+
+        $toolCall['impacts'] = array_map(
+            $this->privacyService->displayText(...),
+            array_values(array_filter($toolCall['impacts'], 'is_string'))
+        );
+
+        return $toolCall;
     }
 
     public function deleteConversation(int $conversationId): string
@@ -138,13 +196,15 @@ class ChatManagement implements ChatManagementInterface
         }
     }
 
-    public function confirmAction(int $messageId, bool $acknowledged = false): string
+    public function confirmAction(int $messageId, bool $acknowledged = false, ?array $toolCallIds = null): string
     {
         try {
             $adminUserId = $this->requireAdminUserId();
-            // Same claim as the admin panel's Confirm, so the two cannot both run one proposal
+            $selectedIds = $toolCallIds === null ? null : array_values(array_map('strval', $toolCallIds));
+            // Same claim as the admin panel's Confirm, so the two cannot both run one proposal,
+            // and the same selection rule: a multi-call proposal only runs the named calls (#332)
             $message = $this->confirmationClaim->claimToConfirm(
-                new ConfirmRequest($messageId, $acknowledged, null),
+                new ConfirmRequest($messageId, $acknowledged, $selectedIds),
                 $adminUserId
             );
 
@@ -156,7 +216,7 @@ class ChatManagement implements ChatManagementInterface
             /** @var ChatService $chatService */
             $chatService = $this->chatService;
             $conversationId = (int)$message['conversation_id'];
-            $results = $chatService->executeConfirmedTools($toolCalls, $adminUserId, null, null, $conversationId);
+            $results = $chatService->executeConfirmedTools($toolCalls, $adminUserId, null, $selectedIds, $conversationId);
 
             $this->conversationRepository->resolveConfirmation($messageId, true, $adminUserId);
             foreach ($results as $toolCallId => $result) {

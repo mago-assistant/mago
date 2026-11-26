@@ -15,6 +15,7 @@ use MagoAssistant\Mago\Api\Tool\PresentableToolInterface;
 use MagoAssistant\Mago\Model\Voice\PanelConfig as VoicePanelConfig;
 use MagoAssistant\Mago\Service\Command\CommandRegistry;
 use MagoAssistant\Mago\Service\Command\CommandRunner;
+use MagoAssistant\Mago\Service\Form\BlockedFormFields;
 use MagoAssistant\Mago\Service\Form\FormPolicy;
 use MagoAssistant\Mago\Service\Skills\ResultLimit;
 use MagoAssistant\Mago\Service\Tool\ToolRegistry;
@@ -61,6 +62,7 @@ class ChatPanel extends Template
         private readonly CommandRegistry $commandRegistry,
         private readonly CommandRunner $commandRunner,
         private readonly FormPolicy $formPolicy,
+        private readonly BlockedFormFields $blockedFormFields,
         private readonly ExampleQuestions $exampleQuestions,
         private readonly VoicePanelConfig $voicePanelConfig,
         private readonly AdminPath $adminPath,
@@ -113,6 +115,7 @@ class ChatPanel extends Template
             'formByteCap' => self::FORM_BYTE_CAP,
             'formDenyNamespaces' => $this->formPolicy->getDeniedNamespacePatterns(),
             'formDenyRoutes' => $this->formPolicy->getDeniedRoutePatterns(),
+            'formBlockedFields' => $this->blockedFormFields->getBlockedFieldPaths(),
             'i18n' => $this->getPanelTranslations(),
         ], $this->voicePanelConfig->getJsConfig()));
     }

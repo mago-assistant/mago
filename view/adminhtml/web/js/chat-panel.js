@@ -364,6 +364,9 @@ define([
         var nodes = msgs.querySelectorAll('.mago-message, .mago-date-sep');
         for (var i = 0; i < nodes.length; i++) nodes[i].remove();
         loading.style.display = 'none';
+        // The cards these would retire were just removed; a stale teardown firing in the next
+        // conversation would log a skip that never happened.
+        openConfirmCards.length = 0;
 
         // Starting a new chat or loading another conversation throws the navigate status away with
         // everything else, and the lock it holds on the input has to go with it, or the panel is
@@ -917,7 +920,17 @@ define([
             // the next row, so they are carried forward until there is a bubble to hang them on.
             var pendingTools = [];
             loaded.forEach(function(m) {
-                var tools = parseToolCalls(m);
+                var tools = parseToolCalls(m).map(function(t) {
+                    // Stored impact and caution lines are tokenised like message content; the
+                    // rebuilt card must show the real values the admin decides over, as text,
+                    // through the same token map as everything else.
+                    if (t.impacts && t.impacts.length) {
+                        t.impacts = t.impacts.map(function(line) {
+                            return vaultTokens.replaceTokens(line, tokens);
+                        });
+                    }
+                    return t;
+                });
                 if (m.role === 'assistant' && tools.length) {
                     pendingTools = pendingTools.concat(tools);
                 }
@@ -1507,11 +1520,19 @@ define([
     // An answered write comes back as the card it ended on: the S03 line with its request and
     // duration, the S04 card when it failed, or a muted line when it was declined. Without the
     // stored outcome there is nothing to tell these apart, so the row stays as it was asked.
+    // A superseded proposal never ran and was not declined; its line says what happened to it.
+    function supersededTitle(title) {
+        return title + ' — ' + t('not run, replaced by your newer message');
+    }
+
     function restoreWriteResult(msgEl, tools) {
         var first = tools[0] || null;
         if (!first || !first.status) return;
 
         var title = skillTitle(first.name);
+        if (first.status === 'superseded') {
+            title = supersededTitle(title);
+        }
         var failed = tools.filter(function(t) { return t.status === 'failed'; })[0];
         if (failed) {
             msgEl.appendChild(UI.skillFailed({
@@ -1530,7 +1551,7 @@ define([
             title: title,
             action: single && single.input ? single.input.action : null,
             duration: formatDuration(total),
-            state: first.status === 'skipped' ? 'skipped' : 'done',
+            state: first.status === 'skipped' || first.status === 'superseded' ? 'skipped' : 'done',
             request: single ? single.input : undefined
         }));
     }
@@ -1809,6 +1830,7 @@ define([
         autoGrow();
         updatePrivacyHint('');
         setBusy(true);
+        supersedeOpenCards();
         addTextMsg('user', text);
 
         var msg = null;
@@ -1901,7 +1923,9 @@ define([
                         writeToolDetected = true;
                         if (!msg) { loading.style.display='none'; msg=addMsg('assistant',''); content=msg.querySelector('.mago-message-content'); }
                         releaseInput();
-                        showConfirmButtons(msg, {conversationId: conversationId}, d.tools || []);
+                        // The event names the stored proposal (#332), so this card's Allow and
+                        // Reject act on exactly the message it was drawn for.
+                        showConfirmButtons(msg, {messageId: d.message_id, conversationId: conversationId}, d.tools || []);
                     }
                     else if (evt==='done') {
                         gotDone = true;
@@ -1961,8 +1985,16 @@ define([
         return !!tool && tool.name === 'page_form' && !!tool.input && tool.input.action === 'write_fields';
     }
 
-    // ids = {messageId, conversationId}: the confirm endpoints key on the message that asked,
-    // so a caller that already knows it says so and the rest is looked up from the conversation.
+    // Cards still waiting for an answer, each as a teardown that retires it. The server supersedes
+    // every open proposal when a new message is stored (#332), and the panel mirrors that here so
+    // no retired proposal is left with live buttons.
+    var openConfirmCards = [];
+
+    function supersedeOpenCards() {
+        openConfirmCards.splice(0).forEach(function(retire) { retire(); });
+    }
+
+    // ids = {messageId, conversationId}: the confirm endpoints key on the message that asked.
     function showConfirmButtons(msgEl, ids, tools) {
         ids = ids || {};
         // Prevent duplicate confirm cards
@@ -2045,7 +2077,17 @@ define([
         msgs.scrollTop = msgs.scrollHeight;
 
         var decided = false;
+        // A new message supersedes this proposal on the server (#332); the card follows by turning
+        // into a muted line that says so, so it cannot be clicked and does not read as declined.
+        openConfirmCards.push(function() {
+            if (decided) return;
+            decided = true;
+            card.replaceWith(UI.skillLine({title: supersededTitle(title), action: first && first.input ? first.input.action : null, state: 'skipped'}));
+            sessionLog.write(title, first && first.input ? first.input.action : null, 'skipped');
+        });
         // One answer per card: a second click (or a double click) must not send a second confirm.
+        // A single card sends no tool_call_ids: its proposal may bundle reads the card never
+        // listed, and those must keep running with the write (#332). Only the tick list selects.
         function decide(allowed, selectedIds, acknowledged) {
             if (decided) return;
             decided = true;
@@ -2069,6 +2111,9 @@ define([
             });
         }
 
+        // Only the id the card was built with. Looking up "the conversation's pending proposal"
+        // instead answered an older card with the newest proposal (#332), and with nothing pending
+        // it polled forever; a card that lost its id hands itself back as failed instead.
         function getMessageId(callback) {
             var messageId = parseInt(ids.messageId, 10);
             if (messageId) {
@@ -2076,27 +2121,7 @@ define([
                 return;
             }
 
-            var conversationId = parseInt(ids.conversationId, 10);
-            if (!conversationId) {
-                failLookup('The action could not be linked to this conversation.');
-                return;
-            }
-
-            fetch(config.statusUrl, {
-                method: 'POST',
-                headers: {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
-                body: JSON.stringify({conversation_id: conversationId, form_key: formKey}),
-                credentials: 'same-origin'
-            }).then(function(r) { return r.json(); }).then(function(d) {
-                if (d.message_id) {
-                    callback(d.message_id);
-                } else {
-                    // Retry after 1s — DB write may not be done yet
-                    setTimeout(function() { getMessageId(callback); }, 1000);
-                }
-            }).catch(function() {
-                setTimeout(function() { getMessageId(callback); }, 1000);
-            });
+            failLookup('The action could not be linked to the message that proposed it. Ask again to get a fresh card.');
         }
 
         // The spinner replaced the buttons, so a lookup that cannot resolve has to hand the card

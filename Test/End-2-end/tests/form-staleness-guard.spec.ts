@@ -30,6 +30,7 @@ function staleDirectiveScenario(directive: Record<string, unknown>, summaryText:
       {
         event: 'confirm',
         data: {
+          message_id: MESSAGE_ID,
           tools: [
             {
               name: 'page_form',

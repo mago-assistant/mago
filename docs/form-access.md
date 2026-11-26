@@ -24,6 +24,9 @@ Ask the assistant about "this form" or "the page I'm on" and it can:
 Field values come from the live UI component in the browser, not a fresh database read, so **the
 assistant sees edits you have already typed but not yet saved** — exactly what you'd see on
 screen. Nothing about this is stored anywhere but the conversation until you save it yourself.
+A hidden field (a record id or a value carried along, never shown on screen) is out of scope on
+all three sides: it is not listed, not read and not written, and its value never leaves the
+browser.
 
 If no form is open (the dashboard, a grid, a report), `describe_form` and `read_fields` say so
 plainly and suggest `cms_data` instead for a CMS page that isn't open right now. `page_form` only
@@ -73,6 +76,15 @@ This also covers asking the assistant to change a customer, order, invoice, ship
 field while none is open: the same deny list is checked against where that request would navigate
 your browser to, before it is ever sent there, so the assistant refuses up front instead of
 navigating you to a page it was never going to be able to write to anyway.
+
+On Content > Design > Configuration, the two fields that put scripts and HTML on every storefront
+page (**Scripts and Style Sheets** in the head, **Miscellaneous HTML** in the footer) are refused
+for writes, in the browser and again on the server, because `config_writer` already refuses the
+settings they store (`design/head/includes`, `design/footer/absolute_footer`) however the request
+is worded or confirmed; `page_form` is not a second door to them. The form's other fields stay
+writable, and `describe_form` and `read_fields` still show these two, the same way `config_reader`
+still reads the settings. A module that blocks more settings through `BlockedConfigPaths`'
+`additionalPatterns` blocks the matching design fields with the same entry.
 
 Also out of scope, by design, not as a bug to fix:
 

@@ -10,6 +10,7 @@ use MagoAssistant\Mago\Api\Skill\ActionInterface;
 use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Url\DownloadableLinkUrl;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
 class CreateProductAction implements ActionInterface, ValidatingActionInterface
@@ -133,7 +134,8 @@ class CreateProductAction implements ActionInterface, ValidatingActionInterface
                 'type' => 'array',
                 'items' => ['type' => 'object'],
                 'description' => 'Downloadable products only: [{"title": "File", "url": "https://...", "price": 0, '
-                    . '"number_of_downloads": 0}]',
+                    . '"number_of_downloads": 0}]. The url must be https to a hostname listed in the store\'s '
+                    . 'downloadable_domains; http, IP addresses, localhost and credentials in the url are refused.',
             ],
         ];
     }
@@ -192,6 +194,7 @@ Grouped products and dynamic bundles derive price from children — child produc
 (create them with separate create_product calls).
 Configurable parents are created without variants; add them afterwards with add_configurable_variants.
 Downloadable links with type "url" are used; for uploaded files the admin must use the admin panel.
+Link urls must be https to a hostname from the store's downloadable_domains.
 The result reports what is still empty under "missing" AFTER the product is created (always images,
 which only the admin form can upload) — mention it in one line with the edit link, do not ask about it.
 TEXT;
@@ -212,6 +215,17 @@ TEXT;
      */
     public function findRefusal(array $params): ?array
     {
+        foreach ((array)($params['downloadable_links'] ?? []) as $link) {
+            $url = trim((string)(is_array($link) ? ($link['url'] ?? '') : ''));
+            if ($url === '') {
+                continue;
+            }
+            $reason = (new DownloadableLinkUrl($url))->findRefusalReason();
+            if ($reason !== null) {
+                return ['error' => $reason];
+            }
+        }
+
         $sku = trim((string)($params['sku'] ?? ''));
         $name = trim((string)($params['name'] ?? ''));
         $type = (string)($params['product_type'] ?? '');
