@@ -8,19 +8,36 @@ namespace MagoAssistant\Mago\Service\Skills\Marketing\CouponManager;
 
 use MagoAssistant\Mago\Api\InternalApiClientInterface;
 use MagoAssistant\Mago\Api\Skill\CautionedActionInterface;
+use MagoAssistant\Mago\Api\Skill\ValidatingActionInterface;
 use MagoAssistant\Mago\Service\Privacy\PiiClass;
+use MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\RuleConditionVocabulary as Vocabulary;
 use MagoAssistant\Mago\Service\Skills\Marketing\DiscountRuleCautions;
 use MagoAssistant\Mago\Service\Skills\Marketing\RuleIds;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 
-class CreateRuleAction implements CautionedActionInterface
+class CreateRuleAction implements CautionedActionInterface, ValidatingActionInterface
 {
     private const COUPON_TYPE_MANUAL = 0;
+    private const TYPE_PERCENT = 'percent';
+    private const TYPE_FIXED = 'fixed';
+    private const TYPE_FREE_SHIPPING = 'free_shipping';
+    private const TYPE_BUY_X_GET_Y = 'buy_x_get_y';
+    private const SIMPLE_ACTIONS = [
+        self::TYPE_PERCENT => RuleDiscountValidator::BY_PERCENT,
+        self::TYPE_FIXED => 'by_fixed',
+        self::TYPE_FREE_SHIPPING => RuleDiscountValidator::BY_PERCENT,
+        self::TYPE_BUY_X_GET_Y => RuleDiscountValidator::BUY_X_GET_Y,
+    ];
+    private const FREE_SHIPPING_FOR_MATCHING_ITEMS = '1';
 
     public function __construct(
         private readonly InternalApiClientInterface $apiClient,
         private readonly SecureAdminUrl $secureAdminUrl,
-        private readonly DiscountRuleCautions $cautions
+        private readonly DiscountRuleCautions $cautions,
+        private readonly RuleConditionValidator $conditionValidator,
+        private readonly RuleConditionBuilder $conditionBuilder,
+        private readonly RuleConditionDescriber $conditionDescriber,
+        private readonly RuleDiscountValidator $discountValidator
     ) {
     }
 
@@ -31,7 +48,8 @@ class CreateRuleAction implements CautionedActionInterface
 
     public function getDescription(): string
     {
-        return 'Create a new cart price rule with optional coupon code';
+        return 'Create a new cart price rule with optional coupon code, conditions on the cart and actions '
+            . 'limiting which items get the discount';
     }
 
     public function getParameterSchema(): array
@@ -39,7 +57,7 @@ class CreateRuleAction implements CautionedActionInterface
         return [
             'name' => [
                 'type' => 'string',
-                'description' => 'Name for the cart price rule (required)',
+                'description' => 'Name for the cart price rule (required for create_rule)',
             ],
             'description' => [
                 'type' => 'string',
@@ -47,13 +65,27 @@ class CreateRuleAction implements CautionedActionInterface
             ],
             'discount_type' => [
                 'type' => 'string',
-                'description' => 'Discount type: "percent", "fixed", or "free_shipping"',
+                'description' => 'Discount type: "percent", "fixed" (amount off each item), "free_shipping", or '
+                    . '"buy_x_get_y" (discount_step items bought earn discount_amount items free). There is no '
+                    . '"cheapest item" discount in Magento.',
             ],
             'discount_amount' => [
                 'type' => 'number',
                 'description' => 'Discount amount (e.g. 20 for 20% or 20 for $20 off), 0 or greater. '
-                    . 'For "percent" this is a percentage and must be at most 100.',
+                    . 'For "percent" this is a percentage and must be at most 100. For "buy_x_get_y" this is Y, '
+                    . 'the number of items given free.',
             ],
+            'discount_qty' => [
+                'type' => 'integer',
+                'description' => 'Maximum number of items the discount applies to per cart (0 or omitted: no limit)',
+            ],
+            'discount_step' => [
+                'type' => 'integer',
+                'description' => 'For "buy_x_get_y": X, the items bought per Y free ("buy 3, pay 2" is step 2, '
+                    . 'amount 1). For "percent" and "fixed": the discount applies per this many items (0: every item).',
+            ],
+            'conditions' => Vocabulary::conditionsSchema(),
+            'actions' => Vocabulary::actionsSchema(),
             'coupon_code' => [
                 'type' => 'string',
                 'description' => 'Specific coupon code (optional, omit for auto-apply rule)',
@@ -104,8 +136,10 @@ class CreateRuleAction implements CautionedActionInterface
     {
         return 'Always confirm the discount type, amount, and coupon code with the user before creating a rule. '
             . 'Valid discount types are "percent" (percentage off), "fixed" (fixed amount off per item), '
-            . 'and "free_shipping" (free shipping). '
-            . 'If no website_ids or customer_group_ids are provided, the rule applies to all websites and customer groups.';
+            . '"free_shipping" (free shipping) and "buy_x_get_y". '
+            . 'If no website_ids or customer_group_ids are provided, the rule applies to all websites and customer groups. '
+            . 'Conditions and actions take ids, never names: look categories, promo attributes and their options up '
+            . 'with find_rule_targets first, and when a name matches more than one, ask the user which one they mean.';
     }
 
     /**
@@ -114,8 +148,15 @@ class CreateRuleAction implements CautionedActionInterface
      */
     public function getCautions(array $params, int $adminUserId): array
     {
+        $conditions = $this->tree($params, 'conditions');
+        $actions = $this->tree($params, 'actions');
+
         return [
-            $this->describeDiscount($params),
+            $this->describeDiscount($params, $conditions),
+            ...($conditions === null ? [] : [$this->conditionDescriber->describeConditions($conditions, $adminUserId)]),
+            ...($actions === null ? [] : [$this->conditionDescriber->describeActions($actions, $adminUserId)]),
+            ...$this->conditionDescriber->describeSharedCategoryNames($conditions, $actions, $adminUserId),
+            ...$this->describeQuantities($params),
             ...$this->cautions->describeScope(
                 $this->chosenWebsiteIds($params),
                 $this->chosenCustomerGroupIds($params),
@@ -126,38 +167,34 @@ class CreateRuleAction implements CautionedActionInterface
         ];
     }
 
+    public function findRefusal(array $params): ?array
+    {
+        $error = $this->findInputError($params);
+
+        return $error === null ? null : ['error' => $error];
+    }
+
     public function execute(array $params, int $adminUserId): array
     {
-        $name = $params['name'] ?? '';
-        if (empty($name)) {
-            return ['error' => 'name parameter is required for create_rule'];
+        $refusal = $this->findRefusal($params);
+        if ($refusal !== null) {
+            return $refusal;
         }
 
         if (!$adminUserId) {
             return ['error' => 'Admin user context is required'];
         }
 
-        $discountType = $params['discount_type'] ?? 'percent';
+        $conditions = $this->tree($params, 'conditions');
+        $actions = $this->tree($params, 'actions');
+        $targetError = $this->conditionValidator->findTargetError($conditions, $actions, $adminUserId);
+        if ($targetError !== null) {
+            return ['error' => $targetError];
+        }
+
+        $name = (string)$params['name'];
+        $discountType = $this->discountType($params);
         $discountAmount = (float)($params['discount_amount'] ?? 0);
-
-        // Map human-readable discount type to Magento simple_action
-        $simpleAction = match ($discountType) {
-            'percent' => 'by_percent',
-            'fixed' => 'by_fixed',
-            'free_shipping' => 'by_percent',
-            default => 'by_percent',
-        };
-
-        // A negative amount raises the grand total instead of discounting it, whatever the type.
-        if ($discountAmount < 0) {
-            return ['error' => 'discount_amount must be 0 or greater'];
-        }
-
-        // Stricter than Magento's own form, which clamps a percentage to 100 only at apply time:
-        // above 100 can only be a mistake in the call. free_shipping discards the amount.
-        if ($simpleAction === 'by_percent' && $discountType !== 'free_shipping' && $discountAmount > 100) {
-            return ['error' => 'discount_amount must be between 0 and 100 for a percentage discount'];
-        }
 
         // Determine coupon type and code
         $couponCode = $this->couponCode($params);
@@ -173,10 +210,10 @@ class CreateRuleAction implements CautionedActionInterface
                 'name' => $name,
                 'description' => $params['description'] ?? '',
                 'is_active' => true,
-                'simple_action' => $simpleAction,
+                'simple_action' => self::SIMPLE_ACTIONS[$discountType],
                 'discount_amount' => $discountAmount,
-                'discount_qty' => 0,
-                'discount_step' => 0,
+                'discount_qty' => (int)($params['discount_qty'] ?? 0),
+                'discount_step' => (int)($params['discount_step'] ?? 0),
                 'apply_to_shipping' => false,
                 'coupon_type' => $couponType,
                 'use_auto_generation' => false,
@@ -184,11 +221,13 @@ class CreateRuleAction implements CautionedActionInterface
                 'customer_group_ids' => $customerGroupIds,
                 'stop_rules_processing' => false,
                 'sort_order' => 0,
+                ...($conditions === null ? [] : ['condition' => $this->conditionBuilder->buildConditions($conditions)]),
+                ...($actions === null ? [] : ['action_condition' => $this->conditionBuilder->buildActions($actions)]),
             ],
         ];
 
-        if ($discountType === 'free_shipping') {
-            $ruleData['rule']['simple_free_shipping'] = '1';
+        if ($discountType === self::TYPE_FREE_SHIPPING) {
+            $ruleData['rule']['simple_free_shipping'] = self::FREE_SHIPPING_FOR_MATCHING_ITEMS;
             $ruleData['rule']['discount_amount'] = 0;
         }
 
@@ -227,6 +266,64 @@ class CreateRuleAction implements CautionedActionInterface
     }
 
     /**
+     * Everything that can be checked without the store: refused before the caution card, and again
+     * on execute for a confirm that skips it.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function findInputError(array $params): ?string
+    {
+        if (trim((string)($params['name'] ?? '')) === '') {
+            return 'name parameter is required for create_rule';
+        }
+
+        return $this->findDiscountError($params)
+            ?? (isset($params['conditions']) ? $this->conditionValidator->findConditionsError($params['conditions']) : null)
+            ?? (isset($params['actions']) ? $this->conditionValidator->findActionsError($params['actions']) : null);
+    }
+
+    /**
+     * Free shipping is saved as by_percent with the amount set to 0, so it is checked as itself:
+     * only a negative amount is refused, never a percentage over 100.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function findDiscountError(array $params): ?string
+    {
+        $discountType = $this->discountType($params);
+
+        return $this->discountValidator->findError(
+            $discountType === self::TYPE_FREE_SHIPPING ? self::TYPE_FREE_SHIPPING : self::SIMPLE_ACTIONS[$discountType],
+            (float)($params['discount_amount'] ?? 0),
+            $params['discount_step'] ?? 0,
+            $params['discount_qty'] ?? 0
+        );
+    }
+
+    /**
+     * Unknown types fall back to a percentage, as they always have.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function discountType(array $params): string
+    {
+        $type = (string)($params['discount_type'] ?? self::TYPE_PERCENT);
+
+        return isset(self::SIMPLE_ACTIONS[$type]) ? $type : self::TYPE_PERCENT;
+    }
+
+    /**
+     * The tree as it goes into the rule, or null when the call leaves it out
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>|null
+     */
+    private function tree(array $params, string $key): ?array
+    {
+        return isset($params[$key]) ? Vocabulary::treeFromInput($params[$key]) : null;
+    }
+
+    /**
      * The REST rule has no coupon code field: a specific coupon is its own record, saved once the
      * rule exists. A rule that cannot get its code is deleted again, or it would sit there active,
      * expecting a coupon nobody can enter.
@@ -253,21 +350,49 @@ class CreateRuleAction implements CautionedActionInterface
     }
 
     /**
+     * "Every cart" only when nothing narrows it down; with conditions, the next line says which.
+     *
      * @param array<string, mixed> $params
+     * @param array<string, mixed>|null $conditions
      */
-    private function describeDiscount(array $params): string
+    private function describeDiscount(array $params, ?array $conditions): string
     {
         $amount = $this->cautions->formatAmount((float)($params['discount_amount'] ?? 0));
+        $step = (string)(int)($params['discount_step'] ?? 0);
         $couponCode = $this->couponCode($params);
-        $discount = match ($params['discount_type'] ?? 'percent') {
-            'fixed' => 'Takes ' . $amount . ' off each item in',
-            'free_shipping' => 'Gives free shipping on',
+        $discount = match ($this->discountType($params)) {
+            self::TYPE_FIXED => 'Takes ' . $amount . ' off each item in',
+            self::TYPE_FREE_SHIPPING => 'Gives free shipping on',
+            self::TYPE_BUY_X_GET_Y => 'Gives ' . $amount . ' item(s) free for every ' . $step
+                . ' bought (buy ' . $step . ', get ' . $amount . ' free) in',
             default => 'Takes ' . $amount . '% off',
         };
+        $isConditional = (array)($conditions['rules'] ?? []) !== [];
 
-        return $couponCode === ''
-            ? $discount . ' every cart, automatically and without a coupon.'
-            : $discount . ' carts that use coupon ' . $couponCode . '.';
+        return match (true) {
+            $couponCode !== '' && $isConditional => $discount . ' carts that meet the conditions and use coupon '
+                . $couponCode . '.',
+            $couponCode !== '' => $discount . ' carts that use coupon ' . $couponCode . '.',
+            $isConditional => $discount . ' carts that meet the conditions, automatically and without a coupon.',
+            default => $discount . ' every cart, automatically and without a coupon.',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return string[]
+     */
+    private function describeQuantities(array $params): array
+    {
+        $maximum = (int)($params['discount_qty'] ?? 0);
+        $step = (int)($params['discount_step'] ?? 0);
+
+        return [
+            ...($maximum > 0 ? ['Discounts at most ' . $maximum . ' item(s) per cart.'] : []),
+            ...($step > 0 && $this->discountType($params) !== self::TYPE_BUY_X_GET_Y
+                ? ['Discounts items only in whole steps of ' . $step . '.']
+                : []),
+        ];
     }
 
     /**

@@ -8,6 +8,9 @@ namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Marketing\CouponManager;
 
 use MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\GetRuleAction;
 use MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\ListRulesAction;
+use MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\RuleConditionDescriber;
+use MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\RuleConditionReader;
+use MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\RuleTargetCatalog;
 use MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\RuleState;
 use MagoAssistant\Mago\Service\Time\StoreTime;
 use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
@@ -185,7 +188,13 @@ class RuleLookupActionsTest extends TestCase
 
     private function getRuleAction(): GetRuleAction
     {
-        return new GetRuleAction($this->apiClient, $this->secureAdminUrl(), $this->ruleState());
+        return new GetRuleAction(
+            $this->apiClient,
+            $this->secureAdminUrl(),
+            $this->ruleState(),
+            new RuleConditionReader(),
+            new RuleConditionDescriber(new RuleTargetCatalog($this->apiClient))
+        );
     }
 
     private function listRulesAction(): ListRulesAction

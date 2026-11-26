@@ -7,8 +7,6 @@ declare(strict_types=1);
 namespace MagoAssistant\Mago\Test\Unit\Service\Skills\Marketing\CouponManager;
 
 use MagoAssistant\Mago\Service\Skills\Marketing\CouponManager\CreateRuleAction;
-use MagoAssistant\Mago\Service\Skills\Marketing\DiscountRuleCautions;
-use MagoAssistant\Mago\Service\Url\SecureAdminUrl;
 use MagoAssistant\Mago\Test\Unit\Fakes\FakeInternalApiClient;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -28,10 +26,7 @@ class CreateRuleActionTest extends TestCase
 
     private function action(): CreateRuleAction
     {
-        $secureAdminUrl = $this->createStub(SecureAdminUrl::class);
-        $secureAdminUrl->method('getUrl')->willReturn('https://example.test/admin/rule');
-
-        return new CreateRuleAction($this->apiClient, $secureAdminUrl, new DiscountRuleCautions($this->apiClient));
+        return RuleTargetFixture::createAction($this->apiClient);
     }
 
     private function create(array $params): array
