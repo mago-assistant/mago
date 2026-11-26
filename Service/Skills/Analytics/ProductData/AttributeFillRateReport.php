@@ -238,7 +238,7 @@ class AttributeFillRateReport
     }
 
     /**
-     * @param list<array<string,mixed>> $rows
+     * @param array<array-key,array<string,mixed>> $rows
      * @return array<int,Counts> Attribute id (0 for product counts) => counts
      */
     private function counts(array $rows): array
