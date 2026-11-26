@@ -63,7 +63,7 @@ class RuleConditionSet
             $this->match === self::MATCH_ANY => 'at least one of: ' . implode('; ', $descriptions),
             default => 'all of: ' . implode('; ', $descriptions),
         };
-        $category = $this->categoryCondition?->description ?? '';
+        $category = $this->categoryCondition === null ? '' : $this->categoryCondition->description;
 
         return match (true) {
             $own === '' && $category === '' => '',
