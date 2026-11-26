@@ -78,10 +78,14 @@ define([
     var conversationId = null;
     var busy = false;
     var showingHistory = false;
+    var NO_INLINE_SLASH = -1;
+    var INLINE_SLASH_PATTERN = /(^|\s)\/([^\s\/]*)$/;
     var slashActive = false;
     var slashMenuNode = null;
     var announcedSlashCount = null;
     var slashIndex = 0;
+    var inlineSlashStart = NO_INLINE_SLASH;
+    var inlineSlashEnd = NO_INLINE_SLASH;
     var filteredItems = [];
     var SS_KEY_OPEN = 'mago_open';
     var SS_KEY_CONV = 'mago_conv';
@@ -541,6 +545,9 @@ define([
     });
 
     function matchesSlashItem(item, q) {
+        // A command only runs as the whole message, so mid-sentence the menu offers skills only,
+        // matched on their name: a path like /checkout in a question would otherwise hit a description.
+        if (isInlineSlash()) return item.type === 'skill' && item.full.indexOf(q) !== -1;
         if (!q) return true;
         if (item.type === 'command') {
             // Once arguments follow the command the entry drops out, so Enter sends instead of completing.
@@ -631,6 +638,8 @@ define([
 
     function hideSlashMenu() {
         slashActive = false;
+        inlineSlashStart = NO_INLINE_SLASH;
+        inlineSlashEnd = NO_INLINE_SLASH;
         slashMenuNode = null;
         announcedSlashCount = null;
         slashMenu.classList.remove('is-visible');
@@ -640,12 +649,28 @@ define([
     }
 
     function selectSlashItem(item) {
-        input.value = item.type === 'command'
-            ? '/' + item.full + ' '
-            : 'Use the ' + item.skill.name + ' skill to ';
+        if (isInlineSlash()) {
+            insertSkillAtSlash(item.skill);
+        } else {
+            input.value = item.type === 'command'
+                ? '/' + item.full + ' '
+                : 'Use the ' + item.skill.name + ' skill to ';
+        }
         autoGrow();
         hideSlashMenu();
         input.focus();
+    }
+
+    function isInlineSlash() {
+        return inlineSlashStart !== NO_INLINE_SLASH;
+    }
+
+    // "Make sure to use /conf" becomes "Make sure to use the config_writer skill ", the rest stays, wherever the caret went.
+    function insertSkillAtSlash(skill) {
+        var reference = 'the ' + skill.name + ' skill ';
+        input.value = input.value.substring(0, inlineSlashStart) + reference + input.value.substring(inlineSlashEnd);
+        var newCaret = inlineSlashStart + reference.length;
+        input.setSelectionRange(newCaret, newCaret);
     }
 
     // The input already holds a complete command ("/cache flush") or a bare command name
@@ -695,12 +720,32 @@ define([
         sendBtn.classList.toggle('is-idle', !v.trim());
         updatePrivacyHint(v);
         if (v.charAt(0) === '/') {
-            var filter = v.substring(1);
-            showSlashMenu(filter);
-        } else {
-            hideSlashMenu();
+            inlineSlashStart = NO_INLINE_SLASH;
+            showSlashMenu(v.substring(1));
+            return;
         }
+        var inlineSlash = INLINE_SLASH_PATTERN.exec(v.substring(0, input.selectionStart));
+        if (!inlineSlash) {
+            hideSlashMenu();
+            return;
+        }
+        inlineSlashStart = inlineSlash.index + inlineSlash[1].length;
+        inlineSlashEnd = input.selectionStart;
+        showSlashMenu(inlineSlash[2]);
     });
+
+    // #359: the "/ for skills" hint on the welcome screen types the / for the admin: on its own
+    // in an empty input, after the question otherwise, so the picked skill lands at the end of it.
+    var skillsHint = qs('#mago-skills-hint');
+    if (skillsHint) {
+        skillsHint.onclick = function() {
+            var question = input.value.replace(/\s+$/, '');
+            input.value = question === '' ? '/' : question + ' /';
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+            input.dispatchEvent(new Event('input'));
+        };
+    }
 
     input.onkeydown = function(e) {
         if (slashActive) {

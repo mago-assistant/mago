@@ -467,6 +467,32 @@ html:has(body.mago-active) {
     }
 }
 
+.mago-welcome-hint-button {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+
+    // The admin theme styles button:hover, :active and :focus, which outrank this one class
+    &:hover,
+    &:active,
+    &:focus {
+        background: none;
+        border: 0;
+        box-shadow: none;
+    }
+
+    &:hover {
+        color: var(--mago-ink-soft, #6B645F);
+
+        kbd {
+            border-color: var(--mago-accent, #FF7A33);
+        }
+    }
+}
+
 // Messages: the user's question is a tinted bubble, the answer is plain text
 .mago-message {
     font-size: @mago-font-size__13;
